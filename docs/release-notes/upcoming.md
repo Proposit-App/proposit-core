@@ -31,22 +31,48 @@ only a new parent, this first write carries the rest of the new row too. If
 it points at a new variable, it carries nothing else, like the update a
 removed expression gets. Then the full update runs right after the inserts.
 When one of these points at a new variable, the variable and premise deletes
-also wait until after it. Changesets without such an update are ordered exactly as
-before.
+also wait until after it.
 
 If your persistence layer holds back updates that point at a newly inserted
 parent until after its inserts, as proposit-app's server does, remove that
 workaround. `orderChangeset` does it now. Keeping it can reorder an update
-past a variable delete that was held back for it. With a cascading variable
-key, that loses the row.
+past a variable or premise delete that was held back for it. With a
+cascading key, that loses the row.
 
-Two cases are still unsafe, both only when a changeset moves an expression
-onto a new variable, so that the deletes wait. They involve a unique rule
-checked per statement:
+### `orderChangeset` orders premise changes around the premises they name
 
-- a variable is inserted with the symbol of one being removed;
-- a premise is inserted as the conclusion while the removed conclusion
-  premise still exists.
+Two more orders are fixed.
+
+- **A variable rebound off a premise the same changeset removes.**
+  Variable updates used to run last, so the premise was deleted while the
+  stored variable still named it. Where that key cascades, as proposit-app's
+  does, the variable and every expression using it were silently deleted.
+  Variable updates now run before the premise deletes. One rebound onto a
+  premise the changeset creates runs after that premise is inserted, and
+  the premise deletes wait for it.
+- **An expression moved into a premise the same changeset creates.** A
+  combined changeset can remove an expression and add one with the same id
+  to a new premise. That update now runs after the premise is inserted.
+
+Variable updates now run earlier than they did, so a changeset with a
+variable update together with any premise delete or any insert is ordered
+differently. Changesets with no variable update, and no expression update
+that needs an insert first, are ordered exactly as before.
+
+### What is still unsafe
+
+These cases involve a unique rule checked per statement, and only arise
+while deletes wait:
+
+- **A variable inserted with the symbol of one being removed.** This happens
+  only when a changeset moves an expression onto a new variable or into a
+  new premise.
+- **A variable inserted with the symbol another variable is being renamed
+  off.** This happens in the same cases, because the renames then run after
+  the inserts.
+- **A premise inserted as the conclusion while the removed conclusion
+  premise still exists.** This happens in the same cases, and also when a
+  variable is rebound onto a new premise.
 
 Making such rules deferred, so they are checked at the end of the
-transaction, removes both.
+transaction, removes all three.

@@ -2,8 +2,10 @@
 // keys immediately accepts every operation and ends in the engine's state.
 // Each changeset is applied twice: to a store that cascades nothing, and to
 // one whose deletes cascade to the rows pointing at the deleted row (as
-// proposit-app's parent and variable keys do), where a wrongly timed delete
-// silently takes a row with it. Both require a row with no parent to sit at
+// proposit-app's parent, variable and bound-premise keys do), where a wrongly
+// timed delete silently takes a row with it. A premise-bound variable names
+// its premise too, so deleting that premise reaches the variable and, through
+// it, every expression naming the variable. Both require a row with no parent to sit at
 // position 0, a rule a database checks on every statement. The stores start
 // from the rows as they were before the call, so an expression's stored
 // parent can differ from the parent its removed entry carries: a change in
@@ -72,6 +74,21 @@ function applyStrictly(
             (e) => `delete ${id} while ${e.id} points at it`
         )
     }
+    const deleteVariable = (id: string) => {
+        store.variables.delete(id)
+        dependents(
+            (e) => e.variableId === id,
+            (e) => `delete variable ${id} while ${e.id} uses it`
+        )
+    }
+    const checkVariable = (row: TRow) => {
+        if (
+            row.boundPremiseId !== undefined &&
+            !store.premises.has(row.boundPremiseId as string)
+        ) {
+            errors.push(`variable ${row.id}: bound premise missing`)
+        }
+    }
     const checkExpression = (row: TRow) => {
         if (!store.premises.has(row.premiseId as string)) {
             errors.push(`expression ${row.id}: premise missing`)
@@ -117,17 +134,28 @@ function applyStrictly(
             }
         } else if (op.entity === "variable") {
             if (op.type === "delete") {
-                store.variables.delete(row.id)
-                dependents(
-                    (e) => e.variableId === row.id,
-                    (e) => `delete variable ${row.id} while ${e.id} uses it`
-                )
+                deleteVariable(row.id)
             } else {
+                if (op.type === "update" && !store.variables.has(row.id)) {
+                    errors.push(
+                        `update variable ${row.id}, which is not stored`
+                    )
+                    continue
+                }
+                checkVariable(row)
                 store.variables.set(row.id, row)
             }
         } else if (op.entity === "premise") {
             if (op.type === "delete") {
                 store.premises.delete(row.id)
+                for (const v of [...store.variables.values()]) {
+                    if (v.boundPremiseId !== row.id) continue
+                    if (deletes === "restrict") {
+                        errors.push(
+                            `delete premise ${row.id} while variable ${v.id} is bound to it`
+                        )
+                    } else deleteVariable(v.id)
+                }
                 dependents(
                     (e) => e.premiseId === row.id,
                     (e) => `delete premise ${row.id} while ${e.id} is in it`
@@ -518,6 +546,149 @@ describe("orderChangeset suits a store with immediate foreign keys", () => {
         )
     })
 
+    // A variable rebound off a premise the changeset removes: the stored
+    // row names that premise until its update runs, so the premise delete
+    // must wait for it. Onto a new premise, the update must also follow that
+    // premise's insert.
+    for (const onto of ["an existing premise", "a new premise"] as const) {
+        for (const hold of [false, true]) {
+            it(`a variable rebound off a removed premise onto ${onto}${hold ? ", with deletes held" : ""}`, () => {
+                const eng = new ArgumentEngine(ARG, EMPTY_CLAIM_LOOKUP, {
+                    behavior: "permissive",
+                })
+                const [p1, p2, p3] = [
+                    eng.createPremise().result,
+                    eng.createPremise().result,
+                    eng.createPremise().result,
+                ]
+                const v1 = premiseBoundVariable(eng, p1)
+                const base = {
+                    argumentId: ARG.id,
+                    argumentVersion: ARG.version,
+                    premiseId: p3.getId(),
+                    type: "variable" as const,
+                    parentId: "and",
+                }
+                p3.addExpression({
+                    ...base,
+                    id: "and",
+                    type: "operator",
+                    operator: "and",
+                    parentId: null,
+                    position: 0,
+                })
+                p3.addExpression({
+                    ...base,
+                    id: "x",
+                    variableId: v1,
+                    position: 0,
+                })
+                p3.addExpression({
+                    ...base,
+                    id: "y",
+                    variableId: premiseBoundVariable(eng, p2),
+                    position: 1,
+                })
+
+                expectAppliesStrictly(eng, () => {
+                    const created = eng.createPremise()
+                    const target =
+                        onto === "a new premise" ? created.result : p2
+                    const steps = [
+                        eng.updateVariable(v1, {
+                            boundPremiseId: target.getId(),
+                        }),
+                        // Pointing an expression at a new variable holds
+                        // the deletes until after the inserts.
+                        ...(hold
+                            ? [
+                                  p3.updateExpression("y", {
+                                      variableId: premiseBoundVariable(
+                                          eng,
+                                          created.result
+                                      ),
+                                  }),
+                              ]
+                            : []),
+                        eng.removePremise(p1.getId()),
+                    ]
+                    return steps.reduce(
+                        (all, next) => composeChangesets(all, next.changes),
+                        created.changes
+                    )
+                })
+            })
+        }
+    }
+
+    // An expression removed from one premise and added with the same id to
+    // a premise the changeset creates composes to one update naming the new
+    // premise, which must follow that premise's insert.
+    for (const shape of ["as a root", "under a new operator"] as const) {
+        for (const removeOld of [false, true]) {
+            it(`an expression id reused in a new premise ${shape}${removeOld ? ", its old premise removed" : ""}`, () => {
+                const eng = new ArgumentEngine(ARG, EMPTY_CLAIM_LOOKUP, {
+                    behavior: "permissive",
+                })
+                const [p1, p2] = [
+                    eng.createPremise().result,
+                    eng.createPremise().result,
+                ]
+                const v1 = premiseBoundVariable(eng, p1)
+                p2.addExpression({
+                    argumentId: ARG.id,
+                    argumentVersion: ARG.version,
+                    premiseId: p2.getId(),
+                    id: "x",
+                    type: "variable",
+                    variableId: v1,
+                    parentId: null,
+                    position: 0,
+                })
+
+                expectAppliesStrictly(eng, () => {
+                    const created = eng.createPremise()
+                    const pNew = created.result
+                    const base = {
+                        argumentId: ARG.id,
+                        argumentVersion: ARG.version,
+                        premiseId: pNew.getId(),
+                    }
+                    const steps: { changes: TCoreChangeset }[] = [
+                        p2.removeExpression("x", true),
+                    ]
+                    if (shape === "under a new operator") {
+                        steps.push(
+                            pNew.addExpression({
+                                ...base,
+                                id: "op",
+                                type: "operator",
+                                operator: "not",
+                                parentId: null,
+                                position: 0,
+                            })
+                        )
+                    }
+                    steps.push(
+                        pNew.addExpression({
+                            ...base,
+                            id: "x",
+                            type: "variable",
+                            variableId: v1,
+                            parentId: shape === "as a root" ? null : "op",
+                            position: 0,
+                        })
+                    )
+                    if (removeOld) steps.push(eng.removePremise(p2.getId()))
+                    return steps.reduce<TCoreChangeset>(
+                        (all, next) => composeChangesets(all, next.changes),
+                        created.changes
+                    )
+                })
+            })
+        }
+    }
+
     // Removing one premise and creating another needs no late update, so
     // the deletes still come before the inserts: holding them back would let
     // a reused symbol meet the one it replaces.
@@ -600,6 +771,75 @@ describe("orderChangeset suits a store with immediate foreign keys", () => {
             "update roles ",
         ])
     })
+
+    // A premise replaced, with and without its variable rebound. With no
+    // variable update the order is the one orderChangeset has always
+    // produced. A variable update runs between the variable and premise
+    // deletes. One bound to the new premise follows that premise's insert,
+    // and the premise delete waits for it, so for that moment the argument
+    // holds both premises: a store allowing one conclusion per argument,
+    // checked per statement, rejects a conclusion swap made in the same
+    // changeset.
+    for (const rebind of ["none", "existing", "new"] as const) {
+        it(`orders a replaced premise with ${rebind === "none" ? "no variable rebound" : `its variable rebound onto the ${rebind} premise`}`, () => {
+            let n = 0
+            const eng = new ArgumentEngine(ARG, EMPTY_CLAIM_LOOKUP, {
+                behavior: "permissive",
+                generateId: () => `g${String(n++)}`,
+            })
+            const [p1, p2] = [
+                eng.createPremise().result,
+                eng.createPremise().result,
+            ]
+            const created = eng.createPremise()
+            const target = rebind === "new" ? created.result : p2
+            const steps = [
+                ...(rebind === "none"
+                    ? []
+                    : [
+                          eng.updateVariable("g1", {
+                              boundPremiseId: target.getId(),
+                          }),
+                      ]),
+                eng.removePremise(p1.getId()),
+            ]
+            const changes = steps.reduce(
+                (all, next) => composeChangesets(all, next.changes),
+                created.changes
+            )
+
+            expect(
+                orderChangeset(changes).map(
+                    (o) =>
+                        `${o.type} ${o.entity} ${(o.data as { id?: string }).id ?? ""}`
+                )
+            ).toEqual(
+                {
+                    none: [
+                        "delete variable g1",
+                        "delete premise g0",
+                        "insert premise g4",
+                        "insert variable g5",
+                        "update roles ",
+                    ],
+                    existing: [
+                        "update variable g1",
+                        "delete premise g0",
+                        "insert premise g4",
+                        "insert variable g5",
+                        "update roles ",
+                    ],
+                    new: [
+                        "insert premise g4",
+                        "update variable g1",
+                        "delete premise g0",
+                        "insert variable g5",
+                        "update roles ",
+                    ],
+                }[rebind]
+            )
+        })
+    }
 
     // Chains of mutations combined into one changeset, as a consumer's
     // before/after diff or composeChangesets produces them.
@@ -696,43 +936,81 @@ describe("orderChangeset suits a store with immediate foreign keys", () => {
                         "removePremise",
                         "removeVariable",
                         "removeExpression",
+                        "rebindVariable",
+                        "renameVariable",
+                        "moveToNewPremise",
                     ] as const)
+                    const premiseBound = eng
+                        .getVariables()
+                        .filter((v) => "boundPremiseId" in v)
                     try {
+                        if (call === "moveToNewPremise") {
+                            // Remove a leaf and add one with the same id to
+                            // a new premise: composed, one update naming it.
+                            const leaf = pick(variables)
+                            const removed = pe.removeExpression(leaf.id, false)
+                            const created = eng.createPremise()
+                            const added = created.result.addExpression({
+                                ...leaf,
+                                premiseId: created.result.getId(),
+                                parentId: null,
+                                position: 0,
+                            })
+                            changes = [removed, created, added].reduce(
+                                (all, next) =>
+                                    composeChangesets(all, next.changes),
+                                changes
+                            )
+                            continue
+                        }
                         const result =
-                            call === "createPremise"
-                                ? eng.createPremise()
-                                : call === "updateExpression"
-                                  ? pe.updateExpression(
-                                        variables.length > 0
-                                            ? pick(variables).id
-                                            : "missing",
-                                        { variableId: leafOf(pe).variableId }
+                            call === "rebindVariable"
+                                ? eng.updateVariable(pick(premiseBound).id, {
+                                      boundPremiseId: pick(premises).getId(),
+                                  })
+                                : call === "renameVariable"
+                                  ? eng.updateVariable(
+                                        pick(eng.getVariables()).id,
+                                        { symbol: `S${String(n++)}` }
                                     )
-                                  : call === "wrapExpression"
-                                    ? pe.wrapExpression(
-                                          operator,
-                                          leafOf(pe),
-                                          target
-                                      )
-                                    : call === "insertExpression"
-                                      ? pe.insertExpression(
-                                            { ...operator, position: 0 },
-                                            target
+                                  : call === "createPremise"
+                                    ? eng.createPremise()
+                                    : call === "updateExpression"
+                                      ? pe.updateExpression(
+                                            variables.length > 0
+                                                ? pick(variables).id
+                                                : "missing",
+                                            {
+                                                variableId:
+                                                    leafOf(pe).variableId,
+                                            }
                                         )
-                                      : call === "toggleNegation"
-                                        ? pe.toggleNegation(target)
-                                        : call === "removePremise"
-                                          ? eng.removePremise(
-                                                pick(premises).getId()
+                                      : call === "wrapExpression"
+                                        ? pe.wrapExpression(
+                                              operator,
+                                              leafOf(pe),
+                                              target
+                                          )
+                                        : call === "insertExpression"
+                                          ? pe.insertExpression(
+                                                { ...operator, position: 0 },
+                                                target
                                             )
-                                          : call === "removeVariable"
-                                            ? eng.removeVariable(
-                                                  pick(eng.getVariables()).id
-                                              )
-                                            : pe.removeExpression(
-                                                  target,
-                                                  random() < 0.5
-                                              )
+                                          : call === "toggleNegation"
+                                            ? pe.toggleNegation(target)
+                                            : call === "removePremise"
+                                              ? eng.removePremise(
+                                                    pick(premises).getId()
+                                                )
+                                              : call === "removeVariable"
+                                                ? eng.removeVariable(
+                                                      pick(eng.getVariables())
+                                                          .id
+                                                  )
+                                                : pe.removeExpression(
+                                                      target,
+                                                      random() < 0.5
+                                                  )
                         changes = composeChangesets(changes, result.changes)
                     } catch {
                         // A rejected step changes nothing.
@@ -751,6 +1029,9 @@ describe("orderChangeset suits a store with immediate foreign keys", () => {
                     )
                     expect(rows(store.variables), label).toEqual(
                         rows(after.variables)
+                    )
+                    expect(rows(store.premises), label).toEqual(
+                        rows(after.premises)
                     )
                 }
             }
