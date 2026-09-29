@@ -56,6 +56,10 @@
       that case joins the exceptions above.
     - An expression moved into a new premise holds the deletes, like one
       pointing at a new variable, so all three exceptions above apply to it.
+- `orderChangeset` skips the update of a variable that is also in
+  `variables.removed`, as it already did for expressions. It used to emit
+  the update after the delete, where it matched no row. Only a hand-built
+  changeset has such a variable; the engine never produces one.
 
 ## Tests
 
@@ -73,6 +77,9 @@
   rebinds and renames variables and reuses an expression id in a new
   premise, and compares premise rows at the end. Exact-order pins cover a
   replaced premise with no variable update and with its variable rebound.
+
+- A test applies a hand-built changeset with a variable both modified and
+  removed, with deletes held and not held, to both simulated stores.
 
 ## Internal
 

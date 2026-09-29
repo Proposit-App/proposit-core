@@ -689,6 +689,66 @@ describe("orderChangeset suits a store with immediate foreign keys", () => {
         }
     }
 
+    // A hand-built changeset can list a variable as both modified and
+    // removed. Its row is deleted, so an update after the delete finds no
+    // row; like such an expression, it gets the delete alone.
+    for (const hold of [false, true]) {
+        it(`a variable both modified and removed${hold ? ", with deletes held" : ""}`, () => {
+            const eng = new ArgumentEngine(ARG, EMPTY_CLAIM_LOOKUP, {
+                behavior: "permissive",
+            })
+            const [p1, p2, p3] = [
+                eng.createPremise().result,
+                eng.createPremise().result,
+                eng.createPremise().result,
+            ]
+            const v1 = premiseBoundVariable(eng, p1)
+            p2.addExpression({
+                argumentId: ARG.id,
+                argumentVersion: ARG.version,
+                premiseId: p2.getId(),
+                id: "x",
+                type: "variable",
+                variableId: premiseBoundVariable(eng, p3),
+                parentId: null,
+                position: 0,
+            })
+            const stale = eng.getVariables().find((v) => v.id === v1)!
+
+            expectAppliesStrictly(eng, () => {
+                let changes = eng.removeVariable(v1).changes
+                if (hold) {
+                    // Pointing an expression at a new variable holds the
+                    // deletes until after the inserts.
+                    const created = eng.createPremise()
+                    changes = [
+                        created,
+                        p2.updateExpression("x", {
+                            variableId: premiseBoundVariable(
+                                eng,
+                                created.result
+                            ),
+                        }),
+                    ].reduce(
+                        (all, next) => composeChangesets(all, next.changes),
+                        changes
+                    )
+                }
+                return {
+                    ...changes,
+                    variables: {
+                        added: changes.variables?.added ?? [],
+                        removed: changes.variables?.removed ?? [],
+                        modified: [
+                            ...(changes.variables?.modified ?? []),
+                            { ...stale, symbol: "renamed" },
+                        ],
+                    },
+                }
+            })
+        })
+    }
+
     // Removing one premise and creating another needs no late update, so
     // the deletes still come before the inserts: holding them back would let
     // a reused symbol meet the one it replaces.

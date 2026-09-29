@@ -382,7 +382,8 @@ export type TOrderedOperation<
  *    order does not matter; children still come before parents.
  * 4. Delete variables — safe after expression deletes (no remaining FK
  *    references from expressions). Then update variables, except one bound
- *    to a new premise. Held until after phase 8 when an expression update
+ *    to a new premise; one that is also removed is skipped, as an
+ *    expression is in phase 2. Held until after phase 8 when an expression update
  *    names a new variable or premise (see above).
  * 5. Delete premises — safe after all child rows are removed. Held with
  *    phase 4, or until after phase 6 for a variable bound to a new premise.
@@ -507,7 +508,14 @@ export function orderChangeset<
     // stored row may still name one of them.
     const boundToNewPremise = (v: TVar) =>
         isPremiseBound(v) && addedPremiseIds.has(v.boundPremiseId)
-    const modifiedVars = changeset.variables?.modified ?? []
+    // A variable that is also removed gets its delete alone: an update
+    // after the delete would find no row.
+    const removedVarIds = new Set(
+        (changeset.variables?.removed ?? []).map((v) => v.id)
+    )
+    const modifiedVars = (changeset.variables?.modified ?? []).filter(
+        (v) => !removedVarIds.has(v.id)
+    )
     const earlyVars = modifiedVars.filter((v) => !boundToNewPremise(v))
     const lateVars = modifiedVars.filter(boundToNewPremise)
     const updateVariables = (vars: TVar[]) => {
@@ -569,8 +577,9 @@ export function orderChangeset<
         deletePremises()
     }
 
-    // Phase 9: Update variables — no-op. Every modified variable was emitted
-    // with the deletes above. Retained to keep the phase numbering stable.
+    // Phase 9: Update variables — no-op. Every modified variable not also
+    // removed was emitted with the deletes above. Retained to keep the phase
+    // numbering stable.
 
     // Phase 10: Update expressions — no-op. Every non-removed modified
     // expression was emitted in Phase 2 or after Phase 8. This phase is
