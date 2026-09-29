@@ -315,6 +315,7 @@ export type TOrderedOperation<
  * - `expression.premiseId` → `premise.id`
  * - `expression.variableId` → `variable.id` (for variable-type expressions)
  * - `expression.parentId` → `expression.id` (self-FK for tree structure)
+ * - `variable.boundPremiseId` → `premise.id` (for premise-bound variables)
  * - `variable.argumentId` → `argument.id`
  * - `premise.argumentId` → `argument.id`
  *
@@ -336,22 +337,30 @@ export type TOrderedOperation<
  *   a rule allowing one root per premise must be checked at the end of the
  *   transaction, not per statement.
  *
- * An expression updated to point at a parent or a variable that the same
- * changeset inserts is moved to the root in phase 2 and updated in full
- * after the inserts. In phase 2, one late only for its new parent is written
- * whole with the parent cleared, since its variable is not a new one, so it
- * leaves its old variable before that can be deleted. One that points at
- * a new variable can only be detached (`id`, `parentId`, `position`), so the
- * variable and premise deletes (phases 4 and 5) wait until after its full
- * update: the stored row still names its old variable, which may be one of
- * them, and a store whose variable key cascades would otherwise delete the
- * row. A changeset with no such update keeps the order below exactly.
+ * An expression updated to point at a parent, a variable or a premise that
+ * the same changeset inserts is moved to the root in phase 2 and updated in
+ * full after the inserts. In phase 2, one late only for its new parent is
+ * written whole with the parent cleared, since its variable and premise are
+ * not new ones, so it leaves its old variable before that can be deleted.
+ * One that names a new variable or premise can only be detached (`id`,
+ * `parentId`, `position`), so the variable and premise deletes (phases 4
+ * and 5) wait until after its full update: the stored row still names its
+ * old variable and premise, which may be among them, and a store whose keys
+ * cascade would otherwise delete the row.
  *
- * Known exceptions, only when those deletes wait, for a store that checks
- * the rule per statement. The inserts then run while the removed rows still
- * exist, so:
+ * Variable updates run between the variable and premise deletes, so a
+ * rebound variable leaves its old premise before that premise is deleted,
+ * and a rename can take a symbol a removed variable frees. One bound to a
+ * premise the same changeset inserts runs after that insert instead, and
+ * the premise deletes wait for it. A changeset with no variable update and
+ * no expression update that needs an insert first keeps the order below
+ * exactly.
+ *
+ * Known exceptions, only when deletes wait, for a store that checks the rule
+ * per statement. The inserts then run while the removed rows still exist, so:
  * - a variable inserted with the symbol of one being removed breaks a rule
- *   that symbols are unique per argument;
+ *   that symbols are unique per argument (only when the variable deletes
+ *   wait, for an expression update);
  * - a premise inserted as the conclusion while the removed conclusion
  *   premise still exists breaks a rule of one conclusion per argument.
  *
@@ -370,18 +379,21 @@ export type TOrderedOperation<
  *    so they must be removed first. Every one is detached by now, so their
  *    order does not matter; children still come before parents.
  * 4. Delete variables — safe after expression deletes (no remaining FK
- *    references from expressions). Held until after phase 8 when an update
- *    points at a new variable (see above).
+ *    references from expressions). Then update variables, except one bound
+ *    to a new premise. Held until after phase 8 when an expression update
+ *    names a new variable or premise (see above).
  * 5. Delete premises — safe after all child rows are removed. Held with
- *    phase 4.
+ *    phase 4, or until after phase 6 for a variable bound to a new premise.
  * 6. Insert premises — new premises must exist before their expressions and
- *    variables can be inserted.
+ *    variables can be inserted. Then update the variables bound to them,
+ *    and delete premises if phase 5 waited for those.
  * 7. Insert variables — new variables must exist before variable-type
  *    expressions can reference them.
  * 8. Insert expressions — topologically sorted so parent expressions are
  *    inserted before their children (satisfies the parentId self-FK). Then
  *    the updates held back in phase 2, then phases 4 and 5 if held.
- * 9. Update variables — grouped after inserts for clarity.
+ * 9. (No-op — variable updates are emitted with phase 4 or 6, or after
+ *    phase 8 when the deletes are held.)
  * 10. (No-op — expression updates are emitted in phase 2 or after phase 8.)
  * 11. Update argument metadata — if present.
  * 12. Update role state — if present.
