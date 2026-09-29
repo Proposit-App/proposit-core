@@ -8,6 +8,7 @@ import type {
     TCoreArgumentRoleState,
 } from "../schemata/argument.js"
 import type { TCoreEntityChanges, TCoreChangeset } from "../types/mutation.js"
+import { isPremiseBound } from "../schemata/propositional.js"
 import { POSITION_INITIAL } from "./position.js"
 
 /**
@@ -425,23 +426,28 @@ export function orderChangeset<
     const addedVarIds = new Set(
         (changeset.variables?.added ?? []).map((v) => v.id)
     )
-    const pointsAtNewVariable = (e: TExpr) =>
-        e.type === "variable" && addedVarIds.has(e.variableId)
+    const addedPremiseIds = new Set(
+        (changeset.premises?.added ?? []).map((p) => p.id)
+    )
+    const namesNewRow = (e: TExpr) =>
+        addedPremiseIds.has(e.premiseId) ||
+        (e.type === "variable" && addedVarIds.has(e.variableId))
     const late: TExpr[] = []
     for (const e of changeset.expressions?.modified ?? []) {
         if (removedExprIds.has(e.id)) continue
         if (
             (e.parentId !== null && addedExprIds.has(e.parentId)) ||
-            pointsAtNewVariable(e)
+            namesNewRow(e)
         ) {
             late.push(e)
-            // An update pointing at a new variable can only detach now. One
-            // late for its parent alone names rows that exist, so it moves
-            // off its old variable here too, before that can be deleted.
+            // An update naming a new premise or variable can only detach
+            // now. One late for its parent alone names rows that exist, so
+            // it moves off its old variable here too, before that can be
+            // deleted.
             ops.push({
                 type: "update",
                 entity: "expression",
-                data: pointsAtNewVariable(e)
+                data: namesNewRow(e)
                     ? { id: e.id, parentId: null, position: POSITION_INITIAL }
                     : { ...e, parentId: null, position: POSITION_INITIAL },
             })
@@ -475,24 +481,49 @@ export function orderChangeset<
     // Phases 4 and 5: Delete variables, then premises — safe after
     // expression deletes (no remaining FK references from expressions), and
     // premises after their bound variables. When a late update moves an
-    // expression onto a new variable, the stored row still points at its old
-    // one, which may be among these; the entry does not say which, so all of
-    // them wait until the late updates have run.
-    const deleteVariablesAndPremises = () => {
-        for (const v of changeset.variables?.removed ?? []) {
-            ops.push({ type: "delete", entity: "variable", data: v })
+    // expression onto a new variable or premise, the stored row still names
+    // its old ones, which may be among these; the entry does not say which,
+    // so all of them wait until the late updates have run.
+    //
+    // Variable updates run between the two deletes: after the variable
+    // deletes, so a rename can take a symbol a removed variable frees, and
+    // before the premise deletes, so a rebound variable leaves its old
+    // premise first. One bound to a premise this changeset inserts runs
+    // after that insert instead, and the premise deletes wait for it: the
+    // stored row may still name one of them.
+    const boundToNewPremise = (v: TVar) =>
+        isPremiseBound(v) && addedPremiseIds.has(v.boundPremiseId)
+    const modifiedVars = changeset.variables?.modified ?? []
+    const earlyVars = modifiedVars.filter((v) => !boundToNewPremise(v))
+    const lateVars = modifiedVars.filter(boundToNewPremise)
+    const updateVariables = (vars: TVar[]) => {
+        for (const v of vars) {
+            ops.push({ type: "update", entity: "variable", data: v })
         }
+    }
+    const deletePremises = () => {
         for (const p of changeset.premises?.removed ?? []) {
             ops.push({ type: "delete", entity: "premise", data: p })
         }
     }
-    const holdDeletes = late.some(pointsAtNewVariable)
-    if (!holdDeletes) deleteVariablesAndPremises()
+    const holdDeletes = late.some(namesNewRow)
+    if (!holdDeletes) {
+        for (const v of changeset.variables?.removed ?? []) {
+            ops.push({ type: "delete", entity: "variable", data: v })
+        }
+        updateVariables(earlyVars)
+        if (lateVars.length === 0) deletePremises()
+    }
 
     // Phase 6: Insert premises — new premises must exist before their
-    // expressions and variables can be inserted.
+    // expressions and variables can be inserted. Then the variable updates
+    // bound to them, and the premise deletes that waited for those.
     for (const p of changeset.premises?.added ?? []) {
         ops.push({ type: "insert", entity: "premise", data: p })
+    }
+    if (!holdDeletes && lateVars.length > 0) {
+        updateVariables(lateVars)
+        deletePremises()
     }
 
     // Phase 7: Insert variables — new variables must exist before
@@ -516,12 +547,16 @@ export function orderChangeset<
     for (const e of late) {
         ops.push({ type: "update", entity: "expression", data: e })
     }
-    if (holdDeletes) deleteVariablesAndPremises()
-
-    // Phase 9: Update variables — grouped after inserts for clarity.
-    for (const v of changeset.variables?.modified ?? []) {
-        ops.push({ type: "update", entity: "variable", data: v })
+    if (holdDeletes) {
+        for (const v of changeset.variables?.removed ?? []) {
+            ops.push({ type: "delete", entity: "variable", data: v })
+        }
+        updateVariables(modifiedVars)
+        deletePremises()
     }
+
+    // Phase 9: Update variables — no-op. Every modified variable was emitted
+    // with the deletes above. Retained to keep the phase numbering stable.
 
     // Phase 10: Update expressions — no-op. Every non-removed modified
     // expression was emitted in Phase 2 or after Phase 8. This phase is
