@@ -299,6 +299,41 @@ export class ArgumentEngine<
         })
     }
 
+    /**
+     * Connects a premise engine to this argument: the circularity and
+     * empty-bound-premise checks, the source of known variable ids, the
+     * argument-level validation run after each premise mutation, the
+     * change notification, and the normalization follow-up. Every place
+     * that adds a premise engine to `this.premises` calls this once.
+     */
+    private wirePremiseEngine(
+        pe: PremiseEngine<TArg, TPremise, TExpr, TVar>
+    ): void {
+        this.wireCircularityCheck(pe)
+        this.wireEmptyBoundPremiseCheck(pe)
+        pe.setVariableIdsCallback(
+            () => new Set(this.variables.toArray().map((v) => v.id))
+        )
+        this.wireArgumentValidation(pe)
+        const premiseId = pe.getId()
+        pe.setOnMutate(() => {
+            this.markDirty()
+            this.reactiveDirty.premiseIds.add(premiseId)
+            this.notifySubscribers()
+        })
+        pe.setMutationFollowUp((changes) =>
+            this.followUpWithNormalization(changes)
+        )
+    }
+
+    private wireArgumentValidation(
+        pe: PremiseEngine<TArg, TPremise, TExpr, TVar>
+    ): void {
+        pe.setArgumentValidateCallback(() =>
+            this.validateAfterPremiseMutation()
+        )
+    }
+
     private generateUniqueSymbol(): string {
         let n = this.premises.size - 1
         let candidate = `P${n}`
@@ -396,9 +431,7 @@ export class ArgumentEngine<
 
     private restorePremiseValidation(): void {
         for (const pe of this.premises.values()) {
-            pe.setArgumentValidateCallback(() =>
-                this.validateAfterPremiseMutation()
-            )
+            this.wireArgumentValidation(pe)
         }
     }
 
@@ -914,22 +947,7 @@ export class ArgumentEngine<
                 }
             )
             this.premises.set(id, pm)
-            this.wireCircularityCheck(pm)
-            this.wireEmptyBoundPremiseCheck(pm)
-            pm.setVariableIdsCallback(
-                () => new Set(this.variables.toArray().map((v) => v.id))
-            )
-            pm.setArgumentValidateCallback(() =>
-                this.validateAfterPremiseMutation()
-            )
-            pm.setOnMutate(() => {
-                this.markDirty()
-                this.reactiveDirty.premiseIds.add(id)
-                this.notifySubscribers()
-            })
-            pm.setMutationFollowUp((changes) =>
-                this.followUpWithNormalization(changes)
-            )
+            this.wirePremiseEngine(pm)
             const collector = new ChangeCollector<TExpr, TVar, TPremise, TArg>()
             collector.addedPremise(pm.toPremiseData())
             this.markDirty()
@@ -1899,23 +1917,7 @@ export class ArgumentEngine<
                 generateId
             )
             engine.premises.set(pe.getId(), pe)
-            engine.wireCircularityCheck(pe)
-            engine.wireEmptyBoundPremiseCheck(pe)
-            pe.setVariableIdsCallback(
-                () => new Set(engine.variables.toArray().map((v) => v.id))
-            )
-            pe.setArgumentValidateCallback(() =>
-                engine.validateAfterPremiseMutation()
-            )
-            const premiseId = pe.getId()
-            pe.setOnMutate(() => {
-                engine.markDirty()
-                engine.reactiveDirty.premiseIds.add(premiseId)
-                engine.notifySubscribers()
-            })
-            pe.setMutationFollowUp((changes) =>
-                engine.followUpWithNormalization(changes)
-            )
+            engine.wirePremiseEngine(pe)
         }
         // Restore claim-bound variables first, then premise-bound variables
         for (const v of snapshot.variables.variables) {
@@ -2144,23 +2146,7 @@ export class ArgumentEngine<
         }
         this.conclusionPremiseId = snapshot.conclusionPremiseId
         for (const pe of this.premises.values()) {
-            this.wireCircularityCheck(pe)
-            this.wireEmptyBoundPremiseCheck(pe)
-            pe.setVariableIdsCallback(
-                () => new Set(this.variables.toArray().map((v) => v.id))
-            )
-            pe.setArgumentValidateCallback(() =>
-                this.validateAfterPremiseMutation()
-            )
-            const premiseId = pe.getId()
-            pe.setOnMutate(() => {
-                this.markDirty()
-                this.reactiveDirty.premiseIds.add(premiseId)
-                this.notifySubscribers()
-            })
-            pe.setMutationFollowUp((changes) =>
-                this.followUpWithNormalization(changes)
-            )
+            this.wirePremiseEngine(pe)
         }
         this.markDirty()
         this.reactiveDirty = {
