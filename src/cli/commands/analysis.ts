@@ -17,6 +17,18 @@ import {
 } from "../storage/analysis.js"
 import { listPremiseIds, readPremiseData } from "../storage/premises.js"
 import { readVariables } from "../storage/variables.js"
+import {
+    GrammarTierSchema,
+    type TGrammarTier,
+} from "../../lib/grammar/types.js"
+
+const GRAMMAR_TIERS: readonly TGrammarTier[] = GrammarTierSchema.anyOf.map(
+    (schema) => schema.const
+)
+
+function isGrammarTier(value: string): value is TGrammarTier {
+    return (GRAMMAR_TIERS as readonly string[]).includes(value)
+}
 
 export function registerAnalysisCommands(
     versionedCmd: Command,
@@ -658,10 +670,42 @@ export function registerAnalysisCommands(
     analysis
         .command("validate-argument")
         .description("Validate the argument structure for evaluability")
+        .option(
+            "--tier <tier>",
+            `Also check grammar rules from Structural down to this tier: ${GRAMMAR_TIERS.join(", ")}`
+        )
         .option("--json", "Output as JSON")
-        .action(async (opts: { json?: boolean }) => {
+        .action(async (opts: { tier?: string; json?: boolean }) => {
+            const { tier } = opts
+            if (tier !== undefined && !isGrammarTier(tier)) {
+                errorExit(
+                    `Tier must be one of ${GRAMMAR_TIERS.map((t) => `"${t}"`).join(", ")}, got "${tier}".`
+                )
+            }
             const engine = await hydrateEngine(argumentId, version)
             const result = engine.validateEvaluability()
+
+            if (tier !== undefined) {
+                // A tier adds the grammar rules to the readiness checks rather
+                // than replacing them, so no tier reports an argument as ok
+                // that the plain command reports as invalid.
+                const violations = engine.validate(tier)
+                const ok = result.ok && violations.length === 0
+                if (opts.json) {
+                    printJson({ ok, issues: result.issues, tier, violations })
+                    return
+                }
+                printLine(ok ? "ok" : "invalid")
+                for (const issue of result.issues) {
+                    printLine(
+                        `${issue.severity} ${issue.code}: ${issue.message}`
+                    )
+                }
+                for (const v of violations) {
+                    printLine(`${v.tier} ${v.code}: ${v.message}`)
+                }
+                return
+            }
 
             if (opts.json) {
                 printJson(result)

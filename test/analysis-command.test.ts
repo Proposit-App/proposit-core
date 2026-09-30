@@ -217,3 +217,73 @@ describe("analysis validate-argument without --tier", () => {
         ])
     })
 })
+
+describe("analysis validate-argument --tier", () => {
+    for (const tier of ["structural", "evaluable", "derivable"]) {
+        it(`reports fixture A as ok at the ${tier} tier`, async () => {
+            mockHydrateEngine.mockResolvedValue(buildFixtureA())
+            await run("analysis", "validate-argument", "--tier", tier)
+            expect(printedLines[0]).toBe("ok")
+            expect(printedLines.some((line) => line.includes("P-6"))).toBe(
+                false
+            )
+        })
+    }
+
+    it("reports P-6 for fixture A at the presentable tier", async () => {
+        mockHydrateEngine.mockResolvedValue(buildFixtureA())
+        await run("analysis", "validate-argument", "--tier", "presentable")
+        expect(printedLines[0]).toBe("invalid")
+        expect(
+            printedLines.filter((line) => line.startsWith("presentable P-6: "))
+        ).toHaveLength(1)
+    })
+
+    it("adds the tier and its violations to the JSON", async () => {
+        const engine = buildFixtureA()
+        mockHydrateEngine.mockResolvedValue(engine)
+        await run(
+            "analysis",
+            "validate-argument",
+            "--tier",
+            "presentable",
+            "--json"
+        )
+        expect(mockPrintJson).toHaveBeenCalledTimes(1)
+        const printed = mockPrintJson.mock.calls[0][0] as {
+            ok: boolean
+            tier: string
+            issues: unknown[]
+            violations: Record<string, unknown>[]
+        }
+        expect(printed.ok).toBe(false)
+        expect(printed.tier).toBe("presentable")
+        expect(printed.issues).toEqual(engine.validateEvaluability().issues)
+        expect(printed.violations).toEqual(engine.validate("presentable"))
+        expect(printed.violations).toHaveLength(1)
+        const [violation] = printed.violations
+        expect(violation.code).toBe("P-6")
+        expect(violation.expressionId).toBe("restates-p")
+        expect(typeof violation.premiseId).toBe("string")
+        expect(typeof violation.variableId).toBe("string")
+    })
+
+    it("keeps the readiness issues, so a tier is never looser than none", async () => {
+        mockHydrateEngine.mockResolvedValue(buildEmptyArgument())
+        await run("analysis", "validate-argument", "--tier", "presentable")
+        expect(printedLines).toEqual([
+            "invalid",
+            "error ARGUMENT_NO_CONCLUSION: Argument has no designated conclusion premise.",
+        ])
+    })
+
+    it("refuses a tier it does not recognise before reading the argument", async () => {
+        await expect(
+            run("analysis", "validate-argument", "--tier", "bogus")
+        ).rejects.toThrow("errorExit")
+        expect(mockErrorExit).toHaveBeenCalledWith(
+            'Tier must be one of "structural", "evaluable", "derivable", "presentable", got "bogus".'
+        )
+        expect(mockHydrateEngine).not.toHaveBeenCalled()
+    })
+})
