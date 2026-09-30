@@ -90,7 +90,7 @@ work:
         - path: examples/arguments/*.yaml
           trigger: Argument-Schema
           description: >-
-              Example argument YAML files used by `test/examples.test.ts`;
+              Example argument YAML files used by `test/cli/examples.test.ts`;
               update when core argument schemas (`src/lib/schemata/`) or
               CLI-extended schemas (`src/cli/schemata.ts`, YAML import shape)
               change.
