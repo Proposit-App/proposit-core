@@ -1822,7 +1822,7 @@ Returns extension fields to spread onto every axiom connection added to `ClaimAx
 
 _Since v1.1.0._
 
-The pipeline framework runs a DAG of processing stages — some deterministic, some backed by an LLM — and reports structured per-stage failures. It is **provider-agnostic**: stages depend only on the abstract `TLlmProvider` interface, and concrete providers are shipped as optional subpath extensions. `src/lib/` carries zero third-party SDK imports; the SDK-coupled providers live under `src/extensions/` and declare their SDKs as optional `peerDependencies`.
+The pipeline framework runs a DAG of processing stages — some deterministic, some backed by an LLM — and reports structured per-stage failures. It is **provider-agnostic**: stages depend only on the abstract `TLlmProvider` interface, and concrete providers are shipped as optional subpath extensions. `src/lib/` carries zero third-party SDK imports, and the providers under `src/extensions/` call their APIs with plain `fetch`, so no provider needs an SDK installed.
 
 The framework primitives, the `TLlmProvider` interface, the OpenAI provider, the failure-code constants, and the default ingestion-pipeline factories are all re-exported from the package root for single-import ergonomics. The two concrete providers additionally have dedicated subpath exports (`@proposit/proposit-core/extensions/openai`, `@proposit/proposit-core/extensions/chat-completions`) for callers that prefer to tree-shake provider machinery.
 
@@ -2005,7 +2005,7 @@ Exported from the SDK-free `src/lib/pipelines/failure-codes.ts` (and re-exported
 
 ### `@proposit/proposit-core/extensions/openai`
 
-The **production default** provider. Calls the OpenAI Responses API over raw `fetch` (no `openai` SDK runtime dependency for the request path), with an inlined TypeBox → strict-mode JSON Schema converter and a function-tool agent loop. `openai` is declared as an **optional `peerDependency`**.
+The **production default** provider. Calls the OpenAI Responses API over raw `fetch`, so the `openai` SDK is not needed, with an inlined TypeBox → strict-mode JSON Schema converter and a function-tool agent loop.
 
 #### `createOpenAiResponsesProvider(options)` → `TLlmProvider`
 
