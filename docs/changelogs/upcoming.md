@@ -29,6 +29,14 @@
   version, and stores a new variable through shared private helpers, and
   `ExpressionManager` stores every new expression through one private helper,
   where each of these steps used to be written out at every call site.
+- The OpenAI and chat-completions providers share one TypeBox-to-JSON-Schema
+  walker (`src/extensions/structured-output/typebox-converter.ts`); each passes
+  in only how it writes an object. `typeboxToOpenAiSchema` and
+  `typeboxToJsonSchema` produce the same output and the same errors as before.
+- The two providers share the sorting of a failed HTTP status into a category,
+  and the abort check, in `src/extensions/llm-http/errors.ts`. Each provider's
+  `classifyHttpError` still returns its own error classes, with the same
+  messages. None of the shared code is exported.
 
 ## Removed
 
