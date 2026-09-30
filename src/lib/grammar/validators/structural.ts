@@ -21,6 +21,7 @@
 import type { TViolation } from "../types.js"
 import type { TValidatorContext } from "./context.js"
 import { isClaimBound, isPremiseBound } from "../../schemata/propositional.js"
+import { buildChildMap, buildExpressionsById } from "./tree-views.js"
 
 /**
  * S-1 — FK soundness.
@@ -203,8 +204,7 @@ export function validateS3(ctx: TValidatorContext): readonly TViolation[] {
  */
 export function validateS4(ctx: TValidatorContext): readonly TViolation[] {
     const violations: TViolation[] = []
-    const byId = new Map<string, (typeof ctx.expressions)[number]>()
-    for (const e of ctx.expressions) byId.set(e.id, e)
+    const byId = buildExpressionsById(ctx.expressions)
 
     for (const start of ctx.expressions) {
         const seen = new Set<string>()
@@ -344,26 +344,6 @@ export function validateS7(_ctx: TValidatorContext): readonly TViolation[] {
     return []
 }
 /**
- * Build a Map<parentId, children-sorted-by-position> view of the
- * expression tree. Internal helper for the arity/position validators.
- */
-function childrenByParent(
-    expressions: readonly TValidatorContext["expressions"][number][]
-): Map<string, TValidatorContext["expressions"][number][]> {
-    const out = new Map<string, TValidatorContext["expressions"][number][]>()
-    for (const e of expressions) {
-        if (e.parentId === null) continue
-        const list = out.get(e.parentId) ?? []
-        list.push(e)
-        out.set(e.parentId, list)
-    }
-    for (const list of out.values()) {
-        list.sort((a, b) => a.position - b.position)
-    }
-    return out
-}
-
-/**
  * S-8 — Binary operator arity. `implies` and `iff` have exactly 2
  * children. Child ordering (antecedent at lower position, consequent at
  * higher) is conveyed by the relative sibling positions — any
@@ -379,7 +359,7 @@ function childrenByParent(
  */
 export function validateS8(ctx: TValidatorContext): readonly TViolation[] {
     const violations: TViolation[] = []
-    const children = childrenByParent(ctx.expressions)
+    const children = buildChildMap(ctx.expressions)
     for (const e of ctx.expressions) {
         if (e.type !== "operator") continue
         if (e.operator !== "implies" && e.operator !== "iff") continue
@@ -518,7 +498,7 @@ export function validateS11(ctx: TValidatorContext): readonly TViolation[] {
  */
 export function validateS12(ctx: TValidatorContext): readonly TViolation[] {
     const violations: TViolation[] = []
-    const children = childrenByParent(ctx.expressions)
+    const children = buildChildMap(ctx.expressions)
     for (const e of ctx.expressions) {
         if (e.type !== "operator" || e.operator !== "not") continue
         const count = (children.get(e.id) ?? []).length
@@ -542,7 +522,7 @@ export function validateS12(ctx: TValidatorContext): readonly TViolation[] {
  */
 export function validateS13(ctx: TValidatorContext): readonly TViolation[] {
     const violations: TViolation[] = []
-    const children = childrenByParent(ctx.expressions)
+    const children = buildChildMap(ctx.expressions)
     for (const e of ctx.expressions) {
         if (e.type !== "formula") continue
         const count = (children.get(e.id) ?? []).length

@@ -60,6 +60,7 @@ import type {
     TClaimBoundVariable,
 } from "../schemata/index.js"
 import { isNakedQTree } from "./naked-q.js"
+import { buildWithoutAutoNormalization } from "./permissive-build.js"
 import type { TViolation } from "./types.js"
 
 /**
@@ -157,30 +158,11 @@ export function populateFromGrounding<
     const premiseId = pe.getId()
     const gen = engine.idGenerator
 
-    // Permissive-build + explicit normalize() pattern. The
-    // incremental tree-build below (`removeExpression(nakedRoot)`,
-    // then `addExpression(IMPLIES)`, then antecedent, then Q) passes
-    // through transient states where parents have 0 children. Under
-    // the post-mutation AN hook (assistive mode), AN-3 would
-    // eagerly collapse those 0-child operators between addExpression
-    // calls, breaking the build. We disarm AN for the build by
-    // switching to permissive, then re-arm + run a single explicit
-    // `engine.normalize()` at the end to apply AN-1 (formula buffer
-    // between IMPLIES and OR) on the fully-built tree.
-    //
-    // The saved-behavior capture + try/finally is essential: if a
-    // mutation inside the build throws, the engine's behavior is
-    // restored to its pre-call value rather than left stuck in
-    // permissive mode. The `normalize()` call only runs on the
-    // success path (it's inside the try after all mutations
-    // succeeded) and only when the engine was originally in
-    // assistive mode — permissive callers want the un-normalized
-    // form per the populate-from JSDoc.
-    const savedBehavior = engine.behavior
-    if (savedBehavior === "assistive") {
-        engine.setBehavior("permissive")
-    }
-    try {
+    // The build below passes through states where an operator has no
+    // children yet, so it runs with auto-normalization switched off; a
+    // single `engine.normalize()` then inserts the formula buffer between
+    // IMPLIES and OR (AN-1) when the engine started out assistive.
+    buildWithoutAutoNormalization(engine, () => {
         // Step 1: remove the naked-Q root (cascades nothing — it's a
         // leaf).
         pe.removeExpression(nakedRoot.id, true)
@@ -258,25 +240,7 @@ export function populateFromGrounding<
             parentId: impliesId,
             position: 1,
         } as unknown as Parameters<typeof pe.addExpression>[0])
-
-        // Step 5: restore the original behavior and (if we switched)
-        // run the single explicit normalize() to apply AN-1 on the
-        // fully-built tree.
-        if (savedBehavior === "assistive") {
-            engine.setBehavior(savedBehavior)
-            engine.normalize()
-        }
-    } catch (e) {
-        // Restore behavior on failure paths too so the engine is not
-        // left stuck in permissive mode after an unexpected mutation
-        // throw. The build is not transactional — callers expect the
-        // engine state to surface the partial build for diagnosis;
-        // only the behavior flag gets restored.
-        if (savedBehavior === "assistive") {
-            engine.setBehavior(savedBehavior)
-        }
-        throw e
-    }
+    })
 
     return {
         kind: "populated",

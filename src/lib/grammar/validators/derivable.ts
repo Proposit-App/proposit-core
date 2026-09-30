@@ -16,30 +16,10 @@ import type {
     TCorePropositionalVariableExpression,
     TCoreClaim,
 } from "../../schemata/index.js"
+import type { TChildMap } from "./tree-views.js"
+import { buildChildMap, buildExpressionsById } from "./tree-views.js"
 
 // ---- Internal helpers -------------------------------------------------
-
-type TChildMap = Map<string, TCorePropositionalExpression[]>
-
-/**
- * Build a Map<parentId, children-sorted-by-position> view of the expression
- * tree.
- */
-function buildTChildMap(
-    expressions: readonly TCorePropositionalExpression[]
-): TChildMap {
-    const out: TChildMap = new Map()
-    for (const e of expressions) {
-        if (e.parentId === null) continue
-        const list = out.get(e.parentId) ?? []
-        list.push(e)
-        out.set(e.parentId, list)
-    }
-    for (const list of out.values()) {
-        list.sort((a, b) => a.position - b.position)
-    }
-    return out
-}
 
 /**
  * Walks down through transparent `formula` nodes, returning the first
@@ -152,7 +132,7 @@ function findPremiseRoot(
  */
 export function validateD1(ctx: TValidatorContext): readonly TViolation[] {
     const violations: TViolation[] = []
-    const children = buildTChildMap(ctx.expressions)
+    const children = buildChildMap(ctx.expressions)
     const grouped = groupExpressionsByPremise(ctx.expressions)
     const varToClaim = buildVarToClaim(ctx)
 
@@ -322,7 +302,7 @@ function antecedentMatchesPopulatedForm(
  */
 export function validateD2(ctx: TValidatorContext): readonly TViolation[] {
     const violations: TViolation[] = []
-    const children = buildTChildMap(ctx.expressions)
+    const children = buildChildMap(ctx.expressions)
     const grouped = groupExpressionsByPremise(ctx.expressions)
 
     for (const p of ctx.premises) {
@@ -367,7 +347,7 @@ export function validateD2(ctx: TValidatorContext): readonly TViolation[] {
  */
 export function validateD3(ctx: TValidatorContext): readonly TViolation[] {
     const violations: TViolation[] = []
-    const children = buildTChildMap(ctx.expressions)
+    const children = buildChildMap(ctx.expressions)
     const grouped = groupExpressionsByPremise(ctx.expressions)
     const varToClaim = buildVarToClaim(ctx)
 
@@ -455,13 +435,12 @@ function validateClaimPlacement(
     code: "D-4" | "D-5"
 ): readonly TViolation[] {
     const violations: TViolation[] = []
-    const children = buildTChildMap(ctx.expressions)
+    const children = buildChildMap(ctx.expressions)
     const grouped = groupExpressionsByPremise(ctx.expressions)
     const varToClaim = buildVarToClaim(ctx)
     const premiseTypeById = new Map<string, "freeform" | "derivation">()
     for (const p of ctx.premises) premiseTypeById.set(p.id, p.type)
-    const expressionsById = new Map<string, TCorePropositionalExpression>()
-    for (const e of ctx.expressions) expressionsById.set(e.id, e)
+    const expressionsById = buildExpressionsById(ctx.expressions)
 
     for (const e of ctx.expressions) {
         if (e.type !== "variable") continue

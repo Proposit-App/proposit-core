@@ -17,39 +17,8 @@ import type {
 import { isPremiseBound } from "../../schemata/index.js"
 import { hasBinaryOperatorInBoundedSubtree } from "../bounded-subtree.js"
 import { isVariadicOperator } from "../../core/expression-manager-checks.js"
-
-type TChildMap = Map<string, TCorePropositionalExpression[]>
-
-/**
- * Build a Map<parentId, children-sorted-by-position> view of the
- * expression tree.
- */
-function buildChildMap(
-    expressions: readonly TCorePropositionalExpression[]
-): TChildMap {
-    const out: TChildMap = new Map()
-    for (const e of expressions) {
-        if (e.parentId === null) continue
-        const list = out.get(e.parentId) ?? []
-        list.push(e)
-        out.set(e.parentId, list)
-    }
-    for (const list of out.values()) {
-        list.sort((a, b) => a.position - b.position)
-    }
-    return out
-}
-
-/**
- * Map<expressionId, expression> view for quick lookup.
- */
-function buildExpressionsById(
-    expressions: readonly TCorePropositionalExpression[]
-): Map<string, TCorePropositionalExpression> {
-    const out = new Map<string, TCorePropositionalExpression>()
-    for (const e of expressions) out.set(e.id, e)
-    return out
-}
+import type { TChildMap } from "./tree-views.js"
+import { buildChildMap, buildExpressionsById } from "./tree-views.js"
 
 /**
  * P-1 — Formula buffer between operators. A non-`not` operator (`and`,
@@ -117,8 +86,7 @@ export function validateP2(ctx: TValidatorContext): readonly TViolation[] {
 export function validateP3(ctx: TValidatorContext): readonly TViolation[] {
     const violations: TViolation[] = []
     const children = buildChildMap(ctx.expressions)
-    const exprById = new Map<string, TCorePropositionalExpression>()
-    for (const e of ctx.expressions) exprById.set(e.id, e)
+    const exprById = buildExpressionsById(ctx.expressions)
     const lookup = (id: string): readonly TCorePropositionalExpression[] =>
         children.get(id) ?? []
     const getExpression = (
