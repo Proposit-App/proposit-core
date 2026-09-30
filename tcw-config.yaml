@@ -94,6 +94,25 @@ work:
               update when core argument schemas (`src/lib/schemata/`) or
               CLI-extended schemas (`src/cli/schemata.ts`, YAML import shape)
               change.
+        - path: skills/proposit-core/SKILL.md
+          trigger: Public-API
+          description: >-
+              The agent skill published in the npm package: its overview of
+              the library's model, the common mistakes, and the table routing
+              each topic to a reference doc. Update when a public concept,
+              entry point or subpath export changes.
+        - path: skills/proposit-core/docs/*.md
+          trigger: Public-Engine-API
+          description: >-
+              The published skill's reference docs (building arguments,
+              evaluation, grammar, persistence, forking and diffs, pipelines);
+              update when a public method, type, rule or behaviour they
+              describe changes, and keep every code example compiling.
+        - path: skills/proposit-core/docs/cli.md
+          trigger: Public-CLI-API
+          description: >-
+              The published skill's CLI reference; update when a command,
+              flag, output format or storage layout changes.
         - path: docs/release-notes/upcoming.md
           trigger: Public-API
           description: >-
