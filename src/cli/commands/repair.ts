@@ -3,6 +3,7 @@ import { hydrateEngine, persistEngine } from "../engine.js"
 import { listPremiseIds } from "../storage/premises.js"
 import { readPremiseData } from "../storage/premises.js"
 import { printJson, printLine } from "../output.js"
+import { assertNotPublished } from "../guards.js"
 
 export function registerRepairCommand(
     versionedCmd: Command,
@@ -40,6 +41,12 @@ export function registerRepairCommand(
             }
 
             const inserted = engineExprCount - diskExprCount
+
+            // A published version is read-only. Reporting what a repair would
+            // do only reads, so a dry run is allowed on one.
+            if (!opts.dryRun && inserted > 0) {
+                await assertNotPublished(argumentId, version)
+            }
 
             if (opts.json) {
                 printJson({
