@@ -68,6 +68,14 @@
   (`finalizeResponseV2` itself). The functions moved unchanged, and
   `finalize-response-v2.ts` re-exports the same public names from the same
   subpath.
+- The 33 IEEE segment templates are now built from small shared pieces (the
+  authors list, the "Accessed:" date, the "[Online]. Available:" link, the
+  optional doi, edition, isbn, page and version parts) instead of repeating the
+  same objects by hand, and they live in `src/extensions/citations/ieee/templates/`,
+  one file per group of reference types. Each piece returns new objects every
+  time, so no two templates share one. `segment-templates.ts` still exports
+  every template and instruction type under the same names, and every template
+  holds exactly the same instructions, so rendered citations are unchanged.
 
 ## Removed
 
