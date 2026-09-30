@@ -32,3 +32,17 @@ Without `--tier`, the command's output is unchanged.
 silently ran the other search. It now exits with an error naming the two valid
 modes. A script that passed a misspelled mode will now fail instead of running
 the wrong search.
+
+### IEEE citation dates show the right day in every time zone
+
+A citation's date used to print a day early or late when the code ran outside
+UTC. For example, a newspaper article dated 1787-11-22 printed as
+"Nov. 21, 1787" in Los Angeles. Citation dates are now read as calendar dates,
+so they print the same day wherever the formatting runs, and a server and a
+browser formatting the same citation now agree.
+
+If you build a citation date yourself rather than decoding it from a string,
+make it midnight UTC of the day you mean, for example
+`new Date(Date.UTC(1995, 7, 12))` or `new Date("1995-08-12")`. A date made with
+the local-time constructor, such as `new Date(1995, 7, 12)`, now prints the day
+before when the code runs east of UTC.

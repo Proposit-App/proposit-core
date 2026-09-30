@@ -951,9 +951,9 @@ describe("SocialMedia", () => {
         postTitle: "Title",
         websiteTitle: "Site",
         platform: "Reddit",
-        postDate: new Date(1995, 7, 12),
+        postDate: new Date(Date.UTC(1995, 7, 12)),
         url,
-        accessedDate: new Date(2026, 8, 1),
+        accessedDate: new Date(Date.UTC(2026, 8, 1)),
     }
     const withBody = (() => {
         const { postTitle: _t, websiteTitle: _w, ...rest } = full
@@ -1060,7 +1060,7 @@ describe("SocialMedia", () => {
             type: "SocialMedia" as const,
             author: author("Jane Q.", "Doe"),
             platform: "X",
-            postDate: new Date(2026, 2, 5),
+            postDate: new Date(Date.UTC(2026, 2, 5)),
             url,
         }
         expect(Value.Check(SocialMediaReferenceSchema, old)).toBe(true)
