@@ -6,6 +6,7 @@
 // is synchronous. The timeout is a standard `AbortSignal.timeout` with
 // no extra HTTP-stack dependency.
 
+import { isAbortError } from "../llm-http/errors.js"
 import {
     classifyFetchError,
     classifyHttpError,
@@ -15,14 +16,6 @@ import type {
     TChatCompletionsFetch,
     TChatCompletionsResponse,
 } from "./types.js"
-
-function isAbortError(err: unknown): boolean {
-    return (
-        typeof err === "object" &&
-        err !== null &&
-        (err as { name?: unknown }).name === "AbortError"
-    )
-}
 
 // Compose the caller's AbortSignal with a timeout signal so EITHER one
 // aborts the request. `AbortSignal.any` / `AbortSignal.timeout` are

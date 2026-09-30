@@ -2,12 +2,9 @@
 // OpenAI provider. These are pure, transport-agnostic helpers: given an
 // HTTP `Response` (for streaming) or a parsed envelope, they extract the
 // terminal envelope, assistant text, function calls, and token usage.
-//
-// `isAbortError` lives here as the lowest-level shared abort predicate —
-// `readSseEnvelope` needs it, and the HTTP and retrieval layers (which
-// sit above this module) import it down.
 
 import type { TLlmTokenUsage } from "../../lib/llm/types.js"
+import { isAbortError } from "../llm-http/errors.js"
 import { SchemaValidationLlmError, TransientLlmError } from "./errors.js"
 import type { TOpenAiOutputItem, TOpenAiResponsesEnvelope } from "./types.js"
 
@@ -257,12 +254,4 @@ export function mergeUsage(
         merged.reasoning = (accumulated.reasoning ?? 0) + (next.reasoning ?? 0)
     }
     return merged
-}
-
-export function isAbortError(err: unknown): boolean {
-    return (
-        typeof err === "object" &&
-        err !== null &&
-        (err as { name?: unknown }).name === "AbortError"
-    )
 }

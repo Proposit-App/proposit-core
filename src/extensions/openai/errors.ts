@@ -39,6 +39,8 @@
 // them into `src/lib/llm/` keeps the abstract interface clean — the
 // framework consumes the `retryReason` tag, not the class identity.
 
+import { categorizeHttpError } from "../llm-http/errors.js"
+
 export class TransientLlmError extends Error {
     public readonly retryReason = "transient" as const
     public readonly status?: number
@@ -163,40 +165,21 @@ export function classifyHttpError(
     message: string,
     providerErrorCode?: string
 ): Error {
-    if (status >= 500) {
-        return new TransientLlmError({ message, status })
-    }
-    if (status === 429) {
-        // 429 splits on the body's structured error code: persistent
-        // budget exhaustion (`insufficient_quota`) is fail-fast, every
-        // other (and every unparseable) 429 stays the transient
-        // throttle. The safe default is always "transient + retryable"
-        // — never a false quota trip.
-        if (providerErrorCode === "insufficient_quota") {
+    // Which status goes to which category (and why) is decided in
+    // `categorizeHttpError`, shared with the chat-completions provider;
+    // this maps the category to the OpenAI provider's own classes.
+    switch (categorizeHttpError(status, providerErrorCode)) {
+        case "transient":
+            return new TransientLlmError({ message, status })
+        case "rate_limit":
+            return new RateLimitLlmError({ message, status })
+        case "quota_exhausted":
             return new QuotaExhaustedLlmError({ message, status })
-        }
-        return new RateLimitLlmError({ message, status })
+        case "schema_validation":
+            return new SchemaValidationLlmError({ message, status })
+        case "non_retryable":
+            return new NonRetryableLlmError({ message, status })
     }
-    // 400 vs 422 split:
-    //
-    // OpenAI returns 400 for malformed requests — typically a
-    // converter bug, an unsupported parameter, or a request shape
-    // the API doesn't accept. Retrying a 400 just burns the second
-    // attempt; classify as non-retryable so the framework surfaces
-    // the error immediately.
-    //
-    // OpenAI returns 422 when the model's structured-output reply
-    // failed server-side strict-mode validation. A re-roll can
-    // sometimes succeed, so we route 422 through the
-    // schema-validation class (which carries `retryReason:
-    // "transient"`, so the default retry policy retries it).
-    if (status === 400) {
-        return new NonRetryableLlmError({ message, status })
-    }
-    if (status === 422) {
-        return new SchemaValidationLlmError({ message, status })
-    }
-    return new NonRetryableLlmError({ message, status })
 }
 
 // -- incomplete-reason → user-facing message ----------------------------

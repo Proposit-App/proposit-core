@@ -9,6 +9,7 @@
 // which it consumes the transport and parsing helpers.
 
 import type { TLlmRequest } from "../../lib/llm/types.js"
+import { isAbortError } from "../llm-http/errors.js"
 import {
     callOnce,
     getResponseById,
@@ -18,7 +19,6 @@ import {
 import {
     extractAssistantText,
     extractUsage,
-    isAbortError,
     readSseEnvelope,
 } from "./openai-parsing.js"
 import { deriveSchemaName, reasoningEffortForModel } from "./openai-tools.js"
