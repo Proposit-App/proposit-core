@@ -11,6 +11,7 @@ import {
     requireConfirmation,
 } from "../output.js"
 import { readArgumentMeta, readVersionMeta } from "../storage/arguments.js"
+import { assertNotPublished } from "../guards.js"
 import {
     deletePremiseDir,
     listPremiseIds,
@@ -20,18 +21,6 @@ import {
 } from "../storage/premises.js"
 import { hydrateEngine, hydratePropositCore, persistEngine } from "../engine.js"
 import { readVariables } from "../storage/variables.js"
-
-async function assertNotPublished(
-    argumentId: string,
-    version: number
-): Promise<void> {
-    const meta = await readVersionMeta(argumentId, version)
-    if (meta.published) {
-        errorExit(
-            `Version ${version} of argument "${argumentId}" is published and cannot be modified.`
-        )
-    }
-}
 
 async function buildArgument(
     argumentId: string,

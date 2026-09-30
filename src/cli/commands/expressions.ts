@@ -5,24 +5,12 @@ import type { TExpressionInput } from "../../lib/core/expression-manager.js"
 import { POSITION_INITIAL } from "../../lib/utils/position.js"
 import { hydrateEngine } from "../engine.js"
 import { errorExit, printJson, printLine } from "../output.js"
-import { readVersionMeta } from "../storage/arguments.js"
+import { assertNotPublished } from "../guards.js"
 import {
     premiseExists,
     readPremiseData,
     writePremiseData,
 } from "../storage/premises.js"
-
-async function assertNotPublished(
-    argumentId: string,
-    version: number
-): Promise<void> {
-    const meta = await readVersionMeta(argumentId, version)
-    if (meta.published) {
-        errorExit(
-            `Version ${version} of argument "${argumentId}" is published and cannot be modified.`
-        )
-    }
-}
 
 function typeSpecificInfo(expr: {
     type: string

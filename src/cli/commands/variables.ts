@@ -12,24 +12,12 @@ import {
     printLine,
     requireConfirmation,
 } from "../output.js"
-import { readVersionMeta } from "../storage/arguments.js"
+import { assertNotPublished } from "../guards.js"
 import {
     isClaimBound,
     isPremiseBound,
     type TCorePropositionalVariable,
 } from "../../lib/schemata/index.js"
-
-async function assertNotPublished(
-    argumentId: string,
-    version: number
-): Promise<void> {
-    const meta = await readVersionMeta(argumentId, version)
-    if (meta.published) {
-        errorExit(
-            `Version ${version} of argument "${argumentId}" is published and cannot be modified.`
-        )
-    }
-}
 
 export function registerVariableCommands(
     versionedCmd: Command,
