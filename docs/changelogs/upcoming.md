@@ -59,6 +59,15 @@
   `getCanonicalStageIds` import. The IEEE citation segment types moved to
   `segment-types.ts`, removing an import cycle; `formatting.ts` still exports
   them. The root export file is grouped into commented sections.
+- Internal only, no change in behaviour or public API: the ingestion finalize
+  step, `finalize-response-v2.ts`, is split into one file per job under
+  `src/extensions/pipelines/base/finalize/`: `citation-type.ts` (cleaning up
+  the model's citation-type guess), `source-anchor-resolution.ts` (resolving
+  claims' source anchors and the `SOURCE_ANCHOR_NOTE_CODES` notes),
+  `titles.ts` (composing premise and argument titles) and `assembler.ts`
+  (`finalizeResponseV2` itself). The functions moved unchanged, and
+  `finalize-response-v2.ts` re-exports the same public names from the same
+  subpath.
 
 ## Removed
 
