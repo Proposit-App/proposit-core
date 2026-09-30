@@ -7,7 +7,7 @@ import { ClaimLibrary } from "../../lib/core/claim-library.js"
 import { ClaimCitationLibrary } from "../../lib/core/claim-citation-library.js"
 import { cliLog } from "../logging.js"
 import { errorExit, printJson, printLine, printWarning } from "../output.js"
-import { resolveApiKey, createLlmProvider } from "../llm/index.js"
+import { resolveApiKey, createLlmProvider } from "../llm.js"
 import { executePipeline } from "../../lib/index.js"
 import type { TPipelineResult } from "../../lib/index.js"
 import {

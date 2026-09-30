@@ -11,8 +11,7 @@ vi.mock("../src/cli/output.js", () => ({
 }))
 
 // Import after mock setup
-const { renderDiff, isDiffEmpty } =
-    await import("../src/cli/output/diff-renderer.js")
+const { renderDiff, isDiffEmpty } = await import("../src/cli/diff-renderer.js")
 
 beforeEach(() => {
     printedLines.length = 0
