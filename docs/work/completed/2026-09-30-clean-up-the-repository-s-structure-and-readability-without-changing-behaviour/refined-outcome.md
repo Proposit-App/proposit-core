@@ -34,4 +34,4 @@ sits at position 0; `deriveRoles` is public but unused; three
 
 ## Closeout
 
-Merged to `main` directly; completed with `--already-integrated`.
+Merged to `main` directly, with no work branch for tcw to merge.

@@ -20,4 +20,4 @@ A calendar-date type with precision is filed as its own backlog item
 
 ## Closeout
 
-Merged to `main` directly; completed with `--already-integrated`.
+Merged to `main` directly, with no work branch for tcw to merge.
