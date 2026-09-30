@@ -1239,6 +1239,65 @@ $CLI "$ARG3" latest render
 $CLI "$ARG3" latest analysis validate-argument
 $CLI "$ARG3" latest analysis check-validity
 
+section "12a. analysis validate-argument --tier"
+
+for TIER in structural evaluable derivable presentable; do
+    $CLI "$ARG3" latest analysis validate-argument --tier "$TIER"
+done
+$CLI "$ARG3" latest analysis validate-argument --tier presentable --json
+
+# Grammar rule P-6: a premise-bound variable expression marked unspoken. The
+# CLI lets you make one, and only the Presentable tier reports it.
+P_TRUE=$($CLI "$ARG3" latest premises list --json \
+    | node -e "const d=JSON.parse(require('node:fs').readFileSync(0,'utf-8'));const p=d.find(x=>x.title==='P is true');process.stdout.write(p?p.id:'')")
+if [ -z "$P_TRUE" ]; then
+    echo "FAIL: no premise titled 'P is true'"
+    exit 1
+fi
+PB_VAR=$($CLI "$ARG3" latest variables list --json \
+    | node -e "const d=JSON.parse(require('node:fs').readFileSync(0,'utf-8'));const v=d.find(x=>x.boundPremiseId===process.argv[1]);process.stdout.write(v?v.id:'')" "$P_TRUE")
+if [ -z "$PB_VAR" ]; then
+    echo "FAIL: no variable bound to the 'P is true' premise"
+    exit 1
+fi
+NEW_P=$($CLI "$ARG3" latest premises create --title "Restates P")
+NEW_E=$($CLI "$ARG3" latest expressions create "$NEW_P" --type variable \
+    --variable-id "$PB_VAR")
+if [ -z "$NEW_P" ] || [ -z "$NEW_E" ]; then
+    echo "FAIL: could not build the premise-bound expression"
+    exit 1
+fi
+$CLI "$ARG3" latest expressions mark "$NEW_P" "$NEW_E" --enthymeme
+
+PRESENTABLE_OUT=$($CLI "$ARG3" latest analysis validate-argument --tier presentable)
+echo "$PRESENTABLE_OUT"
+if ! echo "$PRESENTABLE_OUT" | grep -q '^presentable P-6: '; then
+    echo "FAIL: --tier presentable did not report P-6"
+    exit 1
+fi
+DERIVABLE_OUT=$($CLI "$ARG3" latest analysis validate-argument --tier derivable)
+echo "$DERIVABLE_OUT"
+if echo "$DERIVABLE_OUT" | grep -q 'P-6'; then
+    echo "FAIL: --tier derivable reported P-6"
+    exit 1
+fi
+
+# An option value the CLI does not recognise is refused, not substituted.
+if $CLI "$ARG3" latest analysis validate-argument --tier bogus \
+    2>/tmp/proposit-tier-err; then
+    echo "FAIL: an unknown --tier should have errored"
+    exit 1
+fi
+cat /tmp/proposit-tier-err
+rm -f /tmp/proposit-tier-err
+if $CLI "$ARG3" latest analysis check-validity --mode exhastive \
+    2>/tmp/proposit-mode-err; then
+    echo "FAIL: an unknown --mode should have errored"
+    exit 1
+fi
+cat /tmp/proposit-mode-err
+rm -f /tmp/proposit-mode-err
+
 section "12b. import from YAML — complex formulae"
 
 # Create a YAML file with complex antecedents and consequents
