@@ -7,7 +7,7 @@
 // so the caller can forward it on the next turn.
 //
 // This is the shared substrate for both:
-//   - the server's stateless per-request executor (threads the chain
+//   - a consumer's stateless per-request executor (threads the chain
 //     from the client-supplied `lastResponseId`)
 //   - the CLI's stateful conversation object (accumulates the chain)
 
@@ -20,8 +20,6 @@ import type { TLlmProvider, TLlmTokenUsage, TResponseId } from "../llm/types.js"
 import { executeStage } from "../pipelines/single-stage.js"
 import type { TStageOutcomeRecord } from "../pipelines/single-stage.js"
 import type { TSchema } from "typebox"
-import { Value } from "typebox/value"
-import Type from "typebox"
 
 // -- Public types ----------------------------------------------------------
 
@@ -150,9 +148,7 @@ export async function executeTurn<TOut>(
     const pipeline: import("../pipelines/types.js").TPipeline<unknown, TOut> = {
         id: "turn",
         version: "0.0.0",
-        inputSchema: Value.Check(TypeAnySchema, {})
-            ? TypeAnySchema
-            : (Type.Object({}) as TSchema),
+        inputSchema: TypeAnySchema,
         outputSchema: stage.outputSchema,
         stages: [stage],
         finalize: {
@@ -191,7 +187,8 @@ export async function executeTurn<TOut>(
     }
 }
 
-// -- Minimal `Type.Any()` without importing TypeBox ------------------------
-// Used as the synthetic pipeline's input schema.
+// -- Hand-written schema object for the synthetic pipeline's input --------
+// The validator accepts any value against it, so the one-stage pipeline a turn
+// builds never rejects its input.
 
 const TypeAnySchema: TSchema = { type: "any" }

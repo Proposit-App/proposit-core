@@ -411,9 +411,11 @@ export async function launchStage(
 
     // The req is already TLlmRequest<unknown> (the recovered config is
     // generic-erased at the lookup boundary); the typed output is
-    // recovered in completeStage via the stage's outputSchema.
+    // recovered in completeStage via the stage's outputSchema. The consumer
+    // binds its API key into the injected `submitBackgroundResponse`, which
+    // ignores this field, so core passes an empty key.
     const submitResult = await submit(req, {
-        apiKey: resolveApiKey(deps),
+        apiKey: "",
         signal: deps.signal,
     })
 
@@ -548,12 +550,4 @@ export async function completeStage(
         result.retryReason = retryReason
     }
     return result
-}
-
-// API-key resolution for the submit dep. The injected
-// `submitBackgroundResponse` is apiKey-bound by the consumer, so core
-// passes an empty key — the bound capability ignores it. (Kept as a seam
-// in case a future dep shape threads the key through deps.)
-function resolveApiKey(_deps: TExecuteStageDeps): string {
-    return ""
 }
