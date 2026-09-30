@@ -30,7 +30,7 @@ command -v node >/dev/null ||
 command -v pnpm >/dev/null ||
   die "pnpm not found. Try: corepack enable pnpm   (or: npm install -g pnpm)"
 
-node -e 'const [maj, min] = process.versions.node.split(".").map(Number); process.exit(maj > 22 || (maj === 22 && min >= 3) ? 0 : 1)' ||
+node scripts/first-time-setup/node-version-ok.mjs ||
   die "Node $(node --version) is too old — package.json requires >=22.3.0."
 
 [ -d node_modules ] ||

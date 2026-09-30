@@ -16,6 +16,10 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 CLI="node $PROJECT_DIR/dist/cli.js"
+# Prints the id of the first item in a JSON listing on stdin whose field equals
+# a value: find_id <field> <value>. The other JSON helpers in smoke/ are called
+# directly where they are used.
+find_id() { node "$SCRIPT_DIR/smoke/find-id.mjs" "$@"; }
 
 # ── Isolated state directory ─────────────────────────────────────────────────
 export PROPOSIT_HOME
@@ -618,7 +622,8 @@ $CLI origins show "$DOC" --text
 # 74 code points is the normalized length: BOM stripped, both CRLFs folded to
 # LF, trailing blank line trimmed. Every anchor offset indexes into this exact
 # string, so the count is the thing worth asserting.
-ORIGIN_LEN=$($CLI origins show "$DOC" --json | node -e "const d=JSON.parse(require('node:fs').readFileSync(0,'utf-8'));process.stdout.write(String([...d.document.text].length))")
+ORIGIN_LEN=$($CLI origins show "$DOC" --json \
+    | node "$SCRIPT_DIR/smoke/origin-text-length.mjs")
 if [ "$ORIGIN_LEN" != "74" ]; then
     echo "FAIL: normalized origin text is $ORIGIN_LEN code points, expected 74"
     exit 1
@@ -687,7 +692,7 @@ rm -f /tmp/proposit-origin-err6
 
 # Mark a claim-bound variable expression unspoken, then unmark it.
 MARK_EXPR=$($CLI "$ARG" latest expressions list "$P1" --json \
-    | node -e "const d=JSON.parse(require('node:fs').readFileSync(0,'utf-8'));const list=Array.isArray(d)?d:(d.expressions??[]);const e=list.find(x=>x.type==='variable');process.stdout.write(e?e.id:'')")
+    | find_id type variable)
 if [ -z "$MARK_EXPR" ]; then
     echo "FAIL: no variable expression found to mark"
     exit 1
@@ -1195,11 +1200,7 @@ $CLI "$FORKED" latest show
 $CLI "$FORKED" latest render
 
 # Modify the fork: rename a claim-bound variable R → Rain
-FORKED_R=$($CLI "$FORKED" latest variables list --json | node -e "
-const d = JSON.parse(require('fs').readFileSync('/dev/stdin','utf8'));
-const v = d.find(v => v.symbol === 'R');
-if (v) process.stdout.write(v.id);
-")
+FORKED_R=$($CLI "$FORKED" latest variables list --json | find_id symbol R)
 if [ -n "$FORKED_R" ]; then
     $CLI "$FORKED" latest variables update "$FORKED_R" --symbol Rain
 fi
@@ -1238,6 +1239,87 @@ echo "Imported ARG3=$ARG3"
 $CLI "$ARG3" latest render
 $CLI "$ARG3" latest analysis validate-argument
 $CLI "$ARG3" latest analysis check-validity
+
+section "12a. analysis validate-argument --tier"
+
+for TIER in structural evaluable derivable presentable; do
+    $CLI "$ARG3" latest analysis validate-argument --tier "$TIER"
+done
+$CLI "$ARG3" latest analysis validate-argument --tier presentable --json
+
+# Grammar rule P-6: a premise-bound variable expression marked unspoken. The
+# CLI lets you make one, and only the Presentable tier reports it.
+P_TRUE=$($CLI "$ARG3" latest premises list --json \
+    | find_id title "P is true")
+if [ -z "$P_TRUE" ]; then
+    echo "FAIL: no premise titled 'P is true'"
+    exit 1
+fi
+PB_VAR=$($CLI "$ARG3" latest variables list --json \
+    | find_id boundPremiseId "$P_TRUE")
+if [ -z "$PB_VAR" ]; then
+    echo "FAIL: no variable bound to the 'P is true' premise"
+    exit 1
+fi
+NEW_P=$($CLI "$ARG3" latest premises create --title "Restates P")
+NEW_E=$($CLI "$ARG3" latest expressions create "$NEW_P" --type variable \
+    --variable-id "$PB_VAR")
+if [ -z "$NEW_P" ] || [ -z "$NEW_E" ]; then
+    echo "FAIL: could not build the premise-bound expression"
+    exit 1
+fi
+$CLI "$ARG3" latest expressions mark "$NEW_P" "$NEW_E" --enthymeme
+
+PRESENTABLE_OUT=$($CLI "$ARG3" latest analysis validate-argument --tier presentable)
+echo "$PRESENTABLE_OUT"
+if ! echo "$PRESENTABLE_OUT" | grep -q '^presentable P-6: '; then
+    echo "FAIL: --tier presentable did not report P-6"
+    exit 1
+fi
+DERIVABLE_OUT=$($CLI "$ARG3" latest analysis validate-argument --tier derivable)
+echo "$DERIVABLE_OUT"
+if echo "$DERIVABLE_OUT" | grep -q 'P-6'; then
+    echo "FAIL: --tier derivable reported P-6"
+    exit 1
+fi
+
+# Without --tier the command is unchanged: the mark is a grammar matter only.
+PLAIN_OUT=$($CLI "$ARG3" latest analysis validate-argument)
+echo "$PLAIN_OUT"
+if [ "$PLAIN_OUT" != "ok" ]; then
+    echo "FAIL: validate-argument without --tier should print only ok"
+    exit 1
+fi
+
+# --json adds the tier and the violations, in the library's own format.
+$CLI "$ARG3" latest analysis validate-argument --tier presentable --json \
+    | node "$SCRIPT_DIR/smoke/expect-single-violation.mjs" presentable P-6
+
+# An option value the CLI does not recognise is refused, not substituted.
+if $CLI "$ARG3" latest analysis validate-argument --tier bogus \
+    2>/tmp/proposit-tier-err; then
+    echo "FAIL: an unknown --tier should have errored"
+    exit 1
+fi
+if ! grep -q '^Tier must be one of "structural", "evaluable", "derivable", "presentable", got "bogus"\.$' \
+    /tmp/proposit-tier-err; then
+    echo "FAIL: unexpected --tier refusal message"
+    exit 1
+fi
+cat /tmp/proposit-tier-err
+rm -f /tmp/proposit-tier-err
+if $CLI "$ARG3" latest analysis check-validity --mode exhastive \
+    2>/tmp/proposit-mode-err; then
+    echo "FAIL: an unknown --mode should have errored"
+    exit 1
+fi
+if ! grep -q '^Mode must be "first-counterexample" or "exhaustive", got "exhastive"\.$' \
+    /tmp/proposit-mode-err; then
+    echo "FAIL: unexpected --mode refusal message"
+    exit 1
+fi
+cat /tmp/proposit-mode-err
+rm -f /tmp/proposit-mode-err
 
 section "12b. import from YAML — complex formulae"
 

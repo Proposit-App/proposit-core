@@ -21,13 +21,12 @@ cd "$(dirname "$0")/.."
 
 # `@proposit/proposit-core` -> `proposit-proposit-core`, matching what `pnpm pack`
 # itself would name the file, so the only difference is the branch suffix.
-name=$(node -p "require('./package.json').name.replace(/^@/, '').replace(/\//g, '-')")
-version=$(node -p "require('./package.json').version")
+stem=$(node scripts/pack-branch/tarball-stem.mjs)
 # `--abbrev-ref HEAD` is worktree-aware. Slashes are legal in branch names and
 # would be read as path separators in the output filename.
 branch=$(git rev-parse --abbrev-ref HEAD | tr '/' '-')
 
-out="${name}-${version}-${branch}.tgz"
+out="${stem}-${branch}.tgz"
 
 # Remove this branch's previous tarball rather than accumulating one per pack.
 # A leftover *.tgz in the package root makes `pnpm publish` fail with an EUSAGE

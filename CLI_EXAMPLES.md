@@ -582,9 +582,16 @@ Only a claim-bound variable expression can meaningfully be marked. A premise
 cannot be marked at all: it has no content of its own. A premise-bound variable's truth is derived from another premise rather than
 asserted, so there is nothing for a speaker to have suppressed, and an operator
 or formula has no assertion at all. Marking one does not throw (mutations throw
-only on Structural violations); it is reported as `P-6` by the library's
-tier-aware `engine.validate('presentable')`, which the CLI does not currently
-surface. The CLI's own `expressions mark` refuses a non-variable expression up
+only on Structural violations); it is reported as `P-6` at the Presentable
+grammar tier:
+
+```bash
+proposit-core <argument-id> latest analysis validate-argument --tier presentable
+# → invalid
+# → presentable P-6: expression <expression-id> is marked unspoken but its variable <variable-id> (P1) is premise-bound, not claim-bound
+```
+
+The CLI's own `expressions mark` refuses a non-variable expression up
 front.
 
 ---
@@ -654,6 +661,18 @@ Checks that the argument is well-formed and evaluable before running analysis:
 ```bash
 proposit-core <argument-id> latest analysis validate-argument
 proposit-core <argument-id> latest analysis validate-argument --json
+```
+
+Add `--tier` to also check the grammar rules from Structural down to a tier:
+`structural`, `evaluable`, `derivable` or `presentable`. The grammar rules are
+checked in addition to the readiness checks above, so a tier never reports `ok`
+for an argument the plain command calls `invalid`. Each rule an argument breaks
+prints as `<tier> <code>: <message>`, and `--json` adds `tier` and a
+`violations` array to the object:
+
+```bash
+proposit-core <argument-id> latest analysis validate-argument --tier presentable
+proposit-core <argument-id> latest analysis validate-argument --tier presentable --json
 ```
 
 ### Create an analysis file
@@ -726,6 +745,9 @@ proposit-core <argument-id> latest analysis check-validity
 proposit-core <argument-id> latest analysis check-validity --mode exhaustive
 proposit-core <argument-id> latest analysis check-validity --json
 ```
+
+`--mode` is `first-counterexample` (the default) or `exhaustive`; any other
+value is refused with an error.
 
 The hypothetical syllogism argument is **valid** — no admissible assignment satisfies both supporting premises while falsifying the conclusion.
 
@@ -875,6 +897,7 @@ proposit-core $ARG latest graph                          # DOT to stdout
 proposit-core $ARG latest graph | dot -Tsvg -o arg.svg   # render to SVG
 # ── Analysis ──────────────────────────────────────────────────────────────────
 proposit-core $ARG latest analysis validate-argument
+proposit-core $ARG latest analysis validate-argument --tier presentable
 proposit-core $ARG latest analysis create
 proposit-core $ARG latest analysis evaluate --json
 proposit-core $ARG latest analysis check-validity

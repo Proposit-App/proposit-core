@@ -1264,7 +1264,7 @@ proposit-core <id> <ver> analysis validate-assignments [--file <filename>] [--js
 proposit-core <id> <ver> analysis delete [--file <filename>] [--confirm]
 proposit-core <id> <ver> analysis evaluate [--file <filename>] [options]
 proposit-core <id> <ver> analysis check-validity [options]
-proposit-core <id> <ver> analysis validate-argument [--json]
+proposit-core <id> <ver> analysis validate-argument [--tier <tier>] [--json]
 proposit-core <id> <ver> analysis refs [--json]
 proposit-core <id> <ver> analysis export [--json]
 ```
@@ -1274,8 +1274,8 @@ proposit-core <id> <ver> analysis export [--json]
 - **`reject`** — records a rejection against an expression, which strikes its whole premise from the evaluated set. The premise is still evaluated and reported; it simply stops contributing, and nothing is forced `false`.
 - **`accept`** — removes an expression from the rejected list (restores normal computation).
 - **`evaluate`** — resolves symbol→ID, evaluates the argument, and reports the facts: admissibility, surviving support, struck premises, the conclusion's value and attribution, and premise-set satisfiability.
-- **`check-validity`** — runs the full truth-table search (`--mode first-counterexample|exhaustive`).
-- **`validate-argument`** — checks structural readiness (conclusion set, inference premises, etc.).
+- **`check-validity`** — runs the full truth-table search (`--mode first-counterexample|exhaustive`). Any other `--mode` value is refused with an error.
+- **`validate-argument`** — checks that the argument is ready to evaluate (a conclusion is set, the premises are well-formed, and so on). `--tier <tier>` also checks the grammar rules from Structural down to that tier (`structural`, `evaluable`, `derivable` or `presentable`), in addition to the readiness checks rather than instead of them, so a tier never reports `ok` for an argument the plain command calls `invalid`. Each rule broken prints as `<tier> <code>: <message>`, for example `presentable P-6: …`; with `--json`, the output gains `tier` and a `violations` array.
 - **`refs`** — lists every variable referenced across all premises.
 - **`export`** — dumps the full `ArgumentEngine` state as JSON (uses `snapshot()` internally).
 
