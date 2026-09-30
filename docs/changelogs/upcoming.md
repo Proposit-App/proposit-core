@@ -24,6 +24,11 @@
   starts out `assistive`, as `populateFromGrounding` did; the parser always
   builds a new engine with the default `assistive` behavior, so it makes the
   same calls as before. Nothing is added to the public API.
+- Internal only, no change in behaviour: `ArgumentEngine` now connects each
+  premise engine to its argument, checks a new variable's argument id and
+  version, and stores a new variable through shared private helpers, and
+  `ExpressionManager` stores every new expression through one private helper,
+  where each of these steps used to be written out at every call site.
 
 ## Removed
 

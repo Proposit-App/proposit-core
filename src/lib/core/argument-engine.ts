@@ -299,6 +299,41 @@ export class ArgumentEngine<
         })
     }
 
+    /**
+     * Connects a premise engine to this argument: the circularity and
+     * empty-bound-premise checks, the source of known variable ids, the
+     * argument-level validation run after each premise mutation, the
+     * change notification, and the normalization follow-up. Every place
+     * that adds a premise engine to `this.premises` calls this once.
+     */
+    private wirePremiseEngine(
+        pe: PremiseEngine<TArg, TPremise, TExpr, TVar>
+    ): void {
+        this.wireCircularityCheck(pe)
+        this.wireEmptyBoundPremiseCheck(pe)
+        pe.setVariableIdsCallback(
+            () => new Set(this.variables.toArray().map((v) => v.id))
+        )
+        this.wireArgumentValidation(pe)
+        const premiseId = pe.getId()
+        pe.setOnMutate(() => {
+            this.markDirty()
+            this.reactiveDirty.premiseIds.add(premiseId)
+            this.notifySubscribers()
+        })
+        pe.setMutationFollowUp((changes) =>
+            this.followUpWithNormalization(changes)
+        )
+    }
+
+    private wireArgumentValidation(
+        pe: PremiseEngine<TArg, TPremise, TExpr, TVar>
+    ): void {
+        pe.setArgumentValidateCallback(() =>
+            this.validateAfterPremiseMutation()
+        )
+    }
+
     private generateUniqueSymbol(): string {
         let n = this.premises.size - 1
         let candidate = `P${n}`
@@ -396,9 +431,7 @@ export class ArgumentEngine<
 
     private restorePremiseValidation(): void {
         for (const pe of this.premises.values()) {
-            pe.setArgumentValidateCallback(() =>
-                this.validateAfterPremiseMutation()
-            )
+            this.wireArgumentValidation(pe)
         }
     }
 
@@ -914,22 +947,7 @@ export class ArgumentEngine<
                 }
             )
             this.premises.set(id, pm)
-            this.wireCircularityCheck(pm)
-            this.wireEmptyBoundPremiseCheck(pm)
-            pm.setVariableIdsCallback(
-                () => new Set(this.variables.toArray().map((v) => v.id))
-            )
-            pm.setArgumentValidateCallback(() =>
-                this.validateAfterPremiseMutation()
-            )
-            pm.setOnMutate(() => {
-                this.markDirty()
-                this.reactiveDirty.premiseIds.add(id)
-                this.notifySubscribers()
-            })
-            pm.setMutationFollowUp((changes) =>
-                this.followUpWithNormalization(changes)
-            )
+            this.wirePremiseEngine(pm)
             const collector = new ChangeCollector<TExpr, TVar, TPremise, TArg>()
             collector.addedPremise(pm.toPremiseData())
             this.markDirty()
@@ -951,10 +969,9 @@ export class ArgumentEngine<
                     boundArgumentId: this.argument.id,
                     boundArgumentVersion: this.argument.version as number,
                 } as TOptionalChecksum<TPremiseBoundVariable>
-                const withChecksum = this.attachVariableChecksum({
-                    ...autoVariable,
-                } as unknown as TOptionalChecksum<TVar>)
-                this.variables.addVariable(withChecksum)
+                const withChecksum = this.storeNewVariable(
+                    autoVariable as unknown as TOptionalChecksum<TVar>
+                )
                 collector.addedVariable(withChecksum)
                 this.markAllPremisesDirty()
             }
@@ -1098,6 +1115,57 @@ export class ArgumentEngine<
             )
     }
 
+    /**
+     * Throws unless the variable names this engine's argument id and
+     * version, checking the id first. The messages are part of what
+     * callers see, so they must not change.
+     */
+    private assertVariableInThisArgument(variable: {
+        argumentId: string
+        argumentVersion: number
+    }): void {
+        if (variable.argumentId !== this.argument.id) {
+            throw new Error(
+                `Variable argumentId "${variable.argumentId}" does not match engine argument ID "${this.argument.id}".`
+            )
+        }
+        if (variable.argumentVersion !== this.argument.version) {
+            throw new Error(
+                `Variable argumentVersion "${variable.argumentVersion}" does not match engine argument version "${this.argument.version}".`
+            )
+        }
+    }
+
+    /**
+     * Computes the variable's checksum and adds it to the variable manager.
+     * Returns the stored variable. Records no change and marks nothing
+     * dirty; each caller does that itself.
+     */
+    private storeNewVariable(variable: TOptionalChecksum<TVar>): TVar {
+        const withChecksum = this.attachVariableChecksum({ ...variable })
+        this.variables.addVariable(withChecksum)
+        return withChecksum
+    }
+
+    /**
+     * Stores a new variable and returns it with a changeset listing it as
+     * added, after marking every premise dirty. The shared ending of the
+     * public methods that add one variable.
+     */
+    private addNewVariable(
+        variable: TOptionalChecksum<TVar>
+    ): TCoreMutationResult<TVar, TExpr, TVar, TPremise, TArg> {
+        const withChecksum = this.storeNewVariable(variable)
+        const collector = new ChangeCollector<TExpr, TVar, TPremise, TArg>()
+        collector.addedVariable(withChecksum)
+        this.markAllPremisesDirty()
+        const changes = this.finalizeChanges(collector)
+        return {
+            result: withChecksum,
+            changes,
+        }
+    }
+
     public addVariable(
         variable: TOptionalChecksum<TClaimBoundVariable> &
             Record<string, unknown>
@@ -1112,16 +1180,7 @@ export class ArgumentEngine<
                     "addVariable only accepts claim-bound variables. Use bindVariableToPremise for premise-bound variables."
                 )
             }
-            if (variable.argumentId !== this.argument.id) {
-                throw new Error(
-                    `Variable argumentId "${variable.argumentId}" does not match engine argument ID "${this.argument.id}".`
-                )
-            }
-            if (variable.argumentVersion !== this.argument.version) {
-                throw new Error(
-                    `Variable argumentVersion "${variable.argumentVersion}" does not match engine argument version "${this.argument.version}".`
-                )
-            }
+            this.assertVariableInThisArgument(variable)
             // Validate claim reference
             if (
                 !this.claimLibrary.get(variable.claimId, variable.claimVersion)
@@ -1130,18 +1189,9 @@ export class ArgumentEngine<
                     `Claim "${variable.claimId}" version ${variable.claimVersion} does not exist in the claim library.`
                 )
             }
-            const withChecksum = this.attachVariableChecksum({
-                ...variable,
-            } as unknown as TOptionalChecksum<TVar>)
-            this.variables.addVariable(withChecksum)
-            const collector = new ChangeCollector<TExpr, TVar, TPremise, TArg>()
-            collector.addedVariable(withChecksum)
-            this.markAllPremisesDirty()
-            const changes = this.finalizeChanges(collector)
-            return {
-                result: withChecksum,
-                changes,
-            }
+            return this.addNewVariable(
+                variable as unknown as TOptionalChecksum<TVar>
+            )
         })
     }
 
@@ -1192,10 +1242,9 @@ export class ArgumentEngine<
             claimVersion: currentClaim.version,
         }
 
-        const withChecksum = this.attachVariableChecksum(
+        const withChecksum = this.storeNewVariable(
             rawVariable as unknown as TOptionalChecksum<TVar>
         )
-        this.variables.addVariable(withChecksum)
         this.markAllPremisesDirty()
         return withChecksum as unknown as TClaimBoundVariable
     }
@@ -1205,16 +1254,7 @@ export class ArgumentEngine<
             Record<string, unknown>
     ): TCoreMutationResult<TVar, TExpr, TVar, TPremise, TArg> {
         return this.withValidation(() => {
-            if (variable.argumentId !== this.argument.id) {
-                throw new Error(
-                    `Variable argumentId "${variable.argumentId}" does not match engine argument ID "${this.argument.id}".`
-                )
-            }
-            if (variable.argumentVersion !== this.argument.version) {
-                throw new Error(
-                    `Variable argumentVersion "${variable.argumentVersion}" does not match engine argument version "${this.argument.version}".`
-                )
-            }
+            this.assertVariableInThisArgument(variable)
             if (variable.boundArgumentId !== this.argument.id) {
                 throw new Error(
                     `Cross-argument bindings are not supported. boundArgumentId "${variable.boundArgumentId}" does not match engine argument ID "${this.argument.id}".`
@@ -1225,18 +1265,9 @@ export class ArgumentEngine<
                     `Bound premise "${variable.boundPremiseId}" does not exist in this argument.`
                 )
             }
-            const withChecksum = this.attachVariableChecksum({
-                ...variable,
-            } as unknown as TOptionalChecksum<TVar>)
-            this.variables.addVariable(withChecksum)
-            const collector = new ChangeCollector<TExpr, TVar, TPremise, TArg>()
-            collector.addedVariable(withChecksum)
-            this.markAllPremisesDirty()
-            const changes = this.finalizeChanges(collector)
-            return {
-                result: withChecksum,
-                changes,
-            }
+            return this.addNewVariable(
+                variable as unknown as TOptionalChecksum<TVar>
+            )
         })
     }
 
@@ -1246,16 +1277,7 @@ export class ArgumentEngine<
             Record<string, unknown>
     ): TCoreMutationResult<TVar, TExpr, TVar, TPremise, TArg> {
         return this.withValidation(() => {
-            if (variable.argumentId !== this.argument.id) {
-                throw new Error(
-                    `Variable argumentId "${variable.argumentId}" does not match engine argument ID "${this.argument.id}".`
-                )
-            }
-            if (variable.argumentVersion !== this.argument.version) {
-                throw new Error(
-                    `Variable argumentVersion "${variable.argumentVersion}" does not match engine argument version "${this.argument.version}".`
-                )
-            }
+            this.assertVariableInThisArgument(variable)
             if (variable.boundArgumentId === this.argument.id) {
                 throw new Error(
                     `boundArgumentId matches this engine's argument — use bindVariableToPremise for internal bindings.`
@@ -1271,18 +1293,9 @@ export class ArgumentEngine<
                     `Binding to argument "${variable.boundArgumentId}" version ${variable.boundArgumentVersion} is not allowed.`
                 )
             }
-            const withChecksum = this.attachVariableChecksum({
-                ...variable,
-            } as unknown as TOptionalChecksum<TVar>)
-            this.variables.addVariable(withChecksum)
-            const collector = new ChangeCollector<TExpr, TVar, TPremise, TArg>()
-            collector.addedVariable(withChecksum)
-            this.markAllPremisesDirty()
-            const changes = this.finalizeChanges(collector)
-            return {
-                result: withChecksum,
-                changes,
-            }
+            return this.addNewVariable(
+                variable as unknown as TOptionalChecksum<TVar>
+            )
         })
     }
 
@@ -1899,23 +1912,7 @@ export class ArgumentEngine<
                 generateId
             )
             engine.premises.set(pe.getId(), pe)
-            engine.wireCircularityCheck(pe)
-            engine.wireEmptyBoundPremiseCheck(pe)
-            pe.setVariableIdsCallback(
-                () => new Set(engine.variables.toArray().map((v) => v.id))
-            )
-            pe.setArgumentValidateCallback(() =>
-                engine.validateAfterPremiseMutation()
-            )
-            const premiseId = pe.getId()
-            pe.setOnMutate(() => {
-                engine.markDirty()
-                engine.reactiveDirty.premiseIds.add(premiseId)
-                engine.notifySubscribers()
-            })
-            pe.setMutationFollowUp((changes) =>
-                engine.followUpWithNormalization(changes)
-            )
+            engine.wirePremiseEngine(pe)
         }
         // Restore claim-bound variables first, then premise-bound variables
         for (const v of snapshot.variables.variables) {
@@ -2144,23 +2141,7 @@ export class ArgumentEngine<
         }
         this.conclusionPremiseId = snapshot.conclusionPremiseId
         for (const pe of this.premises.values()) {
-            this.wireCircularityCheck(pe)
-            this.wireEmptyBoundPremiseCheck(pe)
-            pe.setVariableIdsCallback(
-                () => new Set(this.variables.toArray().map((v) => v.id))
-            )
-            pe.setArgumentValidateCallback(() =>
-                this.validateAfterPremiseMutation()
-            )
-            const premiseId = pe.getId()
-            pe.setOnMutate(() => {
-                this.markDirty()
-                this.reactiveDirty.premiseIds.add(premiseId)
-                this.notifySubscribers()
-            })
-            pe.setMutationFollowUp((changes) =>
-                this.followUpWithNormalization(changes)
-            )
+            this.wirePremiseEngine(pe)
         }
         this.markDirty()
         this.reactiveDirty = {
