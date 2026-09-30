@@ -156,7 +156,7 @@ import { CLAIM_CANONICALIZATION_SYSTEM_PROMPT } from "../src/extensions/pipeline
 import { ArgumentParser } from "../src/lib/parsing/argument-parser"
 import Type from "typebox"
 import { resolveApiKey, createLlmProvider } from "../src/cli/llm/index"
-import { validateDerivationStructure } from "../src/lib/utils/derivation-validation.js"
+import { validateDerivationStructure } from "../src/lib/grammar/derivation-validation.js"
 import { emptyClaimConnectionLookup } from "../src/lib/utils/lookup"
 import { InvariantViolationError } from "../src/lib/index"
 import { ClaimAxiomLibrary } from "../src/lib/core/claim-axiom-library"

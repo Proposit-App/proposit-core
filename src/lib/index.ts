@@ -10,7 +10,7 @@ export type {
 } from "./core/argument-engine.js"
 export { PremiseEngine } from "./core/premise-engine.js"
 export type { TPremiseEngineSnapshot } from "./core/premise-engine.js"
-export { validateDerivationStructure } from "./utils/derivation-validation.js"
+export { validateDerivationStructure } from "./grammar/derivation-validation.js"
 export type * from "./core/interfaces/index.js"
 export type { TExpressionManagerSnapshot } from "./core/expression-manager.js"
 export { VariableManager } from "./core/variable-manager.js"
