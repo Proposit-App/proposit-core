@@ -233,6 +233,23 @@ function buildExpressions(
     }
 }
 
+/** A premise whose formula parsed and passed the root-only check. */
+type TParsedFormula = { ast: TFormulaAST; premise: TParsedPremise }
+
+/** The claim a parsed claim miniId resolved to. */
+type TClaimRef = { id: string; version: number }
+
+/**
+ * What every step of `ArgumentParser.build` reads: the parsed argument, the
+ * build options, and the warnings list the steps append to.
+ */
+type TBuildState = {
+    arg: TParsedArgument
+    strict: boolean
+    genId: () => string
+    warnings: TParserWarning[]
+}
+
 // ---------------------------------------------------------------------------
 // ArgumentParser
 // ---------------------------------------------------------------------------
@@ -297,11 +314,95 @@ export class ArgumentParser<
         if (!arg) {
             throw new Error("Cannot build: argument is null.")
         }
+        const state: TBuildState = { arg, strict, genId, warnings }
 
         // 1. Parse all formulas upfront and validate
         const declaredSymbols = new Set(arg.variables.map((v) => v.symbol))
-        const parsedFormulas: { ast: TFormulaAST; premise: TParsedPremise }[] =
-            []
+        const parsedFormulas = this.parseFormulas(state)
+
+        // 2. Create argument
+        const argumentId = genId()
+        const argumentVersion = 0
+        const argumentExtras = this.mapArgument(arg)
+        const argument = {
+            ...argumentExtras,
+            id: argumentId,
+            version: argumentVersion,
+        } as TArg
+
+        // 3. Create claims (unified — citation-typed and normal-typed)
+        const { claimLibrary, claimMiniIdToId } = this.createClaims(state)
+
+        const claimCitationLibrary = new ClaimCitationLibrary<TCitation>(
+            claimLibrary
+        )
+        const claimAxiomLibrary = new ClaimAxiomLibrary<TAxiom>(claimLibrary)
+
+        // 4. Create ArgumentEngine
+        const engine = new ArgumentEngine<TArg, TPremise, TExpr, TVar, TClaim>(
+            argument,
+            claimLibrary,
+            {
+                generateId: genId,
+            }
+        )
+
+        // 5. Create variables — resolve claimMiniId to real claim UUID
+        const variablesBySymbol = this.createVariables(
+            state,
+            engine,
+            claimMiniIdToId,
+            declaredSymbols,
+            argumentId,
+            argumentVersion
+        )
+
+        // 6. Filter formulas against surviving declared symbols
+        const survivingFormulas = this.filterFormulasByDeclaredSymbols(
+            state,
+            parsedFormulas,
+            declaredSymbols
+        )
+
+        // 7. Create premises and build expression trees
+        const premiseMiniIdToId = this.buildPremises(
+            state,
+            engine,
+            survivingFormulas,
+            variablesBySymbol,
+            argumentId,
+            argumentVersion
+        )
+
+        // 8. Set conclusion
+        this.setConclusion(state, engine, premiseMiniIdToId)
+
+        // 9. Derivation backing edges
+        this.addDerivationBackingEdges(
+            state,
+            claimMiniIdToId,
+            claimLibrary,
+            claimCitationLibrary,
+            claimAxiomLibrary
+        )
+
+        return {
+            engine,
+            claimLibrary,
+            claimCitationLibrary,
+            claimAxiomLibrary,
+            warnings,
+        }
+    }
+
+    /**
+     * Parses every premise formula and checks that `implies` and `iff`
+     * appear only at the root. A formula that fails either check throws in
+     * strict mode and is skipped with a warning otherwise.
+     */
+    private parseFormulas(state: TBuildState): TParsedFormula[] {
+        const { arg, strict, warnings } = state
+        const parsedFormulas: TParsedFormula[] = []
 
         for (const premise of arg.premises) {
             let ast: TFormulaAST
@@ -349,22 +450,20 @@ export class ArgumentParser<
             parsedFormulas.push({ ast, premise })
         }
 
-        // 2. Create argument
-        const argumentId = genId()
-        const argumentVersion = 0
-        const argumentExtras = this.mapArgument(arg)
-        const argument = {
-            ...argumentExtras,
-            id: argumentId,
-            version: argumentVersion,
-        } as TArg
+        return parsedFormulas
+    }
 
-        // 3. Create claims (unified — citation-typed and normal-typed)
+    /**
+     * Creates a library claim for every parsed claim and records which
+     * claim each miniId resolved to.
+     */
+    private createClaims(state: TBuildState): {
+        claimLibrary: ClaimLibrary<TClaim>
+        claimMiniIdToId: Map<string, TClaimRef>
+    } {
+        const { arg, genId } = state
         const claimLibrary = new ClaimLibrary<TClaim>()
-        const claimMiniIdToId = new Map<
-            string,
-            { id: string; version: number }
-        >()
+        const claimMiniIdToId = new Map<string, TClaimRef>()
 
         for (const parsedClaim of arg.claims) {
             const extras = this.mapClaim(parsedClaim)
@@ -380,21 +479,24 @@ export class ArgumentParser<
             })
         }
 
-        const claimCitationLibrary = new ClaimCitationLibrary<TCitation>(
-            claimLibrary
-        )
-        const claimAxiomLibrary = new ClaimAxiomLibrary<TAxiom>(claimLibrary)
+        return { claimLibrary, claimMiniIdToId }
+    }
 
-        // 5. Create ArgumentEngine
-        const engine = new ArgumentEngine<TArg, TPremise, TExpr, TVar, TClaim>(
-            argument,
-            claimLibrary,
-            {
-                generateId: genId,
-            }
-        )
-
-        // 6. Create variables — resolve claimMiniId to real claim UUID
+    /**
+     * Adds a claim-bound variable to the engine for every parsed variable
+     * whose claim miniId resolves. An unresolved one throws in strict mode;
+     * otherwise it is skipped with a warning and its symbol is removed from
+     * `declaredSymbols`.
+     */
+    private createVariables(
+        state: TBuildState,
+        engine: ArgumentEngine<TArg, TPremise, TExpr, TVar, TClaim>,
+        claimMiniIdToId: Map<string, TClaimRef>,
+        declaredSymbols: Set<string>,
+        argumentId: string,
+        argumentVersion: number
+    ): Map<string, Omit<TClaimBoundVariable, "checksum">> {
+        const { arg, strict, genId, warnings } = state
         const variablesBySymbol = new Map<
             string,
             Omit<TClaimBoundVariable, "checksum">
@@ -434,8 +536,21 @@ export class ArgumentParser<
             engine.addVariable(variable)
         }
 
-        // 6b. Filter formulas against surviving declared symbols
-        const survivingFormulas: typeof parsedFormulas = []
+        return variablesBySymbol
+    }
+
+    /**
+     * Keeps the formulas whose variable symbols were all declared by a
+     * surviving variable. A formula naming any other symbol throws in
+     * strict mode and is dropped with a warning otherwise.
+     */
+    private filterFormulasByDeclaredSymbols(
+        state: TBuildState,
+        parsedFormulas: TParsedFormula[],
+        declaredSymbols: Set<string>
+    ): TParsedFormula[] {
+        const { strict, warnings } = state
+        const survivingFormulas: TParsedFormula[] = []
         for (const entry of parsedFormulas) {
             const formulaVarNames = new Set<string>()
             collectVariableNames(entry.ast, formulaVarNames)
@@ -461,18 +576,31 @@ export class ArgumentParser<
             }
             if (!hasUndeclared) survivingFormulas.push(entry)
         }
+        return survivingFormulas
+    }
 
-        // 7. Create premises and build expression trees.
-        //
-        // The build adds one expression per AST node, parents first, so
-        // it passes through states where an operator has no children
-        // yet. It therefore runs with auto-normalization switched off,
-        // and a single `engine.normalize()` runs over the finished trees
-        // afterwards. The engine created at step 5 uses the default
-        // `assistive` behavior, so the returned engine is normalized and
-        // back in `assistive` mode. The parser test 'auto-normalizes
-        // nested operators by inserting formula buffers' checks that
-        // AN-1 fires on the finished tree.
+    /**
+     * Creates a premise for every surviving formula and builds its
+     * expression tree, returning the premise id each miniId resolved to.
+     *
+     * The build adds one expression per AST node, parents first, so it
+     * passes through states where an operator has no children yet. It
+     * therefore runs with auto-normalization switched off, and a single
+     * `engine.normalize()` runs over the finished trees afterwards. The
+     * engine `build` creates uses the default `assistive` behavior, so the
+     * returned engine is normalized and back in `assistive` mode. The
+     * parser test 'auto-normalizes nested operators by inserting formula
+     * buffers' checks that AN-1 fires on the finished tree.
+     */
+    private buildPremises(
+        state: TBuildState,
+        engine: ArgumentEngine<TArg, TPremise, TExpr, TVar, TClaim>,
+        survivingFormulas: TParsedFormula[],
+        variablesBySymbol: Map<string, Omit<TClaimBoundVariable, "checksum">>,
+        argumentId: string,
+        argumentVersion: number
+    ): Map<string, string> {
+        const { genId } = state
         const premiseMiniIdToId = new Map<string, string>()
         buildWithoutAutoNormalization(engine, () => {
             for (const { ast, premise: parsedPremise } of survivingFormulas) {
@@ -493,8 +621,20 @@ export class ArgumentParser<
                 )
             }
         })
+        return premiseMiniIdToId
+    }
 
-        // 8. Set conclusion
+    /**
+     * Marks the premise named by `conclusionPremiseMiniId` as the
+     * conclusion. An unresolvable miniId throws in strict mode and leaves
+     * the conclusion unset with a warning otherwise.
+     */
+    private setConclusion(
+        state: TBuildState,
+        engine: ArgumentEngine<TArg, TPremise, TExpr, TVar, TClaim>,
+        premiseMiniIdToId: Map<string, string>
+    ): void {
+        const { arg, strict, warnings } = state
         const conclusionId = premiseMiniIdToId.get(arg.conclusionPremiseMiniId)
         if (!conclusionId) {
             if (strict) {
@@ -512,73 +652,25 @@ export class ArgumentParser<
         } else {
             engine.setConclusionPremise(conclusionId)
         }
+    }
 
-        // 9. Derivation backing edges
-        //    The pipeline's deterministic relation sort extracted
-        //    citation/axiomatic antecedents out of freeform premises into
-        //    `derivationBacking` (each backed claim → its citation/axiomatic
-        //    supporters). Materialize each as a ClaimCitationLibrary /
-        //    ClaimAxiomLibrary edge.
+    /**
+     * The pipeline's deterministic relation sort extracted
+     * citation/axiomatic antecedents out of freeform premises into
+     * `derivationBacking` (each backed claim → its citation/axiomatic
+     * supporters). Materialize each as a ClaimCitationLibrary /
+     * ClaimAxiomLibrary edge.
+     */
+    private addDerivationBackingEdges(
+        state: TBuildState,
+        claimMiniIdToId: Map<string, TClaimRef>,
+        claimLibrary: ClaimLibrary<TClaim>,
+        claimCitationLibrary: ClaimCitationLibrary<TCitation>,
+        claimAxiomLibrary: ClaimAxiomLibrary<TAxiom>
+    ): void {
+        const { arg } = state
         const citationEdgeKeys = new Set<string>()
         const axiomEdgeKeys = new Set<string>()
-
-        const tryAddSupportEdge = <
-            TConnection extends TCoreClaimConnection,
-        >(params: {
-            library: {
-                add(connection: Omit<TConnection, "checksum">): TConnection
-            }
-            edgeKeys: Set<string>
-            edgeKey: string
-            mapHook: (
-                dep: TParsedClaim,
-                sup: TParsedClaim,
-                depId: string,
-                supId: string
-            ) => Record<string, unknown>
-            consequentParsed: TParsedClaim
-            supportingParsed: TParsedClaim
-            consequentClaimId: string
-            consequentClaimVersion: number
-            supportingClaim: TClaim
-            warningCode: "CITATION_EDGE_REJECTED" | "AXIOM_EDGE_REJECTED"
-            edgeKind: "Citation" | "Axiom"
-        }): void => {
-            if (params.edgeKeys.has(params.edgeKey)) return
-            params.edgeKeys.add(params.edgeKey)
-            const extras = params.mapHook(
-                params.consequentParsed,
-                params.supportingParsed,
-                params.consequentClaimId,
-                params.supportingClaim.id
-            )
-            try {
-                params.library.add({
-                    ...withoutUndefinedValues(extras),
-                    id: genId(),
-                    claimId: params.consequentClaimId,
-                    claimVersion: params.consequentClaimVersion,
-                    supportingClaimId: params.supportingClaim.id,
-                    supportingClaimVersion: params.supportingClaim.version,
-                } as Omit<TConnection, "checksum">)
-            } catch (error) {
-                if (strict) throw error
-                const code =
-                    error instanceof Error && "violations" in error
-                        ? (error as { violations: { code: string }[] })
-                              .violations[0]?.code
-                        : "unknown"
-                warnings.push({
-                    code: params.warningCode,
-                    message: `${params.edgeKind} edge ${params.consequentClaimId} ← ${params.supportingClaim.id} rejected by library: ${code}`,
-                    context: {
-                        claimId: params.consequentClaimId,
-                        supportingClaimId: params.supportingClaim.id,
-                        libraryErrorCode: String(code),
-                    },
-                })
-            }
-        }
 
         for (const backing of arg.derivationBacking ?? []) {
             const consequentRef = claimMiniIdToId.get(
@@ -608,7 +700,7 @@ export class ArgumentParser<
                 const edgeKey = `${consequentClaimId}|${supportingClaim.id}`
 
                 if (supportingClaim.type === "citation") {
-                    tryAddSupportEdge<TCitation>({
+                    this.tryAddSupportEdge<TCitation>(state, {
                         library: claimCitationLibrary,
                         edgeKeys: citationEdgeKeys,
                         edgeKey,
@@ -623,7 +715,7 @@ export class ArgumentParser<
                         edgeKind: "Citation",
                     })
                 } else if (supportingClaim.type === "axiomatic") {
-                    tryAddSupportEdge<TAxiom>({
+                    this.tryAddSupportEdge<TAxiom>(state, {
                         library: claimAxiomLibrary,
                         edgeKeys: axiomEdgeKeys,
                         edgeKey,
@@ -640,13 +732,70 @@ export class ArgumentParser<
                 // type === 'normal' → no edge
             }
         }
+    }
 
-        return {
-            engine,
-            claimLibrary,
-            claimCitationLibrary,
-            claimAxiomLibrary,
-            warnings,
+    /**
+     * Adds one support edge to its library, once per consequent/supporter
+     * pair. A library rejection throws in strict mode and becomes a warning
+     * otherwise.
+     */
+    private tryAddSupportEdge<TConnection extends TCoreClaimConnection>(
+        state: TBuildState,
+        params: {
+            library: {
+                add(connection: Omit<TConnection, "checksum">): TConnection
+            }
+            edgeKeys: Set<string>
+            edgeKey: string
+            mapHook: (
+                dep: TParsedClaim,
+                sup: TParsedClaim,
+                depId: string,
+                supId: string
+            ) => Record<string, unknown>
+            consequentParsed: TParsedClaim
+            supportingParsed: TParsedClaim
+            consequentClaimId: string
+            consequentClaimVersion: number
+            supportingClaim: TClaim
+            warningCode: "CITATION_EDGE_REJECTED" | "AXIOM_EDGE_REJECTED"
+            edgeKind: "Citation" | "Axiom"
+        }
+    ): void {
+        const { strict, genId, warnings } = state
+        if (params.edgeKeys.has(params.edgeKey)) return
+        params.edgeKeys.add(params.edgeKey)
+        const extras = params.mapHook(
+            params.consequentParsed,
+            params.supportingParsed,
+            params.consequentClaimId,
+            params.supportingClaim.id
+        )
+        try {
+            params.library.add({
+                ...withoutUndefinedValues(extras),
+                id: genId(),
+                claimId: params.consequentClaimId,
+                claimVersion: params.consequentClaimVersion,
+                supportingClaimId: params.supportingClaim.id,
+                supportingClaimVersion: params.supportingClaim.version,
+            } as Omit<TConnection, "checksum">)
+        } catch (error) {
+            if (strict) throw error
+            const code =
+                error instanceof Error && "violations" in error
+                    ? (error as { violations: { code: string }[] })
+                          .violations[0]?.code
+                    : "unknown"
+            warnings.push({
+                code: params.warningCode,
+                message: `${params.edgeKind} edge ${params.consequentClaimId} ← ${params.supportingClaim.id} rejected by library: ${code}`,
+                context: {
+                    claimId: params.consequentClaimId,
+                    supportingClaimId: params.supportingClaim.id,
+                    libraryErrorCode: String(code),
+                },
+            })
         }
     }
 
