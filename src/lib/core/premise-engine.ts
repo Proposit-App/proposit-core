@@ -388,7 +388,7 @@ export class PremiseEngine<
                 // S-14: derivation premise root must be one of variable,
                 // implies, or iff. Enforced at mutation time regardless
                 // of engine `behavior` — Structural rules throw in both
-                // modes (spec §4).
+                // modes.
                 if (
                     (this.premise as TCorePremise).type === "derivation" &&
                     expression.type === "operator" &&
@@ -659,7 +659,7 @@ export class PremiseEngine<
 
     /**
      * Reparent an existing expression onto a new parent at the given
-     * position. Bundled-composite mutation per spec §8 — the parent
+     * position. Bundled-composite mutation — the parent
      * reference, position field, and checksum-dirty propagation update
      * atomically in a single call. No transient orphan state is
      * externally observable.
@@ -670,7 +670,7 @@ export class PremiseEngine<
      * moved expression's own prior slot are tolerated as transient,
      * since the move atomically frees that slot). Higher-tier violations
      * never throw here — Evaluable/Derivable/Presentable issues surface
-     * through `validate(tier)` per spec §7.1.
+     * through `validate(tier)`.
      *
      * Used by the native AN-1 (formula-buffer insertion) and AN-4
      * (same-operator absorption) passes in `src/lib/grammar/an-rules.ts`,
@@ -680,8 +680,8 @@ export class PremiseEngine<
      * @throws If `expressionId` or `newParentId` does not exist in this
      *         premise.
      * @throws S-1: if `newParent` is not an `operator` or `formula` (a
-     *         variable cannot be a parent — parity with `addExpression`
-     *         at em.ts:418-422).
+     *         variable cannot be a parent — the same parent-type check
+     *         `addExpression` makes).
      * @throws S-1: arity — if reparenting would push `newParent`'s
      *         child count past its operator-specific limit (unary `not`
      *         max 1; binary `implies`/`iff` max 2). Same-parent moves
@@ -715,8 +715,8 @@ export class PremiseEngine<
             // S-1 parent-type: only operators and formulas accept
             // children. Without this guard a caller could reparent under
             // a variable (or any other non-container) and produce a
-            // malformed AST that no validator catches. Parity with
-            // `addExpression` at em.ts:418-422.
+            // malformed AST that no validator catches. `addExpression`
+            // makes the same check.
             if (newParent.type !== "operator" && newParent.type !== "formula") {
                 throw new Error(
                     `S-1: cannot reparent under non-operator/formula parent "${newParentId}" (type=${newParent.type}).`
@@ -808,7 +808,7 @@ export class PremiseEngine<
      * Wrap an existing expression in a freshly-minted `formula` node
      * atomically. The formula takes the child's original parent slot
      * (parentId + position); the child becomes the formula's sole
-     * child at position 0. Bundled-composite mutation per spec §8.
+     * child at position 0. Bundled-composite mutation.
      *
      * Used by the native AN-1 (formula-buffer insertion) pass in
      * `src/lib/grammar/an-rules.ts`. Composing this from
@@ -858,8 +858,7 @@ export class PremiseEngine<
     // routes through the native AN-1..AN-4 passes in
     // `src/lib/grammar/an-rules.ts`; the post-mutation assistive hook
     // covers the per-mutation use case. There is no per-premise
-    // `pe.normalizeExpressions()` wrapper and no legacy
-    // `ExpressionManager.normalize()` 5-pass sweep.
+    // normalize method.
 
     public toggleNegation(
         expressionId: string,
@@ -919,19 +918,15 @@ export class PremiseEngine<
                     // Target is already NOT — toggling adds a second NOT and
                     // immediately collapses to the inner child. We express
                     // this directly by removing the existing NOT (promotes
-                    // its child into its slot). The pre-v1.0 gate on
-                    // `collapseDoubleNegation` is gone — `toggleNegation`
-                    // unconditionally toggles.
+                    // its child into its slot). `toggleNegation` always
+                    // toggles; no setting turns this collapse off.
                     this.expressions.removeExpression(expressionId, false)
 
                     const changes = this.finalizeExpressionMutation(collector)
                     return { result: null, changes }
                 } else {
-                    // The pre-v1.0 P-1 inline buffer-insertion branch
-                    // (gated on `grammarConfig.enforceFormulaBetweenOperators`
-                    // + `resolveAutoNormalize(_, 'negationInsertFormula')`,
-                    // which built `NOT(formula(target))` inline) is gone.
-                    // Always wrap with just NOT. AN-1 (post-mutation hook in
+                    // Always wrap with just NOT, never `NOT(formula(target))`.
+                    // AN-1 (post-mutation hook in
                     // assistive mode) inserts the formula buffer if the
                     // target is a non-not operator; permissive mode leaves
                     // the un-buffered state and `validate('presentable')`
@@ -1210,9 +1205,8 @@ export class PremiseEngine<
 
                     // Now reparent the children under the new sub-operator,
                     // using the midpoint-spaced pattern so future inserts
-                    // can bisect. As of core 1.0.2 S-8 is arity-only, so
-                    // the same spacing applies uniformly to all binary
-                    // operators.
+                    // can bisect. S-8 checks arity only, so the same spacing
+                    // applies uniformly to all binary operators.
                     this.expressions.reparentExpression(
                         firstChild.id,
                         newOpId,
@@ -1513,7 +1507,7 @@ export class PremiseEngine<
     // -------------------------------------------------------------------------
 
     /**
-     * Loads expressions in BFS order with the nesting check bypassed.
+     * Loads expressions as-is, with no grammar validation or normalization.
      * Bypasses all PremiseEngine validation (ownership, variable existence, circularity)
      * since restoration paths trust existing data completely.
      */

@@ -1,5 +1,5 @@
 // Unit tests for `claim-reference-validation` — the deterministic
-// reference-audit stage on the v2 ingestion pipeline.
+// reference-audit stage on the ingestion pipeline.
 
 import { describe, expect, it } from "vitest"
 import {

@@ -194,7 +194,7 @@ describe("grammar/evaluable", () => {
         })
     })
 
-    // E-2 is reserved — see spec §4.2. No test block.
+    // E-2 is a reserved code with no rule. No test block.
 
     describe("E-3 variable binding resolves", () => {
         it("returns a violation when a claim-bound variable references a non-existent claim", () => {
@@ -332,8 +332,8 @@ describe("grammar/evaluable", () => {
         it("returns an empty array when consequent is wrapped in a formula buffer", () => {
             // E-5 scans every expression in the premise's tree, so the
             // consequent satisfies E-5 regardless of intervening formula
-            // buffers. This is implicit in the implementation; explicit
-            // test for the spec §4.2 expectation.
+            // buffers. This is implicit in the implementation; this
+            // test makes it explicit.
             const ctx = buildContext({
                 premises: [
                     makeDerivationPremise({
@@ -487,17 +487,17 @@ describe("grammar/evaluable", () => {
     })
 
     describe("E-7 argument has conclusion premise", () => {
-        // E-7 retains its strict pre-1.0.2 reading: any non-empty
-        // argument with no `conclusionPremiseId` violates. The 1.0.2
-        // change moved the constraint to the engine mutation surface
-        // (`clearConclusionPremise` no-op on non-empty, `removePremise`
-        // auto-reassigns on conclusion-deletion-with-others-remaining)
-        // — E-7 stays as the validate-time safety net for snapshot
+        // E-7 is strict: any non-empty argument with no
+        // `conclusionPremiseId` violates. The engine mutation surface
+        // also guards the constraint (`clearConclusionPremise` is a
+        // no-op on a non-empty argument, and `removePremise`
+        // auto-reassigns when the conclusion is deleted and others
+        // remain) — E-7 is the validate-time safety net for snapshot
         // loads and direct data-shape construction that the
         // mutation-surface guards can't intercept.
 
         it("returns a violation when a 1-premise argument has no conclusion designated", () => {
-            // Strict pre-1.0.2 reading: even a single premise requires
+            // Strict reading: even a single premise requires
             // an explicit designation at the validator level. In
             // production this state is unreachable through the
             // mutation API (the engine guards `clearConclusionPremise`

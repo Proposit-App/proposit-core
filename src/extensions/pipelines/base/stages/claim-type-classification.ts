@@ -114,6 +114,6 @@ export function createClaimTypeClassificationStage(
     })
 }
 
-/** Backward-compatible default-options stage. */
+/** The stage with default options, the same as `createClaimTypeClassificationStage()` with no arguments. */
 export const claimTypeClassificationStage: TStage<TClaimTypeClassificationOutput> =
     createClaimTypeClassificationStage()

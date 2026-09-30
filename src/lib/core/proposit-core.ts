@@ -96,10 +96,10 @@ export type TPropositCoreOptions<
  * Construction order follows dependency order:
  * claims -> citations -> axioms -> origins -> forks -> arguments.
  *
- * As of v0.10.0 the legacy `sources` and `claimSources` libraries have been
- * folded into `claims` and `citations` respectively — sources are now
- * claims with `type: "citation"`. As of v0.12.0 a parallel `axioms` library
- * holds axiomatic-claim connections (a third claim type `"axiomatic"`).
+ * A source is a claim with `type: "citation"`, and the `citations` library
+ * holds the connections between claims and their sources. A parallel
+ * `axioms` library holds axiomatic-claim connections (a third claim type
+ * `"axiomatic"`).
  * The `origins` library holds the source texts arguments were built from,
  * their per-version links, and the spans individual parts derive from.
  */
@@ -307,7 +307,8 @@ export class PropositCore<
     > {
         // Pre-typecheck on raw shape. PropositCore.fromSnapshot is called with an
         // `unknown`-typed payload in real callers; the typed signature does not
-        // prevent legacy data from sneaking in. Run structural checks before any
+        // prevent a snapshot written in an older shape from sneaking in. Run
+        // structural checks before any
         // typed coercion.
         const raw = snapshot as unknown as Record<string, unknown>
         if ("claimCitations" in raw) {
@@ -636,7 +637,7 @@ export class PropositCore<
 
         // Step 7: Remap claim references
         const snap = forkedEngine.snapshot()
-        // D5 — `engine.snapshot()` deliberately omits `behavior` from the
+        // `engine.snapshot()` deliberately omits `behavior` from the
         // serialized config (see the comment in `ArgumentEngine.snapshot()`),
         // so the upcoming `fromSnapshot` rebuild would otherwise reset the
         // forked engine to the default `'assistive'`. Carry the behavior

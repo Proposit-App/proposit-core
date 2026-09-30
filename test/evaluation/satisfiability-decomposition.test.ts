@@ -4,8 +4,8 @@
 // pin the reduction: same answers, fewer rows.
 //
 // The oracle is a verbatim copy of the flat walk rather than a list of expected
-// values, so criterion 1 compares implementations instead of comparing the new
-// implementation against what someone believed the old one did.
+// values, so the agreement suite compares implementations instead of comparing
+// the decomposed walk against what someone believed the flat one does.
 
 import { describe, it, expect } from "vitest"
 import {
@@ -210,9 +210,8 @@ const allTrue: TRule = (values) =>
 /* -------------------------------------------------------------------------- */
 
 describe("the decomposed walk agrees with the flat walk", () => {
-    // Criterion 1. These pass before the change as well as after — they guard
-    // the reduction rather than reproduce a defect, which is the distinction
-    // the plan asks this file to keep visible.
+    // These pass on the flat walk as well as the decomposed one — they guard
+    // the reduction rather than reproduce a defect.
 
     const cases: {
         name: string
@@ -336,7 +335,7 @@ describe("the decomposed walk agrees with the flat walk", () => {
 })
 
 describe("premises coupled through a premise-bound variable", () => {
-    // Criterion 2. `p1` and `p2` name no variable in common, so a graph built
+    // `p1` and `p2` name no variable in common, so a graph built
     // from named occurrence alone puts them in separate components — and then
     // walks `p1` without `b` in the assignment, where its bound variable
     // resolves to null and it comes out satisfiable. The set is not.
@@ -400,7 +399,7 @@ describe("premises coupled through a premise-bound variable", () => {
 })
 
 describe("the size of the walk", () => {
-    // Criteria 3 and 4. One premise per component: a row evaluates every
+    // One premise per component: a row evaluates every
     // premise in its component, so with several premises per component an
     // evaluation count is not a row count.
 
@@ -472,8 +471,6 @@ describe("the size of the walk", () => {
 })
 
 describe("the ceiling applies to the largest group", () => {
-    // Criteria 5 and 6.
-
     function group(prefix: string, size: number): string[] {
         return Array.from({ length: size }, (_, index) => `${prefix}${index}`)
     }
@@ -535,7 +532,7 @@ describe("the ceiling applies to the largest group", () => {
 })
 
 describe("forced-true variables reach every group", () => {
-    // Criterion 7. `pForced` reaches no free variable at all, so it forms its
+    // `pForced` reaches no free variable at all, so it forms its
     // own group with no columns — and that group's single row still has to
     // carry the forced assignment or the premise reads null and the group
     // comes back false.

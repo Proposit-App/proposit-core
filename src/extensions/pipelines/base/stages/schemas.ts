@@ -1,26 +1,23 @@
-// Shared TypeBox schemas for the v2-multi-stage ingestion stages.
+// Shared TypeBox schemas for the multi-stage ingestion stages.
 //
 // Each stage's output schema lives here (rather than next to the stage
 // module) so the schemas can be referenced from `finalize-response-v2.ts`,
-// the v2 unit tests, and any future consumer that wants to validate a
+// the stage unit tests, and any future consumer that wants to validate a
 // recorded stage output without importing the stage's `run` function.
 
 import Type, { type Static } from "typebox"
 
 // **Span shape (`{ start, end }`).** Spans use a named-key object
-// rather than a positional tuple. The original tuple shape
-// (`Type.Tuple([Type.Number(), Type.Number()])`) caused the OpenAI
-// structured-output converter to throw `UnsupportedSchemaError:
-// "Tuple"` at request-build time — `segmentation` then surfaced a
-// `LLM_NON_RETRYABLE_ERROR` on first attempt, every downstream stage
-// cascade-skipped on the required dep, and the recording mode
-// completed in ~9ms with `output: null` and zero LLM calls. The
-// named-key form is also more LLM-friendly (each value carries its
+// rather than a positional tuple. The OpenAI structured-output
+// converter rejects a tuple (`Type.Tuple(...)`) with
+// `UnsupportedSchemaError: "Tuple"` when the request is built, which
+// would fail `segmentation` on its first attempt and skip every
+// stage that depends on it. The named-key form is also more LLM-friendly (each value carries its
 // semantic role rather than relying on positional convention) and
 // stays within the converter's supported subset (Object, Array,
 // String, Number, Integer, Boolean, Literal, Union, Optional, Record,
-// Null). See `test/extensions/argument-ingestion/stages/schema-converter-regression.test.ts`
-// for the regression coverage that pins every v2 LLM stage's
+// Null). See `test/extensions/pipelines/stages/schema-converter-regression.test.ts`
+// for the regression coverage that pins every LLM stage's
 // `outputSchema` through `typeboxToOpenAiSchema`.
 export const SpanSchema = Type.Object({
     start: Type.Number({
@@ -46,7 +43,7 @@ export type TSpan = Static<typeof SpanSchema>
 // `mentions`, `sources`, `axioms`, `relations`). Downstream readers
 // access the array via `output.segments` (etc.); the envelope is
 // shallow and does not change the per-item shape. The same regression
-// test that pins `typeboxToOpenAiSchema` survival now also asserts
+// test that pins `typeboxToOpenAiSchema` survival also asserts
 // every LLM-stage's converted root is `type: object`.
 
 export const SegmentationOutputSchema = Type.Object({
@@ -133,7 +130,7 @@ export const BaseCanonicalClaimSchema = Type.Object({
     miniId: Type.String(),
     mentionIds: Type.Array(Type.String()),
     suggestedSymbol: Type.String(),
-    // Per spec §7.2 row 5, the canonicalizer also drafts the
+    // The canonicalizer also drafts the
     // per-claim type. We capture it as `type` and let
     // `claim-type-classification` refine/confirm. Extension fields
     // (title/body/url/axiom) come from the merged extension schema.
@@ -177,8 +174,8 @@ export type TCanonicalClaim = TBaseCanonicalClaim & Record<string, unknown>
 // Same OpenAI strict-mode constraint as above. The natural shape
 // `Record<miniId, { type, sourceString }>` becomes an explicit list
 // of `{ miniId, type, sourceString }` entries, wrapped in a
-// single-key `classifications` envelope (the lambda-fold 3 root-
-// must-be-object invariant). Downstream readers build a Map on
+// single-key `classifications` envelope (the rule that every
+// output schema's root must be an object). Downstream readers build a Map on
 // receipt when they need keyed lookups.
 export const ClaimTypeClassificationEntrySchema = Type.Object({
     miniId: Type.String(),

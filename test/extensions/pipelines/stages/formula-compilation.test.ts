@@ -1,6 +1,6 @@
 // Unit tests for `formula-compilation` — the deterministic stage that
 // turns the relation graph + conclusion selection into compiled
-// premise strings (spec §7.3).
+// premise strings.
 //
 // Coverage matrix:
 //   - support: s implies t

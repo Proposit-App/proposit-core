@@ -6,13 +6,12 @@
 // per-stage `overrides` keyed by stage id. Precedence is
 // stage-override > pipeline-default > internal stage default.
 //
-// The original bug this surface unblocks: v1.3.0 shipped
-// `segmentation` without a `maxOutputTokens` cap, so a 15 KB input
-// hit the OpenAI Responses API default mid-string and returned
-// `status: "incomplete"` with partial JSON. v1.3.1 sets a generous
-// default (`SEGMENTATION_MAX_OUTPUT_TOKENS = 8192`) AND exposes the
-// override surface so callers ingesting even larger inputs can dial
-// the cap up further without forking the stage.
+// Without a `maxOutputTokens` cap, a 15 KB input can hit the OpenAI
+// Responses API default mid-string and return `status: "incomplete"`
+// with partial JSON. `segmentation` has a generous default
+// (`SEGMENTATION_MAX_OUTPUT_TOKENS = 8192`), and this override surface
+// lets callers ingesting even larger inputs raise the cap further
+// without forking the stage.
 
 import { describe, expect, it } from "vitest"
 import { executePipeline } from "../../../src/lib/index.js"
@@ -307,7 +306,7 @@ describe("createScholarPipeline — LLM-options threading", () => {
 
     it("REGRESSION: a `model` override actually REACHES the built llmStage request", async () => {
         // Guards the silent-no-op regression: the resolver computing the
-        // right model but no stage factory reading it. Build a v2
+        // right model but no stage factory reading it. Build a
         // pipeline with a pipeline-level model default and assert the
         // segmentation request carries the override, not the const.
         const segOutput = {

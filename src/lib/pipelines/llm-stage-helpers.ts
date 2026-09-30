@@ -51,14 +51,13 @@ const TRUNCATION_SUFFIX = "…<truncated>"
 
 function truncateValidationError(error: string, capBytes: number): string {
     // NOTE: `capBytes` is measured in JavaScript `string.length` —
-    // UTF-16 code units, not UTF-8 bytes. The spec (§6.3) phrases the
-    // cap as "bytes"; for ASCII-heavy validation errors the two are
-    // equal, and for non-ASCII paths a 2048 cap is roughly 2–4 KB of
-    // UTF-8 depending on character distribution. We accept this drift
-    // for V1: realistic TypeBox validation errors are short and
-    // English; a future polish pass can switch to
-    // `new TextEncoder().encode(error).length` if a real workload
-    // shows the distinction matters.
+    // UTF-16 code units, not UTF-8 bytes, despite the parameter name. For
+    // ASCII-heavy validation errors the two are equal, and for non-ASCII
+    // paths a 2048 cap is roughly 2–4 KB of UTF-8 depending on character
+    // distribution. That difference is accepted because realistic TypeBox
+    // validation errors are short and English; switch to
+    // `new TextEncoder().encode(error).length` if a real workload shows
+    // the distinction matters.
     if (error.length <= capBytes) {
         return error
     }
@@ -280,13 +279,9 @@ export function buildLlmRequest<TOutput>(
     return { req, prompts: { system: prompt.system, user } }
 }
 
-// The genuinely-shared validation core: check a PARSED output value
-// against the stage schema and format the validation error. Used by both
-// the in-process loop (output already parsed by the provider) and
-// `validateLlmOutcome`'s completed branch (output parsed from raw text).
 // Shorten every string longer than its schema's `maxLength` to fit that
-// cap, ending on a whole word (`shortenToLength`), mutating `value` in place. Driven off the validator's own `maxLength`
-// errors (which carry the JSON-pointer path + the limit), so it handles
+// cap, ending on a whole word (`shortenToLength`), mutating `value` in
+// place. Driven off the validator's own `maxLength` errors (which carry the JSON-pointer path + the limit), so it handles
 // nested objects, arrays, and discriminated unions without walking the
 // schema by hand. Re-runs because a union surfaces a failing variant's
 // inner errors only once its siblings are reconciled; truncation is
@@ -329,6 +324,10 @@ function clampMaxLengthStrings(
     }
 }
 
+// The shared validation core: check a PARSED output value against the
+// stage schema and format the validation error. Used by both the
+// in-process loop (output already parsed by the provider) and
+// `validateLlmOutcome`'s completed branch (output parsed from raw text).
 function checkLlmOutput<TOutput>(
     cfg: TLlmStageConfig<TOutput>,
     output: unknown,

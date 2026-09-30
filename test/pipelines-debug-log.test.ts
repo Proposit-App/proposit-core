@@ -1,4 +1,4 @@
-// Unit tests for the opt-in debug logging added in v1.3.1.
+// Unit tests for the opt-in debug logging.
 //
 // Surface under test: `src/lib/pipelines/debug-log.ts` (the env-gated
 // emitter module) and its wiring in `executePipeline` +

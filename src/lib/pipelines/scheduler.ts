@@ -480,9 +480,9 @@ export function runFinalize<TOutput>(
 // Drive every stage of `pipeline` to completion against the shared `state`,
 // honoring `concurrencyLimit`. Mutates `state.records` / `state.failures` (and,
 // via `state.setConfigError`, the caller's captured config error) as stages
-// settle; returns once every stage has a final outcome. Extracted from
-// `executePipeline` — the scheduler loop and its eligibility helpers are the
-// single largest chunk of that function's body.
+// settle; returns once every stage has a final outcome. Kept separate from
+// `executePipeline`, which calls it, because the scheduler loop and its
+// eligibility helpers are the largest part of that work.
 async function runSchedulerLoop(
     pipeline: TPipeline<unknown, unknown>,
     stageById: Map<string, TStage<unknown>>,

@@ -1,16 +1,8 @@
 // AN rule set per-rule tests.
 //
-// These assert the contract every `applyAN*` must honor — any future
-// native rewrite must keep these green.
-//
-// Each `applyAN*` currently delegates to the legacy
-// `pe.normalizeExpressions()` full sweep, so an `applyAN2` call also
-// fires AN-1/3/4 — the rule-level isolation is a future state. Tests
-// here therefore check that the AN end-state is reached after the call,
-// without asserting "only AN-N fired". When the native rewrites land
-// the tests stay valid (each rule still produces the documented
-// effect); a stricter set of "rule N is no-op when its pattern is
-// absent" tests can be added at that point.
+// These assert the contract every `applyAN*` must honor. Each
+// `applyAN*` is a single-rule pass; tests check that the documented
+// end state is reached after the call.
 
 import { describe, it, expect, vi } from "vitest"
 import { ArgumentEngine } from "../../src/lib/core/argument-engine.js"
@@ -93,7 +85,7 @@ describe("applyAN3 — collapse 0/1-child operator/formula", () => {
         expect(pe.getExpressions()).toHaveLength(0)
     })
 
-    // Sub-case-specific guards. These exercise the four native
+    // Sub-case-specific guards. These exercise the four
     // collapse paths (0-child operator, 1-child non-not operator,
     // 0-child formula, 1-child formula with no bounded-subtree binary)
     // and the keep case (1-child formula whose subtree DOES contain a
@@ -390,10 +382,9 @@ describe("applyAN3 — collapse 0/1-child operator/formula", () => {
         expect(pe.getExpressions()).toHaveLength(0)
     })
 
-    it("issues PremiseEngine.removeExpression(_, false) calls for AN-3 collapses (native code path)", () => {
+    it("issues PremiseEngine.removeExpression(_, false) calls for AN-3 collapses", () => {
         // Spy-style guard that locks down the public-API drive. A
-        // 0-child AND collapses via a single removeExpression call;
-        // the same fingerprint will hold for native AN-3 going forward.
+        // 0-child AND collapses via a single removeExpression call.
         const eng = makePermissiveEngine()
         const { result: pe } = eng.createPremise()
         pe.addExpression({
@@ -418,7 +409,7 @@ describe("applyAN3 — collapse 0/1-child operator/formula", () => {
     })
 })
 
-describe("applyAN2 — collapse double negation (native)", () => {
+describe("applyAN2 — collapse double negation", () => {
     // Helper: build a two-premise setup where peB hosts the
     // double-negation shape and references peA's auto-created
     // premise-bound variable (avoids the circular-binding check that
@@ -547,13 +538,10 @@ describe("applyAN2 — collapse double negation (native)", () => {
         expect(veX.parentId).toBe("formula-buf")
     })
 
-    it("issues two PremiseEngine.removeExpression(_, false) calls per direct NOT-NOT collapse (native code path)", () => {
-        // Spy-style guard: the native implementation must drive the
-        // collapse via the public `removeExpression(id, false)` API.
-        // A delegation through `pe.normalizeExpressions()` would
-        // register zero removeExpression calls because it uses the
-        // private `promoteChild` primitive. This test fails loudly if
-        // AN-2 ever regresses to delegation, and locks down the
+    it("issues two PremiseEngine.removeExpression(_, false) calls per direct NOT-NOT collapse", () => {
+        // Spy-style guard: the implementation must drive the
+        // collapse via the public `removeExpression(id, false)` API,
+        // not a private primitive. This locks down the
         // `removeExpression(_, false)` semantic.
         const { eng, peB, varAId } = setupTwoPremisesWithCrossVar()
         peB.addExpression({
@@ -686,17 +674,15 @@ describe("applyAN2 — collapse double negation (native)", () => {
 describe("applyAN4 — absorb same-operator adjacency through a formula", () => {
     // Contract / regression-guard tests for AN-4 (P-5).
     //
-    // **Implementation: native single-rule pass.** `applyAN4`
+    // **Implementation: single-rule pass.** `applyAN4`
     // walks each premise's tree looking
     // for `OUTER_OP → formula → INNER_OP (same operator) → [c1,…,cN]`
     // and, for each match, uses `pe.reparentExpression(c_i, outerId,
     // position_i)` to move every inner child into the outer at
-    // legacy-spacing positions, then removes the empty inner OP and
-    // formula wrapper via `pe.removeExpression`. The legacy
-    // delegation through `pe.normalizeExpressions()` is gone (see
-    // `src/lib/grammar/an-rules.ts` for the implementation + the
-    // ported position-spacing + redistribution-fallback from
-    // `ExpressionManager.absorbSameOperator`). These tests are the
+    // evenly spaced positions, then removes the empty inner OP and
+    // formula wrapper via `pe.removeExpression` (see
+    // `src/lib/grammar/an-rules.ts` for the implementation, including
+    // the position spacing and the redistribution fallback). These tests are the
     // contract regression guards — any future refactor of AN-4 must
     // keep them green.
     //
@@ -705,14 +691,10 @@ describe("applyAN4 — absorb same-operator adjacency through a formula", () => 
     // becomes outer-OP → (..., child1, child2, ..., ). Implies/iff
     // are root-only (S-5) and never absorb — only and/or pairs.
     //
-    // **Per-rule isolation caveat (historical, now resolved at the
-    // AN-4 level).** A delegating `applyAN4` that routed through the
-    // legacy full sweep would also trigger AN-3 on a fixture with a
-    // 1-child outer-OR in the same call, confusing "no-firing"
-    // assertions. The multi-child outer operators (≥2 children) below
-    // were chosen to avoid that confusion under a delegated path.
-    // Native AN-4 fires only on its specific pattern, so the same
-    // fixtures now assert genuinely per-rule behavior.
+    // **Per-rule isolation.** The outer operators below have at least
+    // two children so that no AN-3 single-child collapse applies to
+    // them; `applyAN4` fires only on its own pattern, so these fixtures
+    // assert per-rule behavior.
 
     // Helper: build a four-premise setup so peB hosts the absorption
     // shape using peA, peC, and peD's auto-created premise-bound
@@ -749,9 +731,8 @@ describe("applyAN4 — absorb same-operator adjacency through a formula", () => 
     }
 
     it("absorbs OR(a, formula(OR(c, d))) into OR(a, c, d) and removes the formula+inner-OR", () => {
-        // Multi-child outer-OR avoids the AN-3 single-child collapse
-        // path that would otherwise also fire under the delegated
-        // legacy sweep.
+        // Multi-child outer-OR keeps the fixture clear of the AN-3
+        // single-child collapse pattern.
         const { eng, peB, varAId, varCId, varDId } =
             setupFourPremisesWithCrossVars()
         peB.addExpression({
@@ -823,7 +804,7 @@ describe("applyAN4 — absorb same-operator adjacency through a formula", () => 
         // ve-c + ve-d next to ve-a.
         expect(ids).toEqual(["or-outer", "ve-a", "ve-c", "ve-d"])
         // Identity preservation: each variable expression keeps its
-        // id through absorption. The native `reparentExpression`
+        // id through absorption. The `reparentExpression`
         // primitive mutates parentId/position in place without minting
         // new ids, so this invariant must hold.
         const veA = after.find((e) => e.id === "ve-a")!
@@ -833,9 +814,8 @@ describe("applyAN4 — absorb same-operator adjacency through a formula", () => 
         expect(veC.parentId).toBe("or-outer")
         expect(veD.parentId).toBe("or-outer")
         // Order preserved: a (was outer-position 0) < c (first inner
-        // child) < d (second inner child). The legacy path slots
-        // absorbed children between the formula's left and right
-        // neighbors.
+        // child) < d (second inner child). Absorbed children are
+        // slotted between the formula's left and right neighbors.
         expect(veA.position).toBeLessThan(veC.position)
         expect(veC.position).toBeLessThan(veD.position)
     })
@@ -1082,8 +1062,7 @@ describe("applyAN4 — absorb same-operator adjacency through a formula", () => 
         // AN-4 firing condition. The formula is justified per P-3
         // (bounded subtree contains AND), AN-3 leaves it. The outer
         // OR has 2 children, AN-3 leaves it. Whole tree stays
-        // stable — change-detection in `runLegacyNormalizeAndReportChange`
-        // returns false because no ids appear/disappear.
+        // stable — no ids appear or disappear.
         const { eng, peB, varAId, varCId, varDId } =
             setupFourPremisesWithCrossVars()
         peB.addExpression({
@@ -1161,7 +1140,7 @@ describe("applyAN4 — absorb same-operator adjacency through a formula", () => 
         expect(afterIds).toEqual(beforeIds)
     })
 
-    it("is a no-op when there is no intervening formula (native AN-4 fires only on the OP → formula → same-OP shape)", () => {
+    it("is a no-op when there is no intervening formula (AN-4 fires only on the OP → formula → same-OP shape)", () => {
         // Native AN-4 matches only when the inner operator's parent
         // is a formula. Without the intervening formula, the shape
         // `OUTER_OP → INNER_OP` is a P-1 violation (handled by AN-1,
@@ -1702,10 +1681,10 @@ describe("applyAN4 — absorb same-operator adjacency through a formula", () => 
     })
 })
 
-describe("applyAN1 — insert formula buffer between operators (native)", () => {
+describe("applyAN1 — insert formula buffer between operators", () => {
     // Contract / regression-guard tests for AN-1 (P-1).
     //
-    // **Implementation: native.** `applyAN1` walks each
+    // **Implementation.** `applyAN1` walks each
     // premise's expression tree looking for non-`not` operators whose
     // parent is also an operator (the P-1 violation shape) and calls
     // `pe.wrapInFormula(childOpId, formulaId)` to insert a freshly-
@@ -2079,12 +2058,10 @@ describe("applyAN1 — insert formula buffer between operators (native)", () => 
         expect(afterIds).toEqual(beforeIds)
     })
 
-    it("uses pe.wrapInFormula (not addExpression+reparent) on the native code path", () => {
+    it("uses pe.wrapInFormula (not addExpression+reparent)", () => {
         // Spy on `pe.wrapInFormula` to confirm AN-1 issues the
-        // wrap-primitive call directly. Locks in the native code path
-        // — a future regression that goes back through
-        // `pe.normalizeExpressions()` or composes the operation from
-        // simpler primitives would fail this assertion.
+        // wrap-primitive call directly. A change that composes the
+        // operation from simpler primitives would fail this assertion.
         const { eng, peB, varAId, varBId } = setupTwoPremisesWithCrossVars()
         peB.addExpression({
             id: "and-root",
@@ -2197,7 +2174,7 @@ describe("applyANToFixedPoint — drives all four rules to convergence", () => {
 
     it("converges within the MAX_AN_ITERATIONS safety cap on realistic input", () => {
         // The cap is 10; convergence on well-formed input should be
-        // ≤ 3 iterations (spec §5.1). This test exercises a tree with
+        // ≤ 3 iterations. This test exercises a tree with
         // multiple AN-3 firings (nested empty operators) to make sure
         // the fixed-point loop terminates without hitting the cap.
         const eng = makePermissiveEngine()

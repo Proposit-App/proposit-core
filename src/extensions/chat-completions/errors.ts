@@ -9,9 +9,11 @@
 // from the tag, so these classes need no `code` of their own.
 //
 // The class names intentionally mirror the OpenAI provider's names but
-// are *distinct* classes living in this extension; they are surfaced
-// only from this subpath (NOT the package root) to avoid colliding with
-// the root-exported OpenAI error classes.
+// are *distinct* classes living in this extension. Neither set is
+// exported from the package root: these come only from the
+// `extensions/chat-completions` subpath and the OpenAI ones only from
+// the `extensions/openai` subpath, so the matching names never
+// collide.
 //
 // Mapping for the framework's default retry policy
 // (`retryOn: ["schema_validation", "transient"]`):

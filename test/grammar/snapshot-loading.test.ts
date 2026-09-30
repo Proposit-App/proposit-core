@@ -1,6 +1,5 @@
 // Snapshot loading accepts any Structural state.
 //
-// Per spec §7.2:
 //   - fromSnapshot / fromData load any snapshot whose Structural-tier
 //     invariants hold. Evaluable / Derivable / Presentable violations
 //     do NOT cause a load failure — they surface post-load via
@@ -103,8 +102,8 @@ describe("ArgumentEngine.fromData / fromSnapshot — accepts any Structural stat
             varExpr("v-p-expr", "v-p", "and-root", "p-1", 0),
         ]
 
-        // Use permissive grammarConfig at load so the legacy load-time
-        // normalize doesn't paper over the violation.
+        // Load in permissive mode so nothing normalizes the tree and
+        // hides the violation.
         const eng = ArgumentEngine.fromData(
             argument,
             claimLib,

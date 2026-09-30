@@ -62,6 +62,6 @@ export function createClaimMentionExtractionStage(
     })
 }
 
-/** Backward-compatible default-options stage. */
+/** The stage with default options, the same as `createClaimMentionExtractionStage()` with no arguments. */
 export const claimMentionExtractionStage: TStage<TClaimMentionExtractionOutput> =
     createClaimMentionExtractionStage()

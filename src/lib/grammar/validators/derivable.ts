@@ -1,5 +1,5 @@
-// Derivable-tier validators (D-1..D-6). Code 'D-7' is reserved — see spec
-// §4.3 (derivation premise cardinality was restated as Evaluable E-6).
+// Derivable-tier validators (D-1..D-6). Code 'D-7' is reserved and never
+// reused: derivation premise cardinality is checked as Evaluable E-6.
 //
 // D-1 derivation premise canonical shape (naked-Q or populated)
 // D-2 single-citation derivation form (IMPLIES(c, Q), no surrounding OR)
@@ -43,7 +43,7 @@ function buildTChildMap(
 
 /**
  * Walks down through transparent `formula` nodes, returning the first
- * descendant that is not a formula. Per spec §4.3 D-1: the Presentable
+ * descendant that is not a formula. Under D-1 the Presentable
  * tier wraps `OR` in a formula buffer; validators must treat the buffer
  * as transparent when matching the populated-form skeleton.
  *

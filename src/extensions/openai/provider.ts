@@ -1,6 +1,6 @@
 // Concrete `TLlmProvider` backed by the OpenAI Responses API.
 //
-// The V1 adapter: raw `fetch` to
+// Uses raw `fetch` to
 // `https://api.openai.com/v1/responses` with strict-mode
 // structured output via the inlined TypeBox → JSON Schema converter,
 // translation of the framework's `TToolSpec` discriminated union
@@ -11,8 +11,8 @@
 //
 // The provider deliberately uses raw `fetch` rather than the
 // `openai` npm SDK. `openai` is declared as an optional peer in
-// `package.json` for forward-looking insurance — a future version may
-// adopt it; V1 keeps the dependency surface minimal.
+// `package.json`, but this provider does not import it, which keeps
+// the dependency surface minimal.
 //
 // Error classification routes HTTP-status families into framework-
 // recognized error classes (see `./errors.ts`):
@@ -20,8 +20,8 @@
 //   * 5xx                        → `TransientLlmError`
 //   * 429 (insufficient_quota)   → `QuotaExhaustedLlmError`
 //   * 429 (any other body)       → `RateLimitLlmError`
-//   * 400, 422                   → `SchemaValidationLlmError`
-//   * 401, 403, other 4xx        → `NonRetryableLlmError`
+//   * 422                        → `SchemaValidationLlmError`
+//   * 400, 401, 403, other 4xx   → `NonRetryableLlmError`
 //   * loop cap exceeded          → `ToolLoopExhaustedError`
 //
 // The framework's `llmStage` retry policy classifies via the
@@ -105,7 +105,7 @@ export type TCreateOpenAiResponsesProviderOptions = {
      * Background mode requires `store: true`, which retains the
      * response server-side (~10 min, for polling) and is **NOT
      * ZDR-compatible**. Enable only where that data-retention posture
-     * is acceptable. V1 supports the **no-tools path only**: a request
+     * is acceptable. Only requests without tools are supported: a request
      * that sets `backgroundMode` and carries `tools` throws
      * `NonRetryableLlmError`.
      */
@@ -120,7 +120,7 @@ export type TCreateOpenAiResponsesProviderOptions = {
      *
      * When `true`, `backgroundMode` is ignored for this provider
      * instance. `stream` is also ignored (SSE is always used in this
-     * mode). V1 supports the **no-tools path only**: a request that
+     * mode). Only requests without tools are supported: a request that
      * sets `backgroundStreamMode` and carries `tools` throws
      * `NonRetryableLlmError`.
      *
@@ -277,19 +277,17 @@ export function createOpenAiResponsesProvider(
                 throw new NonRetryableLlmError({ message })
             }
 
-            // **Incomplete-envelope classification (v1.3.1).** When
+            // **Incomplete-envelope classification.** When
             // the model stops before finishing, the Responses API
             // returns 200 OK with `status: "incomplete"` +
             // `incomplete_details: { reason: <reason> }` and a
-            // *partial* `output_text`. Pre-v1.3.1 the provider
-            // blindly ran the partial text through `safeParseJson`,
-            // which surfaced a cryptic `SchemaValidationLlmError:
-            // Unterminated string in JSON at position N`. The
-            // framework's default policy then retried, hit the same
-            // wall on attempt 2, and produced the deterministic
-            // two-attempt-failure pattern users reported.
+            // *partial* `output_text`. Parsing that partial text as
+            // JSON would only yield an unhelpful
+            // `Unterminated string in JSON` schema error that fails
+            // the same way on every retry, so it is classified here
+            // before any parse.
             //
-            // The fold post-validation splits the classification by
+            // The classification is split by
             // `incomplete_details.reason`:
             //
             //   * `max_output_tokens` → `TransientLlmError`
@@ -366,8 +364,8 @@ export function createOpenAiResponsesProvider(
             // tool-call round (execute handlers, ignore the message,
             // re-call). The follow-up round gets to produce the
             // final answer. Callers that want the message even when
-            // tools fire would need a different exit condition; we
-            // accept this behavior as V1.
+            // tools fire would need a different exit condition, which
+            // this provider does not offer.
             if (functionCalls.length > 0) {
                 // Per the Responses-API conversation-history
                 // contract, the next request must include each

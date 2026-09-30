@@ -279,7 +279,7 @@ describe("ArgumentEngine.populateFromCitations", () => {
         // buffer that AN-1 inserts in assistive mode between IMPLIES
         // and OR. The default-constructed engine here is assistive; a
         // permissive engine would have OR as the direct antecedent
-        // (no buffer). See the §5 P-1 / AN-1 contract.
+        // (no buffer). See the P-1 / AN-1 contract.
         const { eng, citLib, derivedClaimId, s1Id, s2Id } =
             setupCitationFixture()
         citLib.add({

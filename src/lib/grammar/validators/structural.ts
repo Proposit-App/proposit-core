@@ -372,11 +372,10 @@ function childrenByParent(
  * the mutation primitives and are not a Structural invariant; sibling
  * uniqueness is enforced separately by S-9.
  *
- * Pre-1.0.2 S-8 also pinned positions to literal `[0, 1]`. That check
- * was over-strict — it false-flagged existing arguments whose binary
- * operators sat at midpoint-spaced positions (e.g., `[0, 1073741823]`,
- * the default `wrapExpression` spacing for variadic operators). The
- * position pin was relaxed in 1.0.2 to arity-only.
+ * S-8 deliberately does not require the literal positions `[0, 1]`:
+ * binary operators legitimately sit at midpoint-spaced positions such
+ * as `[0, 1073741823]` (the default `wrapExpression` spacing), and
+ * pinning the values would flag those valid arguments.
  */
 export function validateS8(ctx: TValidatorContext): readonly TViolation[] {
     const violations: TViolation[] = []

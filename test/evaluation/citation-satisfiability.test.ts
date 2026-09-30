@@ -45,7 +45,7 @@ describe("evaluation gives the citation when asking whether the premises hold", 
         const validity = built.engine.checkValidity({ mode: "exhaustive" })
 
         // The validity check runs the same question over the same premise set.
-        // Before this change the two answered differently, which is the defect.
+        // The defect this pins: the two answered differently.
         expect(validity.ok).toBe(true)
         expect(evaluated.premiseSetSatisfiable).toBe(false)
     })
@@ -67,7 +67,7 @@ describe("evaluation gives the citation when asking whether the premises hold", 
 })
 
 describe("a reader may still disagree with a source", () => {
-    // These pass before the change. They are the trap: the naive fix — passing
+    // These pass without the fix too. They are the trap: the naive fix — passing
     // the grounded set as `forcedTrueVariableIds` — makes citations invisible
     // to `isReaderAsserted`, and a reader's own assignment stops being theirs.
 

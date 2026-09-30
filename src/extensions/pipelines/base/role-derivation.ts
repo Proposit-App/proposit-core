@@ -1,17 +1,9 @@
-// `role-derivation` — pure helper that assigns each claim a role
-// (`'conclusion'` | `'premise'` | `'intermediate'`) given the
-// argument's premise/variable graph + the selected conclusion premise.
+// `role-derivation` — pure helper that returns each claim's role
+// (`'conclusion'` | `'premise'` | `'intermediate'`).
 //
-// v1 is trivial: the LLM already emits per-claim roles in its
-// `parsed.argument.claims[].role` field; v1's pipeline just trusts
-// that assignment and `deriveRoles` returns the LLM-provided map.
-//
-// v2 will derive roles from the relations graph + selected conclusion
-// (the LLM no longer self-assigns roles in the multi-stage pipeline).
-// The helper signature is forward-compatible: it accepts a generic
-// `claims` collection plus the selected conclusion premise miniId and
-// the per-premise variable wiring, so v2 can swap in a real
-// derivation without breaking v1 callers.
+// It copies the role already recorded on each parsed claim
+// (`claims[].role`) into a `claimMiniId -> role` map; it does not
+// work anything out from the premise or relation graph.
 
 import type { TParsedClaim } from "../../../lib/parsing/index.js"
 
@@ -22,8 +14,8 @@ export type TDeriveRolesInput = {
 }
 
 /**
- * Returns a `claimMiniId -> role` map. v1 trusts the LLM's
- * self-assigned roles; v2 will compute roles from premise relations.
+ * Returns a `claimMiniId -> role` map, taking each claim's role as
+ * recorded on the claim itself.
  */
 export function deriveRoles(
     input: TDeriveRolesInput

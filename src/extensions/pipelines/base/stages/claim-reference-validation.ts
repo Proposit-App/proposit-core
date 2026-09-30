@@ -86,8 +86,8 @@ export function validateClaimReferences(canon: TClaimCanonicalizationOutput): {
     const knownMiniIds = new Set(canon.canonicalClaims.map((c) => c.miniId))
 
     // 2. mentionToClaim dangling references + empty mention ids.
-    // mentionToClaim is now a list of { mentionId, claimMiniId }
-    // entries (lambda-fold 4 — OpenAI strict-mode doesn't accept
+    // mentionToClaim is a list of { mentionId, claimMiniId }
+    // entries (OpenAI strict-mode doesn't accept
     // Record-shaped maps with arbitrary string keys).
     for (const entry of canon.mentionToClaim) {
         const { mentionId, claimMiniId } = entry

@@ -24,13 +24,13 @@
 //     fail-fast comes from the `retryOn` exclusion, NOT from
 //     subclassing `NonRetryableLlmError` (which would collapse the
 //     code back to `LLM_NON_RETRYABLE_ERROR`).
-//   * `SchemaValidationLlmError` — no `retryReason` tag; the
-//     framework's separate schema-validation retry path handles
-//     this. Thrown for 400/422 responses that signal strict-mode
-//     schema violations.
+//   * `SchemaValidationLlmError` — `retryReason: "transient"`, so
+//     the default retry policy retries it. Thrown for 422 responses
+//     that signal a strict-mode schema violation, and for output
+//     text that is not valid JSON.
 //   * `NonRetryableLlmError` — no tag; framework classifies as
 //     `non_retryable` and surfaces it immediately as
-//     `LLM_NON_RETRYABLE_ERROR`. Used for 401/403 and other
+//     `LLM_NON_RETRYABLE_ERROR`. Used for 400/401/403 and other
 //     unrecoverable 4xx.
 //   * `ToolLoopExhaustedError` — surfaces from the agent loop when
 //     the round cap is hit. Non-retryable.
@@ -189,8 +189,7 @@ export function classifyHttpError(
     // failed server-side strict-mode validation. A re-roll can
     // sometimes succeed, so we route 422 through the
     // schema-validation class (which carries `retryReason:
-    // "transient"` as the V1 retry workaround until the framework
-    // grows a dedicated `schema_validation` retry tag).
+    // "transient"`, so the default retry policy retries it).
     if (status === 400) {
         return new NonRetryableLlmError({ message, status })
     }

@@ -1,5 +1,5 @@
 // Pure data view consumed by every tier's validators. No engine references.
-// Built by ArgumentEngine.validate() (Phase C) before delegating to the
+// Built by ArgumentEngine.validate() before delegating to the
 // dispatcher in src/lib/grammar/validate.ts.
 
 import type {

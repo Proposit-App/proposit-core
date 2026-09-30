@@ -47,7 +47,7 @@ export const CliPremiseMetaSchema = Type.Object(
 export type TCliPremiseMeta = Static<typeof CliPremiseMetaSchema>
 
 // ---------------------------------------------------------------------------
-// CLI expression schema — optional checksum for backward-compatible disk reads
+// CLI expression schema — checksum is optional so files stored without one still load
 // ---------------------------------------------------------------------------
 const CliBaseExpressionSchema = Type.Object({
     id: UUID,
@@ -102,7 +102,7 @@ export const CliPremiseDataSchema = Type.Object({
 export type TCliPremiseData = Static<typeof CliPremiseDataSchema>
 
 // ---------------------------------------------------------------------------
-// Axiomatic claim reason codes (v0.12)
+// Axiomatic claim reason codes
 // ---------------------------------------------------------------------------
 export const CliAxiomReasonCode = Type.Union([
     Type.Literal("true-by-definition"),

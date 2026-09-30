@@ -66,6 +66,6 @@ export function createCitationSourceDetectionStage(
     })
 }
 
-/** Backward-compatible default-options stage. */
+/** The stage with default options, the same as `createCitationSourceDetectionStage()` with no arguments. */
 export const citationSourceDetectionStage: TStage<TCitationSourceDetectionOutput> =
     createCitationSourceDetectionStage()

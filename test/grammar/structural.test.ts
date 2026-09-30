@@ -605,11 +605,9 @@ describe("grammar/structural", () => {
             expect(violations[0].code).toBe("S-8")
         })
 
-        // Pre-1.0.2 S-8 also pinned positions to literal [0, 1]. The
-        // 1.0.2 relaxation drops the position check — only arity matters.
-        // The two non-[0,1] cases below now PASS S-8 (any [a, b] with
-        // a < b is equivalent to [0, 1] under S-8's relaxed reading);
-        // S-9 still guards sibling-position uniqueness.
+        // S-8 checks arity only, not positions. The two non-[0,1] cases
+        // below PASS S-8 (any [a, b] with a < b is equivalent to [0, 1]
+        // under S-8); S-9 guards sibling-position uniqueness.
 
         it("returns an empty array for IMPLIES(a@5, b@10) (positions are sibling metadata, not S-8 concern)", () => {
             const ctx = buildContext({
@@ -637,11 +635,9 @@ describe("grammar/structural", () => {
         })
 
         it("returns an empty array for IMPLIES(a@0, b@1073741823) (midpoint-spaced positions are valid)", () => {
-            // Regression for the bug that motivated the 1.0.2 relaxation:
-            // pre-1.0.1 wrapExpression/insertExpression assigned midpoint
-            // positions to all binary children (including implies/iff);
-            // S-8 falsely flagged these as violations. Post-1.0.2 they
-            // are valid by construction.
+            // Pins that midpoint-spaced positions on the children of
+            // implies/iff are valid: a stored tree may carry them, and
+            // S-8 must not flag them as violations.
             const ctx = buildContext({
                 premises: [makeFreeformPremise({ id: "p-1" })],
                 expressions: [

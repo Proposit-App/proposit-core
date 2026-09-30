@@ -172,14 +172,11 @@ export function validateInsertExpression<
         )
     }
 
-    // The pre-v1.0 P-1 inline buffer-insertion / throw branches
-    // (gated on `grammarConfig.enforceFormulaBetweenOperators` +
-    // `resolveAutoNormalize(_, 'wrapInsertFormula')`) for three
-    // sites — (1) new expression as child of anchor's parent;
-    // (2) left node as child of new expression; (3) right node as
-    // child of new expression — were deleted. AN-1 (post-mutation
-    // hook in assistive mode) inserts the buffer when any of these
-    // sites produces a non-not operator under operator;
+    // P-1 is not checked here for any of the three placements — (1) new
+    // expression as child of anchor's parent; (2) left node as child of
+    // new expression; (3) right node as child of new expression. AN-1
+    // (post-mutation hook in assistive mode) inserts the buffer when any
+    // of these placements produces a non-not operator under operator;
     // permissive mode leaves the un-buffered state and
     // `validate('presentable')` flags it.
 
@@ -288,14 +285,11 @@ export function validateWrapExpression<
         )
     }
 
-    // The pre-v1.0 P-1 inline buffer-insertion / throw branches
-    // (gated on `grammarConfig.enforceFormulaBetweenOperators` +
-    // `resolveAutoNormalize(_, 'wrapInsertFormula')`) for three
-    // sites — (1) new operator as child of existing node's parent;
-    // (2) existing node as child of new operator;
-    // (3) new sibling as child of new operator — were deleted.
+    // P-1 is not checked here for any of the three placements — (1) new
+    // operator as child of existing node's parent; (2) existing node as
+    // child of new operator; (3) new sibling as child of new operator.
     // AN-1 (post-mutation hook in assistive mode) inserts the
-    // buffer when any of these sites produces a non-not operator
+    // buffer when any of these placements produces a non-not operator
     // under operator; permissive mode leaves the un-buffered state
     // and `validate('presentable')` flags it.
 
@@ -516,9 +510,8 @@ export function validateRemoveAndPromote<
     // Exactly 1 child — promote it into the target's slot.
     const child = children[0]
 
-    // The P-1 promote-on-remove enforcement throw lived here under
-    // `grammarConfig.enforceFormulaBetweenOperators`. AN-1 (post-mutation
-    // hook in assistive mode) now inserts the buffer if the promotion
+    // P-1 is not checked on promotion. AN-1 (post-mutation hook in
+    // assistive mode) inserts the buffer if the promotion
     // produced a non-not operator under operator; permissive mode leaves
     // the un-buffered state and `validate('presentable')` flags it.
 

@@ -4,12 +4,11 @@
 // evaluated lazily per call, so toggling the env var mid-process is
 // honored).
 //
-// **Why this module exists.** The v1.3.0 segmentation truncation
-// regression took two rounds of reproduction with no actionable
-// breadcrumbs in the logs — the framework's existing
-// `stage:llm-call` event captures the right data on the event bus
-// but consumers had to be wired up to surface it. This module gives
-// devs a one-flag escape hatch: set the env var, re-run the
+// **Why this module exists.** The framework's `stage:llm-call` event
+// captures the right data on the event bus, but a consumer has to be
+// wired up to surface it, so a failing pipeline otherwise leaves no
+// useful clues in the logs. This module gives developers a single
+// switch: set the env var, re-run the
 // failing pipeline, get structured per-call diagnostics on stderr
 // without modifying any consumer code.
 //

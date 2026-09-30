@@ -173,14 +173,14 @@ export interface TPremiseCrud<
      * Removes a premise and reassigns any role assignments that
      * reference it.
      *
-     * **Invariant guard (1.0.2):** when the removed premise was the
+     * **Invariant guard:** when the removed premise was the
      * conclusion AND other premises remain after the delete, the
      * conclusion role is atomically reassigned to the **lowest-id
      * remaining premise** (sorted lexicographically) rather than left
      * `undefined`, preserving the engine-level invariant that a
      * non-empty argument always has a conclusion designated (E-7).
      * When the removed premise was the conclusion AND no premises
-     * remain, the role is cleared as before (vacuous invariant on the
+     * remain, the role is cleared (vacuous invariant on the
      * empty argument). Consumers that want a different reassignment
      * policy (e.g., server-side `createdOn` ordering or a UI-defined
      * sibling position) should issue their own
@@ -293,8 +293,8 @@ export interface TVariableManagement<
     ): TCoreMutationResult<TVar | undefined, TExpr, TVar, TPremise, TArg>
     /**
      * Removes a variable and cascade-deletes all expressions referencing it
-     * across every premise (including their full subtrees). As of v1.0
-     * operator collapse on the surviving parents is the AN-3
+     * across every premise (including their full subtrees). Operator
+     * collapse on the surviving parents is the AN-3
      * post-mutation hook's responsibility in assistive behavior; in
      * permissive behavior the un-collapsed shape stays and surfaces via
      * `engine.validate('presentable')`.
@@ -498,7 +498,7 @@ export interface TArgumentRoleState<
     /**
      * Clears the conclusion designation.
      *
-     * **Invariant guard (1.0.2):** A non-empty argument always has a
+     * **Invariant guard:** A non-empty argument always has a
      * conclusion designated (E-7). On an argument with one or more
      * premises this method is a **no-op** — it returns the current
      * (unchanged) role state with an empty changeset rather than
@@ -546,9 +546,8 @@ export interface TArgumentEvaluation {
      * running the full evaluability sweep.
      *
      * Naked-Q derivation premises (single-variable root) are **not** flagged
-     * — they are a valid Derivable state per spec §4.2 and are skipped by
-     * evaluation rather than throwing. The pre-1.0
-     * `DERIVATION_STRUCTURE_INVALID_AT_EVALUATION` code has been removed.
+     * — they are a valid Derivable state and are skipped by evaluation
+     * rather than throwing.
      *
      * @returns A validation result with any issues found.
      *
@@ -566,10 +565,8 @@ export interface TArgumentEvaluation {
      *
      * Derivation premises with broken trees produce violations with code
      * `DERIVATION_STRUCTURE_INVALID`. Naked-Q (single-variable root) is
-     * a valid Derivable state per spec §4.2 and is **not** flagged here —
-     * it is skipped by evaluation rather than thrown. The pre-1.0
-     * `DERIVATION_STRUCTURE_INVALID_AT_EVALUATION` override has been
-     * removed.
+     * a valid Derivable state and is **not** flagged here — it is
+     * skipped by evaluation rather than thrown.
      *
      * @returns An `TInvariantValidationResult` — `ok: true` when all
      *   derivation premises are structurally valid, `ok: false` with
@@ -797,12 +794,11 @@ export interface TArgumentLifecycle<
      * schema/reference/structural-bookkeeping invariants that sit
      * outside the tier hierarchy.
      *
-     * @since 1.0.0 — replaces the pre-1.0 `validate()` no-arg
-     *   overload, which has been removed.
+     * @since 1.0.0
      */
     validateInvariants(): TInvariantValidationResult
     /**
-     * Four-tier grammar validation per spec §4. Returns the union of
+     * Four-tier grammar validation. Returns the union of
      * violations from Structural up through `tier` — `'structural'`
      * returns S-rule violations only, `'evaluable'` returns S + E,
      * `'derivable'` returns S + E + D, `'presentable'` returns the
@@ -814,7 +810,7 @@ export interface TArgumentLifecycle<
      */
     validate(tier: TGrammarTier): readonly TViolation[]
     /**
-     * Global normalize pass per spec §6. Runs the AN rule set
+     * Global normalize pass. Runs the AN rule set
      * (AN-1..AN-4) everywhere it can fire, converging the argument
      * toward `tier` (defaults to `'presentable'`).
      *
@@ -824,10 +820,10 @@ export interface TArgumentLifecycle<
      * violations requires user intent and is exposed via the repair
      * primitives.
      *
-     * In v1.0 every AN rule targets a Presentable invariant, so calls
+     * Every AN rule currently targets a Presentable invariant, so calls
      * with `tier` ∈ {'structural', 'evaluable', 'derivable'} are
-     * effectively no-ops. The parameter exists as forward-compatible
-     * API surface.
+     * effectively no-ops. The parameter is reserved so lower-tier rules
+     * can be added without an API break.
      *
      * Bypasses `behavior`: cleanup runs regardless of whether the
      * engine is in `'assistive'` or `'permissive'` mode.

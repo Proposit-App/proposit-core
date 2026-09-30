@@ -1,53 +1,41 @@
-// Regression test: every v2 LLM-stage outputSchema must (a) convert
+// Regression test: every LLM-stage outputSchema must (a) convert
 // successfully via `typeboxToOpenAiSchema`, (b) produce a converted
 // JSON Schema whose root is `{ "type": "object" }`, and (c) walk
 // recursively without any strict-mode violations
 // (`additionalProperties` non-false, `patternProperties` anywhere,
-// `properties`/`required` mismatch). All three invariants come from
-// concrete OpenAI 400 responses observed during fixture recording.
+// `properties`/`required` mismatch). Each invariant matches a concrete
+// OpenAI rejection:
 //
-// Lambda-fold 1 (`Type.Tuple` → `SpanSchema { start, end }`):
-//   The converter threw `UnsupportedSchemaError: "Tuple"` synchronously
-//   at request-build time. `llmStage` classified it as
-//   `LLM_NON_RETRYABLE_ERROR` (no `retryReason` tag), `segmentation`
-//   failed after retry exhaustion, every downstream stage with a
-//   required dep on `segmentation` cascade-skipped, and `finalize`
-//   returned `output: null` in ~9 ms total per fixture with zero LLM
-//   calls landing.
+// (a) No `Type.Tuple` (spans use `SpanSchema { start, end }`):
+//   The converter throws `UnsupportedSchemaError: "Tuple"` synchronously
+//   when the request is built. `llmStage` classifies it as
+//   `LLM_NON_RETRYABLE_ERROR` (no `retryReason` tag), so `segmentation`
+//   fails, every downstream stage with a required dependency on it is
+//   skipped, and `finalize` returns `output: null` without any LLM call.
 //
-// Lambda-fold 3 (array-rooted → object-envelope outputSchemas):
-//   With the converter no longer throwing, the v2 stages reached the
-//   real OpenAI Responses API — which then returned 400
-//   `invalid_json_schema`: "schema must be a JSON Schema of
-//   'type: object', got 'type: array'". `classifyHttpError(400)`
-//   returns `NonRetryableLlmError` (no `retryReason`), so the same
-//   stage-failed → cascade-skip → output-null chain repeated, only
-//   slower (84-926 ms per fixture because real HTTP roundtrips). Fix:
-//   wrap each of the 5 originally-array-rooted LLM stage schemas in a
-//   single-key envelope (`segments`, `mentions`, `sources`, `axioms`,
-//   `relations`).
+// (b) Object-rooted output schemas:
+//   The OpenAI Responses API returns 400 `invalid_json_schema`: "schema
+//   must be a JSON Schema of 'type: object', got 'type: array'".
+//   `classifyHttpError(400)` returns `NonRetryableLlmError`, so the same
+//   stage-failed → skip → output-null chain follows. Each naturally
+//   array-shaped stage output is wrapped in a single-key envelope
+//   (`segments`, `mentions`, `sources`, `axioms`, `relations`).
 //
-// Lambda-fold 4 (`Type.Record` → explicit list shapes):
-//   Recording attempt #3 made it past segmentation (4 stages
-//   completed) but `claim-canonicalization` then hit a different
-//   strict-mode 400: "'required' is required to be supplied and to
-//   be an array including every key in properties. Extra required
-//   key 'mentionToClaim' supplied." OpenAI strict mode does not
-//   support `additionalProperties` / `patternProperties` /
-//   arbitrary-key Record-style objects. The converter's
-//   `convertRecord` produces `{ type: "object", additionalProperties:
-//   <V> }`; even though our `properties` and `required` lists agree
-//   on the key, the API treats the inner schema (which carries
-//   `additionalProperties: <V>`) as if it had no fixed properties
-//   and reports `required` as having "extra" keys. Fix: replace
-//   `Type.Record(...)` with explicit list shapes —
-//   `mentionToClaim: Array<{ mentionId, claimMiniId }>`,
+// (c) No `Type.Record` (explicit list shapes instead):
+//   OpenAI strict mode does not support `additionalProperties` /
+//   `patternProperties` / arbitrary-key Record-style objects. The
+//   converter's `convertRecord` produces `{ type: "object",
+//   additionalProperties: <V> }`, which the API rejects with a 400
+//   ("'required' is required to be supplied and to be an array
+//   including every key in properties. Extra required key
+//   'mentionToClaim' supplied."). Keyed maps are therefore explicit
+//   list shapes — `mentionToClaim: Array<{ mentionId, claimMiniId }>`,
 //   `ClaimTypeClassificationOutputSchema: { classifications:
 //   Array<{ miniId, type, sourceString }> }`. Downstream readers
 //   build a `Map` on receipt when they need keyed lookups.
 //
-// This test pins all three invariants so future stages can't
-// reintroduce any of these classes of bug at fixture-recording time.
+// This test pins all three invariants so a new stage can't
+// reintroduce any of these classes of bug.
 
 import { describe, expect, it } from "vitest"
 import type { TSchema } from "typebox"
@@ -66,7 +54,7 @@ import {
 import { createClaimCanonicalizationStage } from "../../../../src/extensions/pipelines/base/stages/claim-canonicalization.js"
 import { basicsExtension } from "../../../../src/extensions/pipelines/base/basics-extension.js"
 
-// Table-driven test: every v2 LLM-stage outputSchema. Adding a new
+// Table-driven test: every LLM-stage outputSchema. Adding a new
 // LLM stage means appending one row here; both invariants are then
 // pinned automatically. Deterministic stage outputSchemas
 // (`variable-assignment`, `claim-reference-validation`,
@@ -87,7 +75,7 @@ function llmStageSchemas(): [name: string, schema: TSchema][] {
     ]
 }
 
-describe("v2 LLM stages — outputSchema OpenAI-converter round trip", () => {
+describe("LLM stages — outputSchema OpenAI-converter round trip", () => {
     for (const [name, schema] of llmStageSchemas()) {
         it(`${name}: typeboxToOpenAiSchema converts without throwing`, () => {
             expect(() => typeboxToOpenAiSchema(schema)).not.toThrow()
@@ -95,8 +83,8 @@ describe("v2 LLM stages — outputSchema OpenAI-converter round trip", () => {
     }
 })
 
-describe("v2 LLM stages — converted root must be type:object", () => {
-    // Pins the lambda-fold 3 invariant: the OpenAI Responses-API
+describe("LLM stages — converted root must be type:object", () => {
+    // Pins invariant (b): the OpenAI Responses-API
     // strict-mode `text.format.schema` field requires a `type: object`
     // root. Wrap each natural array shape in a single-key envelope so
     // the converted schema's root is the envelope's `object` rather
@@ -117,18 +105,16 @@ describe("v2 LLM stages — converted root must be type:object", () => {
  *
  *   - `additionalProperties` is either absent or literal `false`.
  *     The converter's only legitimate path for arbitrary-key
- *     objects (`Type.Record`) was `{ type: "object",
+ *     objects (`Type.Record`) is `{ type: "object",
  *     additionalProperties: <V> }`, which violates strict mode and
- *     was rejected by the API. The lambda-fold 4 fix removes every
- *     `Type.Record` from the v2 stage schemas; this assertion is
- *     the test-time guard.
+ *     is rejected by the API. The stage schemas carry no
+ *     `Type.Record`; this assertion is the test-time guard.
  *   - `patternProperties` is absent. Strict mode does not support
  *     it either.
  *   - Every key in `properties` is in `required`, and every key in
  *     `required` is in `properties` (the symmetric invariant —
- *     OpenAI's diagnostic at the time of lambda-fold 4 was "extra
- *     required key 'mentionToClaim' supplied" which is one
- *     direction; we pin both).
+ *     OpenAI's "extra required key 'mentionToClaim' supplied"
+ *     diagnostic covers one direction; we pin both).
  *
  * Recurses through `properties`, `items`, and `anyOf` branches.
  * Throws with a path like `"claim-canonicalization.canonicalClaims.
@@ -191,7 +177,7 @@ function walkConvertedSchema(schema: unknown, path: readonly string[]): void {
     }
 }
 
-describe("v2 LLM stages — converted schema is strict-mode-compliant (recursive walk)", () => {
+describe("LLM stages — converted schema is strict-mode-compliant (recursive walk)", () => {
     for (const [name, schema] of llmStageSchemas()) {
         it(`${name}: passes the strict-mode invariants at every depth`, () => {
             const converted = typeboxToOpenAiSchema(schema)
@@ -305,18 +291,17 @@ function findFormatPaths(schema: unknown, path: readonly string[]): string[] {
 // carry a string `format`:
 //
 //   1. `getParsingResponseSchema(BasicsParsingSchema)` — a raw
-//      `JSON.parse(JSON.stringify(...))` of the TypeBox node. This is
-//      the path the server's `argument_build_finalize` executor uses
-//      (`enforceStrictSchema(getParsingResponseSchema(...))`); it does
+//      `JSON.parse(JSON.stringify(...))` of the TypeBox node. A consumer
+//      may send this directly as a strict-mode schema; it does
 //      NOT pass through `typeboxToOpenAiSchema`, so any `format` on a
 //      source String node serializes straight through to OpenAI.
-//   2. `typeboxToOpenAiSchema(<v2 stage schema>)` — the converter path
+//   2. `typeboxToOpenAiSchema(<stage schema>)` — the converter path
 //      used by core's own OpenAI provider.
 //
-// A leaked `format: "uri"` on the citation `url` field caused a 400
-// (`'uri' is not a valid format`) from OpenAI strict mode. The
-// leak-proof fix removes `format` at the source TypeBox node so no
-// derivation path can emit it. These tests guard both paths.
+// A `format: "uri"` on the citation `url` field gets a 400
+// (`'uri' is not a valid format`) from OpenAI strict mode, so the
+// source TypeBox node carries no `format` and no derivation path can
+// emit it. These tests guard both paths.
 describe("OpenAI-bound parse schema carries no string `format`", () => {
     it("getParsingResponseSchema(BasicsParsingSchema) has no `format` anywhere", () => {
         const raw = getParsingResponseSchema(BasicsParsingSchema)

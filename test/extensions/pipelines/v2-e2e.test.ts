@@ -1,8 +1,6 @@
 // Golden-corpus e2e test driver for the scholar (multi-stage)
 // ingestion pipeline. Reads + writes `v2-recorded-llm.json` +
-// `v2-expected.json` per fixture (the recorded-data filenames predate
-// the role rename and are kept as-is — the recordings are byte-identical
-// across the rename, which is the point).
+// `v2-expected.json` per fixture.
 //
 // Mode is controlled by the `INGESTION_TEST_RECORD` env var:
 //
@@ -119,12 +117,10 @@ function writeExpected(
 // + premise miniIds via `ctx.generateId()`. The framework default is
 // `crypto.randomUUID()` (set in `executePipeline`'s
 // `defaultGenerateId`), which produces a different identifier on every
-// invocation. The recording run therefore committed UUIDs into the
-// `v2-expected.json` fixtures; subsequent replay runs minted fresh
-// UUIDs and the deep-equal assertion blew up on every fixture that
-// had a non-null `argument` (4 of 5 — `ambiguous-conclusion` was the
-// exception because its output is `{ argument: null, ... }` with no
-// minted ids).
+// invocation. With that default, ids written into `v2-expected.json`
+// on a recording run would never match the fresh ids minted on a
+// replay run, and the deep-equal assertion would fail for every
+// fixture whose `argument` is not null.
 //
 // Approach: inject a deterministic counter-based `generateId` into
 // the e2e test's `executePipeline`

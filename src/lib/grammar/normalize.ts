@@ -1,12 +1,11 @@
-// Global normalize() pass per spec §6.
+// Global normalize() pass (docs/Proposit_Grammar.md §5).
 //
 // `normalizeArgument(engine, tier)` is the engine-facing implementation
 // behind `ArgumentEngine.normalize(tier?)`. It runs the AN rule set
 // (AN-1..AN-4) globally across every owned premise, converging the
 // argument toward the requested tier (default `'presentable'`).
 //
-// Forward-compat: in v1.0 every AN rule targets a Presentable invariant,
-// so calls with `tier` ∈ {`structural`, `evaluable`, `derivable`} are
+// Every AN rule currently targets a Presentable invariant, so calls with `tier` ∈ {`structural`, `evaluable`, `derivable`} are
 // effectively no-ops. The parameter exists so a future submit/finalize
 // gate can introduce lower-tier AN rules without an API break.
 //
@@ -19,10 +18,8 @@
 //
 // Bypasses `engine.behavior`. `normalize()` is user-initiated (the UI
 // calls it after the user confirms a Tidy / Normalize action), so it
-// must do its job even when `behavior === 'permissive'`. There is no
-// legacy per-flag config, no inline P-1 throw sites, and no PERMISSIVE
-// swap to work around them, so this bridge is just a tier-gate +
-// unconditional delegation.
+// must do its job even when `behavior === 'permissive'`. This bridge is
+// therefore just a tier gate followed by unconditional delegation.
 
 import type { ArgumentEngine } from "../core/argument-engine.js"
 import type {
@@ -52,7 +49,7 @@ export function normalizeArgument<
     engine: ArgumentEngine<TArg, TPremise, TExpr, TVar, TClaim>,
     tier: TGrammarTier = "presentable"
 ): void {
-    // v1.0 forward-compat: every AN rule targets Presentable. Lower-tier
+    // Every AN rule currently targets Presentable, so lower-tier
     // requests are no-ops.
     if (tier !== "presentable") return
 

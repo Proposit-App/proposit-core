@@ -1,4 +1,4 @@
-// `segmentation` — first stage of the v2 multi-stage ingestion
+// `segmentation` — first stage of the multi-stage ingestion
 // pipeline. Splits the raw input text into segments (sentences or
 // sentence-like chunks) and emits a stable `segmentId` per segment
 // plus the text + character span.
@@ -21,17 +21,15 @@ import type { TIngestionInput, TLlmStageOptionsOverride } from "../types.js"
 
 export const SEGMENTATION_MODEL = "gpt-6-sol"
 
-// **Output cap (v1.3.1 fix for the segmentation-truncation
-// regression).** Segmentation emits an array of `{ segmentId, text,
+// **Output cap.** Segmentation emits an array of `{ segmentId, text,
 // span }` records — each segment's `text` is copied verbatim from
 // the input (per the prompt). For a 15 KB input the model
 // legitimately wants 30–50 segments at ~80–150 tokens of JSON each,
 // so the output budget needs to comfortably exceed 5 k tokens.
-// Without an explicit cap the Responses API's default
-// `max_output_tokens` for `gpt-5.4-mini` kicks in mid-string and
-// the model returns `status: "incomplete"` + partial JSON; v1.3.0
-// reproduced this against Singer's "Solution to World Poverty"
-// (15.5 KB / ~4 k input tokens). 8192 tokens is roughly 2× the
+// Without an explicit cap the model's default
+// `max_output_tokens` can cut the output off mid-string, and the
+// model returns `status: "incomplete"` + partial JSON (seen on a
+// 15.5 KB / ~4 k input-token essay). 8192 tokens is roughly 2× the
 // expected upper bound on realistic input sizes and stays well below
 // any per-model context-window limit — comfortable headroom without
 // burning tokens on an over-spec'd cap.
@@ -39,7 +37,7 @@ export const SEGMENTATION_MODEL = "gpt-6-sol"
 // Callers that ingest larger inputs can raise the cap further via
 // `createScholarPipeline(extension, { llm: { overrides: {
 // segmentation: { maxOutputTokens: N } } } })` — see
-// `shared/types.ts`.
+// `../types.ts`.
 export const SEGMENTATION_MAX_OUTPUT_TOKENS = 8192
 
 export const SEGMENTATION_SYSTEM_PROMPT = `You are the first stage of an argument-ingestion pipeline. Your job is to split the supplied input text into a list of segments.
@@ -94,10 +92,8 @@ export function createSegmentationStage(
 }
 
 /**
- * Backward-compatible default-options stage. Existing consumers
- * (tests, the v2 factory's pre-1.3.1 path) keep importing this and
- * see the new internal defaults — same as if they had called
- * `createSegmentationStage()` with no args.
+ * The stage with default options, the same as
+ * `createSegmentationStage()` with no arguments.
  */
 export const segmentationStage: TStage<TSegmentationOutput> =
     createSegmentationStage()
