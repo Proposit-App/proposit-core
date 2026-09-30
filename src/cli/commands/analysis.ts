@@ -171,6 +171,9 @@ export function registerAnalysisCommands(
                 argumentId,
                 version
             )
+            if (!(await analysisFileExists(argumentId, version, filename))) {
+                errorExit(`Analysis file "${filename}" does not exist.`)
+            }
             const data = await readAnalysis(argumentId, version, filename)
             if (opts.json) {
                 printJson(data)
@@ -246,6 +249,9 @@ export function registerAnalysisCommands(
                 argumentId,
                 version
             )
+            if (!(await analysisFileExists(argumentId, version, filename))) {
+                errorExit(`Analysis file "${filename}" does not exist.`)
+            }
             const resetValue = parseAssignmentValue(opts.value, "Value")
             const data = await readAnalysis(argumentId, version, filename)
             for (const symbol of Object.keys(data.assignments)) {
