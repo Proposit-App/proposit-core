@@ -10,9 +10,9 @@ import {
     hasRequiredFailureUpstream,
     computeDagProgress,
     optional,
-} from "../src/lib/pipelines/scheduling.js"
-import type { TStageDescriptor } from "../src/lib/pipelines/scheduling.js"
-import type { TStageOutcomeRecord } from "../src/lib/index.js"
+} from "../../src/lib/pipelines/scheduling.js"
+import type { TStageDescriptor } from "../../src/lib/pipelines/scheduling.js"
+import type { TStageOutcomeRecord } from "../../src/lib/index.js"
 
 const stage = (
     id: string,

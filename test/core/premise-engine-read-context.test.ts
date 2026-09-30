@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
-import { ArgumentEngine, ClaimLibrary } from "../src/lib/index"
-import type { PremiseEngine } from "../src/lib/core/premise-engine"
+import { ArgumentEngine, ClaimLibrary } from "../../src/lib/index"
+import type { PremiseEngine } from "../../src/lib/core/premise-engine"
 
 // The premise engine's read-only routines live in module functions and read
 // the engine's state through a context. These pin that they read it the way

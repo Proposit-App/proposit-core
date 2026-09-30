@@ -2,12 +2,12 @@ import { readFileSync } from "node:fs"
 import { dirname, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 import { describe, expect, it } from "vitest"
-import { importArgumentFromYaml } from "../src/cli/import"
-import { isClaimBound } from "../src/lib/schemata"
-import type { TCoreExpressionAssignment } from "../src/lib/types/evaluation"
+import { importArgumentFromYaml } from "../../src/cli/import"
+import { isClaimBound } from "../../src/lib/schemata"
+import type { TCoreExpressionAssignment } from "../../src/lib/types/evaluation"
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
-const examplesDir = resolve(__dirname, "../examples/arguments")
+const examplesDir = resolve(__dirname, "../../examples/arguments")
 
 function loadExample(filename: string): string {
     return readFileSync(resolve(examplesDir, filename), "utf-8")

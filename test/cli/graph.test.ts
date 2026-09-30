@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest"
-import { PropositCore } from "../src/lib/core/proposit-core"
-import { buildDotGraph } from "../src/cli/commands/graph"
+import { PropositCore } from "../../src/lib/core/proposit-core"
+import { buildDotGraph } from "../../src/cli/commands/graph"
 
 describe("buildDotGraph", () => {
     describe("newline handling in DOT labels", () => {

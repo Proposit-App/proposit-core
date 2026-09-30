@@ -4,7 +4,7 @@ const printedLines: string[] = []
 let printedJson: unknown = undefined
 let _exitMessage: string | undefined = undefined
 
-vi.mock("../src/cli/output.js", () => ({
+vi.mock("../../src/cli/output.js", () => ({
     printLine: (text: string) => {
         printedLines.push(text)
     },
@@ -20,30 +20,30 @@ vi.mock("../src/cli/output.js", () => ({
 // Mock hydrateEngine and hydratePropositCore
 const mockHydrateEngine = vi.fn()
 const mockHydratePropositCore = vi.fn()
-vi.mock("../src/cli/engine.js", () => ({
+vi.mock("../../src/cli/engine.js", () => ({
     hydrateEngine: mockHydrateEngine,
     hydratePropositCore: mockHydratePropositCore,
 }))
 
 // Mock resolveVersion to return the version number as-is
 const mockResolveVersion = vi.fn()
-vi.mock("../src/cli/router.js", () => ({
+vi.mock("../../src/cli/router.js", () => ({
     resolveVersion: mockResolveVersion,
 }))
 
 // Mock diffArguments to return a controllable diff
 const mockDiffArguments = vi.fn()
-vi.mock("../src/lib/core/diff.js", () => ({
+vi.mock("../../src/lib/core/diff.js", () => ({
     diffArguments: mockDiffArguments,
 }))
 
 // Mock renderDiff
 const mockRenderDiff = vi.fn()
-vi.mock("../src/cli/diff-renderer.js", () => ({
+vi.mock("../../src/cli/diff-renderer.js", () => ({
     renderDiff: mockRenderDiff,
 }))
 
-const { registerDiffCommand } = await import("../src/cli/commands/diff.js")
+const { registerDiffCommand } = await import("../../src/cli/commands/diff.js")
 
 import { Command } from "commander"
 

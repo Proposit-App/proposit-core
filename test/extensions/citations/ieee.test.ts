@@ -23,7 +23,7 @@ import {
     formatSingleAuthor,
     formatCitationParts,
     type TIEEEReference,
-} from "../../src/extensions/citations/ieee"
+} from "../../../src/extensions/citations/ieee"
 
 describe("UnparsedURL removal", () => {
     it("ReferenceTypeSchema has 33 literals and excludes UnparsedURL", () => {
@@ -856,7 +856,7 @@ describe("IEEE extension", () => {
 describe("segment template config", () => {
     it("BOOK_TEMPLATE is a non-empty array", async () => {
         const { BOOK_TEMPLATE } =
-            await import("../../src/extensions/citations/ieee/segment-templates.js")
+            await import("../../../src/extensions/citations/ieee/segment-templates.js")
         expect(Array.isArray(BOOK_TEMPLATE)).toBe(true)
         expect(BOOK_TEMPLATE.length).toBeGreaterThan(0)
     })
@@ -865,7 +865,7 @@ describe("segment template config", () => {
 describe("buildSegments conditional else", () => {
     it("emits the else branch when the field is absent or, with checkLength, an empty array", async () => {
         const { buildSegments } =
-            await import("../../src/extensions/citations/ieee/segment-builder.js")
+            await import("../../../src/extensions/citations/ieee/segment-builder.js")
         const template = [
             {
                 type: "conditional" as const,
@@ -891,7 +891,7 @@ describe("single-name authors", () => {
 
     it("accepts an organisation or a one-word name as an author", async () => {
         const { AuthorSchema } =
-            await import("../../src/extensions/citations/ieee/references.js")
+            await import("../../../src/extensions/citations/ieee/references.js")
         expect(Value.Check(AuthorSchema, { name: "Reuters" })).toBe(true)
         expect(Value.Check(AuthorSchema, { name: "Aristotle" })).toBe(true)
         expect(Value.Check(AuthorSchema, author("Jane", "Smith"))).toBe(true)
@@ -899,7 +899,7 @@ describe("single-name authors", () => {
 
     it("rejects a single name with anything beside it, or with no text", async () => {
         const { AuthorSchema } =
-            await import("../../src/extensions/citations/ieee/references.js")
+            await import("../../../src/extensions/citations/ieee/references.js")
         expect(
             Value.Check(AuthorSchema, { name: "Reuters", suffix: "Jr." })
         ).toBe(false)
@@ -1055,7 +1055,7 @@ describe("SocialMedia", () => {
         const {
             SocialMediaReferenceSchema,
             RelaxedSocialMediaReferenceSchema,
-        } = await import("../../src/extensions/citations/ieee/index.js")
+        } = await import("../../../src/extensions/citations/ieee/index.js")
         const old = {
             type: "SocialMedia" as const,
             author: author("Jane Q.", "Doe"),
@@ -1073,7 +1073,7 @@ describe("SocialMedia", () => {
 
     it("validates the new fields", async () => {
         const { SocialMediaReferenceSchema } =
-            await import("../../src/extensions/citations/ieee/index.js")
+            await import("../../../src/extensions/citations/ieee/index.js")
         const check = (patch: Record<string, unknown>) =>
             Value.Check(SocialMediaReferenceSchema, { ...full, ...patch })
         expect(check({})).toBe(true)

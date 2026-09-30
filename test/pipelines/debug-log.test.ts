@@ -11,7 +11,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import Type from "typebox"
-import { createOpenAiResponsesProvider } from "../src/extensions/openai/provider.js"
+import { createOpenAiResponsesProvider } from "../../src/extensions/openai/provider.js"
 import {
     executePipeline,
     deterministicStage,
@@ -20,10 +20,10 @@ import {
     isDebugEnabled,
     PROPOSIT_PIPELINE_DEBUG_ENV_VAR,
     PROPOSIT_PIPELINE_DEBUG_PREFIX,
-} from "../src/lib/pipelines/index.js"
-import { createMockLlmProvider } from "./mocks/llm.js"
-import type { TOpenAiFetch } from "../src/extensions/openai/types.js"
-import type { TPipeline } from "../src/lib/pipelines/index.js"
+} from "../../src/lib/pipelines/index.js"
+import { createMockLlmProvider } from "../mocks/llm.js"
+import type { TOpenAiFetch } from "../../src/extensions/openai/types.js"
+import type { TPipeline } from "../../src/lib/pipelines/index.js"
 
 // -- console.debug interception ---------------------------------------
 //

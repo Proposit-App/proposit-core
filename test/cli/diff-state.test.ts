@@ -6,14 +6,14 @@ import {
     PropositCore,
     diffArguments,
     isClaimBound,
-} from "../src/index.js"
+} from "../../src/index.js"
 import type {
     TCoreArgumentDiff,
     TCoreDiffState,
     TCorePropositionalExpression,
     TCorePropositionalVariable,
-} from "../src/index.js"
-import { isDiffEmpty } from "../src/cli/diff-renderer.js"
+} from "../../src/index.js"
+import { isDiffEmpty } from "../../src/cli/diff-renderer.js"
 
 const ARG_ID = "arg-1"
 

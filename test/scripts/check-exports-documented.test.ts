@@ -8,7 +8,7 @@ import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 import { describe, expect, it } from "vitest"
 
-const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..")
+const ROOT = join(dirname(fileURLToPath(import.meta.url)), "../..")
 const SCRIPT = join(ROOT, "scripts/check-exports-documented.mjs")
 
 function run(packageJson: unknown): { ok: boolean; output: string } {

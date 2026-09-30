@@ -16,11 +16,11 @@
 // the same pattern the `populateFrom*` factories use.
 
 import { describe, it, expect } from "vitest"
-import { ArgumentEngine, ClaimLibrary } from "../src/lib/index"
-import type { TCoreVariableAssignment } from "../src/lib/index"
-import { ClaimCitationLibrary } from "../src/lib/core/claim-citation-library.js"
-import { makeArgument } from "./grammar/fixtures.js"
-import type { PremiseEngine } from "../src/lib/index"
+import { ArgumentEngine, ClaimLibrary } from "../../src/lib/index"
+import type { TCoreVariableAssignment } from "../../src/lib/index"
+import { ClaimCitationLibrary } from "../../src/lib/core/claim-citation-library.js"
+import { makeArgument } from "../grammar/fixtures.js"
+import type { PremiseEngine } from "../../src/lib/index"
 
 const ARG = makeArgument()
 

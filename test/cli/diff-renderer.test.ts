@@ -1,17 +1,18 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
-import type { TCoreArgumentDiff } from "../src/lib/types/diff.js"
-import type { TCorePremise } from "../src/lib/schemata/propositional.js"
+import type { TCoreArgumentDiff } from "../../src/lib/types/diff.js"
+import type { TCorePremise } from "../../src/lib/schemata/propositional.js"
 
 // We capture printLine calls to verify output
 const printedLines: string[] = []
-vi.mock("../src/cli/output.js", () => ({
+vi.mock("../../src/cli/output.js", () => ({
     printLine: (text: string) => {
         printedLines.push(text)
     },
 }))
 
 // Import after mock setup
-const { renderDiff, isDiffEmpty } = await import("../src/cli/diff-renderer.js")
+const { renderDiff, isDiffEmpty } =
+    await import("../../src/cli/diff-renderer.js")
 
 beforeEach(() => {
     printedLines.length = 0

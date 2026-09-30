@@ -35,7 +35,7 @@ import {
     llmStage,
     optional,
     subPipelineStage,
-} from "../src/lib/index.js"
+} from "../../src/lib/index.js"
 import type {
     TPipeline,
     TPipelineEvent,
@@ -44,21 +44,21 @@ import type {
     TStageOutcomeRecord,
     TExecuteStageDeps,
     TRetrievedResponse,
-} from "../src/lib/index.js"
-import { QuotaExhaustedLlmError } from "../src/extensions/openai/index.js"
+} from "../../src/lib/index.js"
+import { QuotaExhaustedLlmError } from "../../src/extensions/openai/index.js"
 // Package-internal seam fns — imported directly from stage-helpers (NOT
 // the public barrel) to test them without exporting them.
 import {
     readLlmStageConfig,
     buildLlmRequest,
     validateLlmOutcome,
-} from "../src/lib/pipelines/stage-helpers.js"
+} from "../../src/lib/pipelines/stage-helpers.js"
 import {
     createMockLlmProvider,
     makeQuotaError,
     makeRateLimitError,
     makeTransientError,
-} from "./mocks/llm.js"
+} from "../mocks/llm.js"
 
 // ---------------- helpers ----------------
 
@@ -2779,7 +2779,7 @@ describe("executeFinalize — single-finalize execution", () => {
 // transform is demonstrated to fire, for both entry points. (correctiveParse
 // is off by default in this TypeBox build; Value.Parse is otherwise
 // validate-or-throw, applying transforms only via the corrective path —
-// the same pattern test/extensions/ieee.test.ts uses for EncodableDate.)
+// the same pattern test/extensions/citations/ieee.test.ts uses for EncodableDate.)
 
 describe("executeStage / executeFinalize — ctx.input reflects Value.Parse transforms", () => {
     beforeAll(() => Settings.Set({ correctiveParse: true }))

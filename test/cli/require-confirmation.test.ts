@@ -15,7 +15,7 @@ describe("requireConfirmation", () => {
         vi.spyOn(process.stderr, "write").mockImplementation(() => true)
         const destroySpy = vi.spyOn(stream, "destroy")
 
-        const { requireConfirmation } = await import("../src/cli/output.js")
+        const { requireConfirmation } = await import("../../src/cli/output.js")
         const promise = requireConfirmation("Delete?")
 
         stream.push("confirm\n")
@@ -36,7 +36,7 @@ describe("requireConfirmation", () => {
             .mockImplementation((() => {}) as never)
         const destroySpy = vi.spyOn(stream, "destroy")
 
-        const { requireConfirmation } = await import("../src/cli/output.js")
+        const { requireConfirmation } = await import("../../src/cli/output.js")
         const promise = requireConfirmation("Delete?")
 
         stream.push("no\n")

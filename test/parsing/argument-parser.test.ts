@@ -5,7 +5,7 @@ import {
     type TParsedClaim,
     type TParsedVariable,
     type TParsedPremise,
-} from "../src/lib/parsing/index.js"
+} from "../../src/lib/parsing/index.js"
 
 function buildResponse(parts: {
     claims: TParsedClaim[]

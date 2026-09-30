@@ -25,17 +25,17 @@ import {
     executeTurn,
     ConversationClosedError,
     executePipeline,
-} from "../src/lib/index.js"
+} from "../../src/lib/index.js"
 import {
     createReviewTurn,
     createSimulateTurn,
     createDistillTurn,
-} from "../src/extensions/builder/index.js"
-import { createScribePipeline } from "../src/extensions/pipelines/ingestion/scribe/index.js"
-import { basicsExtension } from "../src/extensions/pipelines/base/index.js"
-import type { TExecuteTurnDeps } from "../src/lib/conversation/turn.js"
-import { createMockLlmProvider, type TMockResponse } from "./mocks/llm.js"
-import { ParsedArgumentResponseSchema } from "../src/lib/parsing/schemata.js"
+} from "../../src/extensions/builder/index.js"
+import { createScribePipeline } from "../../src/extensions/pipelines/ingestion/scribe/index.js"
+import { basicsExtension } from "../../src/extensions/pipelines/base/index.js"
+import type { TExecuteTurnDeps } from "../../src/lib/conversation/turn.js"
+import { createMockLlmProvider, type TMockResponse } from "../mocks/llm.js"
+import { ParsedArgumentResponseSchema } from "../../src/lib/parsing/schemata.js"
 import { Value } from "typebox/value"
 
 // ---------------- helpers ----------------------------------------------------
@@ -369,7 +369,7 @@ describe("contract types", () => {
         // TypeScript-level test: the type should accept previousResponseId
         type TInput = { name: string }
         type TExtended =
-            import("../src/lib/conversation/contract.js").TMultiTurnInput<TInput>
+            import("../../src/lib/conversation/contract.js").TMultiTurnInput<TInput>
 
         const input: TExtended = { name: "test", previousResponseId: "resp-1" }
         const _input = input as unknown as {
@@ -383,7 +383,7 @@ describe("contract types", () => {
     it("TMultiTurnOutput extends O with responseId", () => {
         type TOutput = { message: string }
         type TExtended =
-            import("../src/lib/conversation/contract.js").TMultiTurnOutput<TOutput>
+            import("../../src/lib/conversation/contract.js").TMultiTurnOutput<TOutput>
 
         const output: TExtended = { message: "hello", responseId: "resp-1" }
         const _output = output as unknown as {

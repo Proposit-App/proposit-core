@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 
 const printedLines: string[] = []
 
-vi.mock("../src/cli/output.js", () => ({
+vi.mock("../../src/cli/output.js", () => ({
     printLine: (text: string) => {
         printedLines.push(text)
     },
@@ -21,19 +21,19 @@ const mockErrorExit = vi.hoisted(() =>
 )
 
 const mockHydrateEngine = vi.fn()
-vi.mock("../src/cli/engine.js", () => ({
+vi.mock("../../src/cli/engine.js", () => ({
     hydrateEngine: mockHydrateEngine,
 }))
 
 const { registerAnalysisCommands } =
-    await import("../src/cli/commands/analysis.js")
+    await import("../../src/cli/commands/analysis.js")
 
 import { Command } from "commander"
-import { ArgumentEngine } from "../src/lib/core/argument-engine.js"
-import { ClaimLibrary } from "../src/lib/core/claim-library.js"
-import type { TExpressionInput } from "../src/lib/core/expression-manager.js"
-import type { TCorePropositionalExpression } from "../src/lib/schemata/index.js"
-import { importArgumentFromYaml } from "../src/cli/import.js"
+import { ArgumentEngine } from "../../src/lib/core/argument-engine.js"
+import { ClaimLibrary } from "../../src/lib/core/claim-library.js"
+import type { TExpressionInput } from "../../src/lib/core/expression-manager.js"
+import type { TCorePropositionalExpression } from "../../src/lib/schemata/index.js"
+import { importArgumentFromYaml } from "../../src/cli/import.js"
 
 beforeEach(() => {
     printedLines.length = 0
