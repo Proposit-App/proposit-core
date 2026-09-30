@@ -9,6 +9,7 @@ import {
 } from "../../lib/utils/origin-text.js"
 import type { TOriginAnchorTargetType } from "../../lib/schemata/index.js"
 import { listVersionNumbers } from "../storage/arguments.js"
+import { errorMessage } from "../guards.js"
 
 const STANCES = ["representation", "seed"] as const
 const TARGET_TYPES = ["expression", "argument"] as const
@@ -95,9 +96,7 @@ export function registerOriginCommands(program: Command): void {
                         stance: opts.stance as (typeof STANCES)[number],
                     })
                 } catch (error) {
-                    errorExit(
-                        error instanceof Error ? error.message : String(error)
-                    )
+                    errorExit(errorMessage(error))
                 }
                 await persistCore(core)
                 printLine(documentId)
@@ -217,9 +216,7 @@ export function registerOriginCommands(program: Command): void {
                         stance: opts.stance as (typeof STANCES)[number],
                     }).id
                 } catch (error) {
-                    errorExit(
-                        error instanceof Error ? error.message : String(error)
-                    )
+                    errorExit(errorMessage(error))
                 }
                 await persistCore(core)
                 printLine(linkId)
@@ -239,9 +236,7 @@ export function registerOriginCommands(program: Command): void {
             try {
                 core.origins.removeLink(linkId)
             } catch (error) {
-                errorExit(
-                    error instanceof Error ? error.message : String(error)
-                )
+                errorExit(errorMessage(error))
             }
             await persistCore(core)
             printLine("success")
@@ -260,9 +255,7 @@ export function registerOriginCommands(program: Command): void {
             try {
                 core.origins.removeDocument(documentId)
             } catch (error) {
-                errorExit(
-                    error instanceof Error ? error.message : String(error)
-                )
+                errorExit(errorMessage(error))
             }
             await persistCore(core)
             printLine("success")
@@ -339,9 +332,7 @@ export function registerOriginCommands(program: Command): void {
                         endCodePoint: end,
                     }).id
                 } catch (error) {
-                    errorExit(
-                        error instanceof Error ? error.message : String(error)
-                    )
+                    errorExit(errorMessage(error))
                 }
                 await persistCore(core)
                 printLine(anchorId)

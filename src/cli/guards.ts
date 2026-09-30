@@ -32,3 +32,11 @@ export async function assertPremiseExists(
         errorExit(notFoundMessage)
     }
 }
+
+/**
+ * The text to show for a caught value: the message of an `Error`, or the
+ * value converted to a string for anything else that was thrown.
+ */
+export function errorMessage(err: unknown): string {
+    return err instanceof Error ? err.message : String(err)
+}

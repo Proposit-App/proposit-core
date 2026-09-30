@@ -11,7 +11,11 @@ import {
     requireConfirmation,
 } from "../output.js"
 import { readArgumentMeta, readVersionMeta } from "../storage/arguments.js"
-import { assertNotPublished, assertPremiseExists } from "../guards.js"
+import {
+    assertNotPublished,
+    assertPremiseExists,
+    errorMessage,
+} from "../guards.js"
 import {
     deletePremiseDir,
     listPremiseIds,
@@ -98,7 +102,7 @@ export function registerPremiseCommands(
                         engine.createPremiseWithId(id, extras, opts.symbol)
                     }
                 } catch (err) {
-                    errorExit(err instanceof Error ? err.message : String(err))
+                    errorExit(errorMessage(err))
                 }
 
                 await persistEngine(engine)
@@ -222,7 +226,7 @@ export function registerPremiseCommands(
             try {
                 engine.removePremise(premiseId)
             } catch (err) {
-                errorExit(err instanceof Error ? err.message : String(err))
+                errorExit(errorMessage(err))
             }
 
             await persistEngine(engine)
@@ -273,7 +277,7 @@ export function registerPremiseCommands(
                         )
                     }
                 } catch (err) {
-                    errorExit(err instanceof Error ? err.message : String(err))
+                    errorExit(errorMessage(err))
                 }
 
                 await persistEngine(engine)
@@ -431,7 +435,7 @@ export function registerPremiseCommands(
                     propositCore.citations
                 )
             } catch (err) {
-                errorExit(err instanceof Error ? err.message : String(err))
+                errorExit(errorMessage(err))
             }
             let axiomsResult: ReturnType<typeof engine.populateFromAxioms>
             try {
@@ -440,7 +444,7 @@ export function registerPremiseCommands(
                     propositCore.axioms
                 )
             } catch (err) {
-                errorExit(err instanceof Error ? err.message : String(err))
+                errorExit(errorMessage(err))
             }
 
             await persistEngine(engine)

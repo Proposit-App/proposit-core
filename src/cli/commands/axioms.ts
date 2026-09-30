@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto"
 import { Command } from "commander"
 import { hydratePropositCore, persistCore } from "../engine.js"
 import { errorExit, printJson, printLine } from "../output.js"
+import { errorMessage } from "../guards.js"
 
 export function registerAxiomCommands(program: Command): void {
     const axioms = program
@@ -82,9 +83,7 @@ export function registerAxiomCommands(program: Command): void {
                     supportingClaimVersion: axiomClaim.version,
                 })
             } catch (error) {
-                errorExit(
-                    error instanceof Error ? error.message : String(error)
-                )
+                errorExit(errorMessage(error))
             }
             await persistCore(core)
             printLine(connection.id)

@@ -12,7 +12,7 @@ import {
     printLine,
     requireConfirmation,
 } from "../output.js"
-import { assertNotPublished } from "../guards.js"
+import { assertNotPublished, errorMessage } from "../guards.js"
 import {
     isClaimBound,
     isPremiseBound,
@@ -60,7 +60,7 @@ export function registerVariableCommands(
             try {
                 engine.addVariable(variable)
             } catch (err) {
-                errorExit(err instanceof Error ? err.message : String(err))
+                errorExit(errorMessage(err))
             }
 
             await persistCore(core)
@@ -98,7 +98,7 @@ export function registerVariableCommands(
                         boundArgumentVersion: version,
                     })
                 } catch (err) {
-                    errorExit(err instanceof Error ? err.message : String(err))
+                    errorExit(errorMessage(err))
                 }
 
                 await persistEngine(engine)
@@ -164,7 +164,7 @@ export function registerVariableCommands(
                         symbol: opts.symbol,
                     })
                 } catch (err) {
-                    errorExit(err instanceof Error ? err.message : String(err))
+                    errorExit(errorMessage(err))
                 }
             }
 

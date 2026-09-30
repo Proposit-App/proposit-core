@@ -8,6 +8,7 @@ import { OriginLibrary } from "../../lib/core/origin-library.js"
 import type { TClaimLookup } from "../../lib/core/interfaces/library.interfaces.js"
 import { getStateDir } from "../config.js"
 import { errorExit } from "../output.js"
+import { errorMessage } from "../guards.js"
 
 function claimsPath(): string {
     return path.join(getStateDir(), "claims.json")
@@ -42,9 +43,7 @@ async function readLibraryFile<T>(
     try {
         return load(JSON.parse(content) as never)
     } catch (err) {
-        errorExit(
-            `Could not load ${filePath}: ${err instanceof Error ? err.message : String(err)}`
-        )
+        errorExit(`Could not load ${filePath}: ${errorMessage(err)}`)
     }
 }
 

@@ -19,6 +19,7 @@ import { createDistillTurn } from "../extensions/builder/distill.js"
 import type { TTurnResult } from "../lib/conversation/turn.js"
 import type { TExecuteTurnDeps } from "../lib/conversation/turn.js"
 import type { TStage } from "../lib/pipelines/types.js"
+import { errorMessage } from "./guards.js"
 
 const DEFAULT_MODEL = "gpt-6-sol"
 const DEFAULT_API_KEY =
@@ -206,6 +207,6 @@ async function main(): Promise<void> {
 }
 
 main().catch((err) => {
-    console.error(err instanceof Error ? err.message : String(err))
+    console.error(errorMessage(err))
     process.exit(1)
 })

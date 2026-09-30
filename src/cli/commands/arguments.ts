@@ -32,6 +32,7 @@ import { writeVariables } from "../storage/variables.js"
 import { writeRoles } from "../storage/roles.js"
 import { getPremisesDir } from "../config.js"
 import { registerParseCommand } from "./parse.js"
+import { errorMessage } from "../guards.js"
 
 export function registerArgumentCommands(program: Command): void {
     const args = program.command("arguments").description("Manage arguments")
@@ -70,9 +71,7 @@ export function registerArgumentCommands(program: Command): void {
             try {
                 result = importArgumentFromYaml(content)
             } catch (error) {
-                errorExit(
-                    error instanceof Error ? error.message : String(error)
-                )
+                errorExit(errorMessage(error))
             }
 
             // Merge the imported claims and citations into the existing
@@ -236,7 +235,7 @@ export function registerArgumentCommands(program: Command): void {
             try {
                 result = core.forkArgument(argumentId, newArgumentId)
             } catch (err) {
-                errorExit(err instanceof Error ? err.message : String(err))
+                errorExit(errorMessage(err))
             }
 
             await persistEngine(result.engine)
