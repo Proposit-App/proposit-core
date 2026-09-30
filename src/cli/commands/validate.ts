@@ -17,8 +17,8 @@ export function registerValidateCommand(
             // renamed to `validateInvariants()` for unambiguous
             // contrast with the tier-aware `engine.validate(tier)`
             // grammar validator. The CLI surfaces the invariant sweep
-            // (schema conformance, reference integrity, etc.); for
-            // four-tier grammar validation use a separate command.
+            // (schema conformance, reference integrity, etc.); four-tier
+            // grammar validation is `analysis validate-argument --tier`.
             const result = engine.validateInvariants()
 
             if (opts.json) {
