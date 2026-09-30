@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
-import { composeChangesets } from "../src/lib/utils/changeset.js"
-import { ChangeCollector } from "../src/lib/core/change-collector.js"
-import type { TCoreChangeset } from "../src/lib/types/mutation.js"
+import { composeChangesets } from "../../src/lib/utils/changeset.js"
+import { ChangeCollector } from "../../src/lib/core/change-collector.js"
+import type { TCoreChangeset } from "../../src/lib/types/mutation.js"
 
 // Entities only need an id and something that changes; the expression
 // bucket stands in for all three entity categories, which share one rule.

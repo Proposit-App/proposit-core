@@ -12,15 +12,15 @@
 // the same call can move an expression before removing it.
 
 import { describe, expect, it } from "vitest"
-import { ArgumentEngine } from "../src/lib/core/argument-engine.js"
-import { EMPTY_CLAIM_LOOKUP } from "../src/lib/utils/lookup.js"
+import { ArgumentEngine } from "../../src/lib/core/argument-engine.js"
+import { EMPTY_CLAIM_LOOKUP } from "../../src/lib/utils/lookup.js"
 import {
     composeChangesets,
     orderChangeset,
-} from "../src/lib/utils/changeset.js"
-import type { TCoreChangeset } from "../src/lib/types/mutation.js"
-import type { PremiseEngine } from "../src/lib/core/premise-engine.js"
-import { makeArgument } from "./grammar/fixtures.js"
+} from "../../src/lib/utils/changeset.js"
+import type { TCoreChangeset } from "../../src/lib/types/mutation.js"
+import type { PremiseEngine } from "../../src/lib/core/premise-engine.js"
+import { makeArgument } from "../grammar/fixtures.js"
 
 const ARG = makeArgument()
 
