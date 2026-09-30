@@ -72,3 +72,17 @@
 - The iff-rooted axiom derivation test runs instead of being skipped. It now
   uses `populateFromAxioms`, keeps the derivation premise as a supporting
   premise, and accepts the root step.
+
+## Fixed
+
+- `repair` wrote its formula buffers to a published version, the one command
+  that changes a version without checking. It now refuses with the same
+  "is published and cannot be modified" error as the others, just before it
+  would write; `--dry-run` still reports on a published version, since it only
+  reads. Pinned by `test/cli/repair-command.test.ts`.
+- `analysis show` and `analysis reset` reported a missing analysis file as
+  `Analysis file "…" not found.` from inside the file read, and `reset` checked
+  its `--value` first. Both now check that the file exists straight after
+  resolving its name, like `set`, `set-operator` and `delete`, and report
+  `Analysis file "…" does not exist.`. Pinned by
+  `test/cli/analysis-file-checks.test.ts`.
