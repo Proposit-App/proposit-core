@@ -1,0 +1,9 @@
+slug: 2026-08-18-add-logical-simplification-rules-contradiction-and-tautology-reduction
+title: Decide whether a sound simplification set exists over four-valued evaluation
+created: '2026-08-18'
+resolution: null
+priority: 12
+effort: low
+complexity: medium
+tags:
+- product

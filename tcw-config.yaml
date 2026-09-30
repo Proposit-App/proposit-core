@@ -1,39 +1,16 @@
 id: proposit-core
-connected-projects:
-    parent:
-        # `path` is where the orchestration workspace sits when this repo is
-        # checked out inside it; `repository` is how a machine without it — a
-        # fresh clone, a cloud session — obtains it. The path wins whenever it is
-        # there, so a workstation holding the whole workspace contacts nothing.
-        proposit-app:
-            path: ..
-            repository:
-                url: https://github.com/Proposit-App/proposit-orchestration.git
-                ref: main
 work:
-    # Relative to this node, so it resolves on any checkout laid out the way the
-    # workspace is; `repository` answers for one that has only this repo. The
-    # absolute path this replaces was a fact about a single machine.
-    path: ../docs/proposit-core/work
-    repository:
-        url: https://github.com/Proposit-App/proposit-orchestration.git
-        ref: main
-        path: docs/proposit-core/work
+    path: docs/work
     tags:
         - bug
         - product
         - tech-debt
-    tracker:
-        candidate-query: project = PRPI AND component = core AND status = "To Do" AND (assignee = currentUser() OR assignee IS EMPTY)
     lifecycle:
         stages:
             implement:
                 prompt:
                     - builtin: true
-                    # Node-local, so a `file:` binding reaches it. The three
-                    # proposit-app packages share theirs through a script
-                    # because they are three nodes in one repository; this one
-                    # is a repository of its own and needs no such indirection.
+                    # Node-local, so a `file:` binding reaches it.
                     - file: docs/lifecycle/implement.md
     documentation:
         - path: README.md
