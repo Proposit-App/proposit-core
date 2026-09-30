@@ -2,6 +2,16 @@
 
 ## Changed
 
+- The agent skill published in the package (`skills/proposit-core/`) is
+  rewritten for the current API. `SKILL.md` and six reference files
+  (`building-arguments.md`, `evaluation.md`, `grammar.md`, `persistence.md`,
+  `forking-and-diffs.md`, `pipelines.md`) plus a rewritten `cli.md` replace
+  `api-usage.md`, `architecture.md` and `types-schemas.md`. It now covers
+  claims and the claim, citation and axiom libraries, `PropositCore`,
+  four-valued evaluation, the four grammar tiers, changesets and checksums,
+  forking, pipelines and the CLI; the old files described three-valued
+  evaluation and had no claims. `testing.md`, which described this
+  repository's own test suite, is removed.
 - Dropped the optional `openai` peer dependency. Neither LLM provider imports
   the SDK; both call their endpoints with plain `fetch`.
 - Comments across `src/` and `test/` now describe behaviour rather than
