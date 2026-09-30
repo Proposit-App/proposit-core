@@ -14,13 +14,6 @@
         "verbatimModuleSyntax": true,
         "types": ["node", "vitest/globals"]
     },
-    "include": [
-        "src/**/*.ts",
-        "test/**/*.ts",
-        "scripts/**/*.ts",
-        "eslint.config.mjs",
-        "*.mjs",
-        ".ltstash/predicate.ts"
-    ],
+    "include": ["src/**/*.ts", "test/**/*.ts", "scripts/**/*.ts", "*.mjs"],
     "exclude": ["dist", "node_modules", "src/lib/core/parser/formula-gen.js"]
 }
