@@ -76,6 +76,17 @@
   time, so no two templates share one. `segment-templates.ts` still exports
   every template and instruction type under the same names, and every template
   holds exactly the same instructions, so rendered citations are unchanged.
+- Internal only, no change in behaviour or public API: three large modules
+  were split. Constraint propagation (`propagateOperatorConstraints`,
+  `closeUnderAcceptedOperators`) moved from `argument-evaluation.ts` to
+  `src/lib/core/evaluation/propagation.ts`. `src/lib/utils/changeset.ts` became
+  `changeset-merge.ts` (combining changesets and recording per-entity changes)
+  and `changeset-order.ts` (`orderChangeset`). In `src/lib/pipelines/`, the
+  retry policy, the stage errors, the token-usage side channel and the clock
+  moved to `stage-primitives.ts`, and running one stage or the finalize moved
+  from `scheduler.ts` to `stage-runner.ts`; this removes the import cycles
+  between the stage modules, and the clock function is no longer written
+  twice. Every old module still exports the names it exported before.
 
 ## Removed
 

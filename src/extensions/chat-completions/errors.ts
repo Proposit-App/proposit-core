@@ -3,7 +3,7 @@
 //
 // The framework's `llmStage` retry policy classifies provider errors by
 // inspecting a `retryReason` tag on the thrown object (see
-// `src/lib/pipelines/stage-helpers.ts#classifyError`). To play cleanly
+// `src/lib/pipelines/llm-stage-helpers.ts#classifyError`). To play cleanly
 // with that mechanism, each error class carries the appropriate tag as
 // an own property. The framework derives the `TProcessingFailure.code`
 // from the tag, so these classes need no `code` of their own.

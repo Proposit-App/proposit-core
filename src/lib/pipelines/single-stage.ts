@@ -7,8 +7,8 @@
 // stages' persisted outputs AND outcomes, without re-running the whole
 // DAG. `executeStage` and `executeFinalize` are the thin, stateless
 // (state in, state out) entry points for that: they reuse the same
-// `runOneStage` / `runFinalize` bodies the whole-DAG scheduler
-// (`scheduler.ts`) uses.
+// `runOneStage` / `runFinalize` bodies (`stage-runner.ts`) the whole-DAG
+// scheduler (`scheduler.ts`) uses.
 
 import { Value } from "typebox/value"
 import type {
@@ -26,18 +26,17 @@ import {
     applyRetrySuffix,
     validateLlmOutcome,
     failureRetryReason,
-} from "./stage-helpers.js"
-import type { TRetryReason } from "./stage-helpers.js"
+} from "./llm-stage-helpers.js"
+import type { TRetryReason } from "./stage-primitives.js"
+import { PipelineConfigurationError, now } from "./stage-primitives.js"
 import {
-    PipelineConfigurationError,
     makeStageContext,
     runOneStage,
     runFinalize,
-    now,
     noopEmit,
-    defaultGenerateId,
-} from "./scheduler.js"
-import type { TStageRunState, TStageRecord } from "./scheduler.js"
+    defaultPipelineGenerateId,
+} from "./stage-runner.js"
+import type { TStageRunState, TStageRecord } from "./stage-runner.js"
 import type {
     TLlmProvider,
     TLlmRequest,
@@ -185,7 +184,7 @@ function buildSingleShotState(
         failures: [],
         signal: deps.signal ?? new AbortController().signal,
         emit: deps.onEvent ?? noopEmit,
-        generateId: deps.generateId ?? defaultGenerateId,
+        generateId: deps.generateId ?? defaultPipelineGenerateId,
         llm: deps.llm,
         input,
         setConfigError: (error) => {
