@@ -1,10 +1,10 @@
-# Changelog
+# Changelog: 0.2.0 to 0.5.0
 
-All notable changes to proposit-core are documented here.
+This file covers the releases from 0.2.0 to 0.5.0. Versions 0.5.1 to 0.6.1 have no changelog; release notes exist in `docs/release-notes/` for 0.5.4 to 0.6.1, and per-version changelogs in this folder start at 0.6.2.
 
 ---
 
-## 0.5.0 (unreleased)
+## 0.5.0 (released 2026-03-13)
 
 Global, inter-argument entity libraries with versioning and freeze semantics.
 
