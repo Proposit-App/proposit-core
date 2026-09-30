@@ -6,7 +6,7 @@ import type {
     TCoreValidationIssue,
     TCoreValidationResult,
 } from "../../types/evaluation.js"
-import { isVariadicOperator } from "../expression-manager-checks.js"
+import { isVariadicOperator } from "../expression-manager/checks.js"
 import {
     makeErrorIssue,
     makeValidationResult,

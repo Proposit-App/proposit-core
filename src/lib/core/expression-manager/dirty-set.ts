@@ -1,8 +1,8 @@
-import type { TCorePropositionalExpression } from "../schemata/index.js"
-import type { ChangeCollector } from "./change-collector.js"
-import type { TLogicEngineOptions } from "./argument-engine.js"
-import { DEFAULT_CHECKSUM_CONFIG } from "../checksum-config.js"
-import { entityChecksum, computeHash, canonicalSerialize } from "./checksum.js"
+import type { TCorePropositionalExpression } from "../../schemata/index.js"
+import type { ChangeCollector } from "../change-collector.js"
+import type { TLogicEngineOptions } from "../argument-engine.js"
+import { DEFAULT_CHECKSUM_CONFIG } from "../../checksum-config.js"
+import { entityChecksum, computeHash, canonicalSerialize } from "../checksum.js"
 
 /**
  * Marks an expression and all its ancestors as dirty for hierarchical

@@ -12,7 +12,7 @@
 import type { TViolation } from "../types.js"
 import type { TValidatorContext } from "./context.js"
 import { isClaimBound, isPremiseBound } from "../../schemata/propositional.js"
-import { isVariadicOperator } from "../../core/expression-manager-checks.js"
+import { isVariadicOperator } from "../../core/expression-manager/checks.js"
 
 /**
  * Build a Map<parentId, child-count> view of the expression tree.

@@ -22,7 +22,7 @@
 // rather than duplicating the bounded-subtree walk in each.
 
 import type { TCorePropositionalExpression } from "../schemata/index.js"
-import { isVariadicOperator } from "../core/expression-manager-checks.js"
+import { isVariadicOperator } from "../core/expression-manager/checks.js"
 
 /**
  * Returns `true` iff the subtree rooted at `expressionId` contains a

@@ -16,7 +16,7 @@ import type {
 } from "../../schemata/index.js"
 import { isPremiseBound } from "../../schemata/index.js"
 import { hasBinaryOperatorInBoundedSubtree } from "../bounded-subtree.js"
-import { isVariadicOperator } from "../../core/expression-manager-checks.js"
+import { isVariadicOperator } from "../../core/expression-manager/checks.js"
 import type { TChildMap } from "./tree-views.js"
 import { buildChildMap, buildExpressionsById } from "./tree-views.js"
 

@@ -44,7 +44,7 @@ import type {
     TExpressionUpdate,
 } from "./expression-manager.js"
 import { ExpressionManager } from "./expression-manager.js"
-import { isVariadicOperator } from "./expression-manager-checks.js"
+import { isVariadicOperator } from "./expression-manager/checks.js"
 import { VariableManager } from "./variable-manager.js"
 import {
     collectDecidableOperators,

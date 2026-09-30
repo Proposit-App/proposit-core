@@ -1,10 +1,10 @@
-import type { TCorePropositionalExpression } from "../schemata/index.js"
-import type { TCorePositionConfig } from "../utils/position.js"
+import type { TCorePropositionalExpression } from "../../schemata/index.js"
+import type { TCorePositionConfig } from "../../utils/position.js"
 import type {
     TExpressionInput,
     TExpressionWithoutPosition,
     TExpressionUpdate,
-} from "./expression-manager.js"
+} from "../expression-manager.js"
 
 // Operators are grouped by the arity they impose on their children.
 // A swap is permitted exactly when both operators sit in the same group,

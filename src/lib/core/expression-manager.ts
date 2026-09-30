@@ -21,8 +21,8 @@ import {
     markExpressionDirty,
     flushExpressionChecksums,
     pruneDeletedFromDirtySet,
-} from "./expression-manager-dirty-set.js"
-import { validateExpressionManagerInvariants } from "./expression-manager-invariants.js"
+} from "./expression-manager/dirty-set.js"
+import { validateExpressionManagerInvariants } from "./expression-manager/invariants.js"
 import {
     validateInsertExpression,
     validateWrapExpression,
@@ -30,7 +30,7 @@ import {
     validateUpdateExpression,
     validateRemoveAndPromote,
     validateAddExpressionRelative,
-} from "./expression-manager-checks.js"
+} from "./expression-manager/checks.js"
 import type { TInvariantValidationResult } from "../types/validation.js"
 
 // Distribute Omit across the union to preserve discriminated-union narrowing.
