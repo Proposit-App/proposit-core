@@ -41,7 +41,8 @@ import type {
     TIngestionInput,
     TIngestionLlmOptions,
 } from "../../base/types.js"
-import { INGESTION_INPUT_SCHEMA } from "../scholar/scholar.js"
+import { INGESTION_INPUT_SCHEMA } from "../input-schema.js"
+import { SCRIBE_PIPELINE_ID } from "../pipeline-ids.js"
 import {
     createExtractStage,
     createExtractCanonicalizationAdapterStage,
@@ -56,7 +57,7 @@ import {
     STRUCTURE_STAGE_DEFAULTS,
 } from "./structure-stage.js"
 
-const PIPELINE_ID = "argument-ingestion-scribe"
+const PIPELINE_ID = SCRIBE_PIPELINE_ID
 const PIPELINE_VERSION = "1.1.0"
 
 /**

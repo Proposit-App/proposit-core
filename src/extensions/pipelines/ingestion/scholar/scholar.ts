@@ -30,7 +30,6 @@
 // 4 deterministic stages (claim-reference-validation, variable-assignment,
 // formula-compilation, formula-validation) + 8 LLM stages.
 
-import Type from "typebox"
 import {
     STAGE_IDS,
     claimReferenceValidationStage,
@@ -66,18 +65,11 @@ import type {
     TIngestionInput,
     TIngestionLlmOptions,
 } from "../../base/types.js"
+import { INGESTION_INPUT_SCHEMA } from "../input-schema.js"
+import { SCHOLAR_PIPELINE_ID } from "../pipeline-ids.js"
 
-const PIPELINE_ID = "argument-ingestion-scholar"
+const PIPELINE_ID = SCHOLAR_PIPELINE_ID
 const PIPELINE_VERSION = "1.0.0"
-
-/**
- * Input schema shared by every ingestion pipeline: a single non-empty
- * raw argument text. Exported so sibling pipelines (e.g. the fast
- * `scribe` pipeline) advertise the identical input contract.
- */
-export const INGESTION_INPUT_SCHEMA = Type.Object({
-    text: Type.String({ minLength: 1 }),
-})
 
 /**
  * Options for `createScholarPipeline`.
