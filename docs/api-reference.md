@@ -1582,6 +1582,32 @@ Combines two changesets made one after the other — the changesets of two succe
 
 ---
 
+### `orderChangeset(changeset)` → `TOrderedOperation[]`
+
+Turns a changeset into a flat list of persistence operations (`insert`, `update` or `delete`, each tagged with its entity kind) that can be run one after another against a relational store that checks foreign keys immediately and cascades nothing. Every row a new row refers to exists before that row is inserted, and every row that refers to a doomed row is gone or detached before that row is deleted. An empty changeset gives an empty list.
+
+The foreign keys it orders around are: an expression's `premiseId`, `variableId` and `parentId`; a variable's `boundPremiseId` and `argumentId`; and a premise's `argumentId`.
+
+**It cannot see what the store holds.** A removed expression's entry carries its parent at the moment of removal, not necessarily the parent the stored row names, because another change in the same changeset may have moved it first. So every removed expression is detached before any expression is deleted. The detach is an update carrying only `id`, `parentId: null` and `position: 0` — never the removed entry itself, whose other fields may be stale or name a variable that has not been inserted yet. Position 0 is where a root sits, as a consumer's CHECK constraint may require. Two duties follow for the store:
+
+- **Write only the fields an update carries.** A detach is not a whole row.
+- **Check a one-root-per-premise rule at the end of the transaction**, not per statement (for example as a deferred constraint trigger). Until the deletes run, a premise can briefly have several roots.
+
+**Updates that need an insert first.** An expression update pointing at a parent, variable or premise that the same changeset inserts is moved to the root first and applied in full after the inserts. One that is late only because of its new parent is written whole, with the parent cleared, in that first step, so it leaves its old variable before any delete. One naming a new variable or premise can only be detached, so the variable and premise deletes wait until after its full update: the stored row still names its old variable and premise, and a store whose keys cascade would otherwise delete it.
+
+**Variable updates** run between the variable deletes and the premise deletes, so a rebound variable leaves its old premise before that premise is deleted (a bound-premise key that cascades would otherwise take the variable and its expressions with it), and a rename can take a symbol a removed variable frees. A variable bound to a premise the changeset inserts is updated after the premise inserts, and the premise deletes wait for it. When the deletes wait for an expression update, all of these run after the inserts instead.
+
+A changeset with no variable update and no expression update needing an insert keeps the plain order: premise updates, expression reparenting and detaches, expression deletes, variable deletes, premise deletes, premise inserts, variable inserts, expression inserts (parents before children), then argument and role-state updates.
+
+**Known exceptions**, only while the deletes wait and only for a store that checks the rule per statement. The inserts then run while the removed rows still exist, so each is a unique rule meeting a row not yet deleted or renamed:
+
+- an inserted variable reusing the symbol of a removed variable, or of one being renamed, breaks a symbols-unique-per-argument rule (both only when the variable deletes wait);
+- an inserted conclusion premise, while the removed conclusion premise still exists, breaks a one-conclusion-per-argument rule, which cannot be deferred.
+
+Origin entities never enter a `TCoreChangeset`, so this ordering does not cover them; see the `OriginLibrary` section.
+
+---
+
 ### `parseFormula(input)` → `TFormulaAST`
 
 Parses a logical formula string into an AST. Supports standard logical notation with operators `not`/`¬`, `and`/`∧`, `or`/`∨`, `implies`/`→`, `iff`/`↔`, and parentheses for grouping. A word operator must stand as a whole word, so `NotRaining` is one symbol, not `not Raining`.

@@ -49,6 +49,14 @@ jobs:
             - name: Install dependencies
               run: pnpm install --frozen-lockfile
 
+            # The generated parser is committed, so a grammar edit that was
+            # never regenerated would ship a stale parser. Regenerate it and
+            # fail if the result differs from the committed copy.
+            - name: Check the committed parser matches the grammar
+              run: |
+                  pnpm run generate:parser
+                  git diff --exit-code src/lib/core/parser/formula-gen.js
+
             - name: Type-check
               run: pnpm run typecheck
 
