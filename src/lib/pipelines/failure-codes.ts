@@ -9,7 +9,7 @@
 // literal) is the load-bearing contract between core and its
 // consumers.
 //
-// `classifyError` (./stage-helpers.ts) maps the `retryReason` tag on a
+// `classifyError` (./llm-stage-helpers.ts) maps the `retryReason` tag on a
 // thrown provider error to one of these codes; the executor copies the
 // code onto the `TProcessingFailure` it reports.
 

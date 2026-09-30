@@ -2,7 +2,7 @@
 //
 // The framework's `llmStage` retry policy classifies provider errors
 // by inspecting a `retryReason` tag on the thrown object (see
-// `src/lib/pipelines/stage-helpers.ts#classifyError`). To play
+// `src/lib/pipelines/llm-stage-helpers.ts#classifyError`). To play
 // cleanly with that mechanism, each provider-side error class carries
 // the appropriate tag as an own property.
 //

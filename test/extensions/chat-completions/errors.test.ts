@@ -2,7 +2,7 @@
 // `classifyHttpError` / `classifyFetchError` mappings.
 //
 // The framework classifies provider errors by the `retryReason` string
-// tag on the thrown object (see `src/lib/pipelines/stage-helpers.ts`
+// tag on the thrown object (see `src/lib/pipelines/llm-stage-helpers.ts`
 // #classifyError) — NOT by class identity. So these tests assert the
 // `retryReason` tag for each class and the status-family routing.
 //
