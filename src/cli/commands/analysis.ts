@@ -585,6 +585,14 @@ export function registerAnalysisCommands(
                 noValidateFirst?: boolean
                 json?: boolean
             }) => {
+                if (
+                    opts.mode !== "first-counterexample" &&
+                    opts.mode !== "exhaustive"
+                ) {
+                    errorExit(
+                        `Mode must be "first-counterexample" or "exhaustive", got "${opts.mode}".`
+                    )
+                }
                 const engine = await hydrateEngine(argumentId, version)
                 const result = engine.checkValidity({
                     mode:
