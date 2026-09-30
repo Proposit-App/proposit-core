@@ -1,0 +1,9 @@
+slug: 2026-08-14-decide-whether-an-argument-asserting-one-claim-both-ways-is-a-validation-error
+title: Report a claim held both ways as a claim-level contested roll-up
+created: '2026-08-14'
+resolution: null
+priority: 38
+effort: low
+complexity: medium
+tags:
+- product

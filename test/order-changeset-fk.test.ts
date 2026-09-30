@@ -2,7 +2,7 @@
 // keys immediately accepts every operation and ends in the engine's state.
 // Each changeset is applied twice: to a store that cascades nothing, and to
 // one whose deletes cascade to the rows pointing at the deleted row (as
-// proposit-app's parent, variable and bound-premise keys do), where a wrongly
+// a consuming application's parent, variable and bound-premise keys do), where a wrongly
 // timed delete silently takes a row with it. A premise-bound variable names
 // its premise too, so deleting that premise reaches the variable and, through
 // it, every expression naming the variable. Both require a row with no parent to sit at

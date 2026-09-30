@@ -1,7 +1,7 @@
 // Barrel for the OpenAI Responses-API provider extension.
 //
-// Public surface consumed by `proposit-server`, the CLI, and other
-// callers: the provider constructor + caller-facing config types +
+// Public surface consumed by applications that use this library, the
+// CLI, and other callers: the provider constructor + caller-facing config types +
 // the error classes that callers may want to `instanceof`-match for
 // finer-grained observability + the response retrieval / reconnect /
 // cancel API for resync.

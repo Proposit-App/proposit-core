@@ -1,0 +1,177 @@
+2026-06-21-lib-extensions-decomposition-residual-expressionmanager-pipelines-execute-stage-grouping:
+  resolution: done
+  resolved: '2026-09-02'
+2026-06-21-ponytail-lean-scan-residual-deletions-structuredclone-swap:
+  resolution: done
+  resolved: '2026-09-02'
+2026-06-21-proposit-core-batched-public-api-exports-cleanup-follow-ups:
+  resolution: done
+  resolved: '2026-09-02'
+2026-06-21-public-engine-api-patchexpressionappfields-stop-reaching-into-engine-internals:
+  resolution: done
+  resolved: '2026-09-02'
+2026-06-26-argument-builder-finalize-via-conversation-distill-into-existing-ingestion-pipeline-drop-one-shot-parse:
+  resolution: done
+  resolved: '2026-09-02'
+2026-06-26-conversation-primitive-builder-turns-terminal-argument-builder:
+  resolution: done
+  resolved: '2026-09-02'
+2026-06-28-structuredclone-swap-and-zero-caller-internal-cleanup-nullish-simplify-checksum-key-dedup:
+  resolution: done
+  resolved: '2026-09-02'
+2026-07-03-executepipeline-in-scheduler-ts-remains-large-after-phase-2-split:
+  resolution: wontfix
+  resolved: '2026-09-02'
+2026-07-03-llmstage-in-llm-stage-helpers-ts-remains-large-after-phase-3-split:
+  resolution: wontfix
+  resolved: '2026-09-02'
+2026-07-12-enrich-diffarguments-with-explicit-four-state-model-and-id-stability-contract:
+  resolution: done
+  resolved: '2026-09-02'
+2026-07-17-basics-parse-core-prompt-should-never-refuse-a-half-baked-argument:
+  resolution: superseded
+  resolved: '2026-09-02'
+2026-07-18-core-re-exports-root-barrel-hygiene-retire-ingestion-taxonomy-feature:
+  resolution: done
+  resolved: '2026-09-02'
+2026-07-21-usage-based-default-variable-assignments-and-inline-t-f-u-review-in-the-argument-text-view:
+  resolution: done
+  resolved: '2026-09-02'
+2026-07-22-gate-the-sound-grade-on-premises-being-true:
+  resolution: done
+  resolved: '2026-09-02'
+2026-07-23-decompose-argumentengine-and-premiseengine-into-method-family-seam-files:
+  resolution: superseded
+  resolved: '2026-09-24'
+2026-07-24-first-time-setup-script-for-proposit-core:
+  resolution: done
+  resolved: '2026-09-02'
+2026-07-30-carry-ingestion-provenance-through-pipeline-finalize:
+  resolution: done
+  resolved: '2026-09-02'
+2026-07-30-origin-data-library-and-enthymeme-annotation:
+  resolution: done
+  resolved: '2026-09-02'
+2026-07-30-typebox-1-3-x-removes-type-base-migrate-tdatetype-off-it:
+  resolution: done
+  resolved: '2026-09-02'
+2026-08-02-scribe-pipeline-emits-no-origin-source-anchors:
+  resolution: done
+  resolved: '2026-09-02'
+2026-08-04-ingestion-pipelines-author-premise-titles:
+  resolution: done
+  resolved: '2026-09-02'
+2026-08-07-rejection-strikes-the-premise-evaluation-emits-orthogonal-facts:
+  resolution: done
+  resolved: '2026-09-02'
+2026-08-08-contested-as-a-fourth-evaluation-value-make-the-constraint-closure-confluent:
+  resolution: done
+  resolved: '2026-09-02'
+2026-08-10-checkvalidity-enumerates-citation-bound-variables-the-default-assignment-treats-as-given:
+  resolution: done
+  resolved: '2026-09-02'
+2026-08-10-evaluation-time-satisfiability-still-reads-citations-as-free-while-checkvalidity-gives-them:
+  resolution: done
+  resolved: '2026-09-02'
+2026-08-10-getvariableidforclaim-implies-a-claim-has-one-variable-and-it-has-two:
+  resolution: done
+  resolved: '2026-09-02'
+2026-08-10-the-satisfiability-walk-pays-2-n-for-variables-that-cannot-interact:
+  resolution: done
+  resolved: '2026-09-02'
+2026-08-14-a-claim-with-no-anchor-attempted-is-silent-indistinguishable-from-one-that-failed-to-resolve:
+  resolution: done
+  resolved: '2026-09-28'
+2026-08-14-trim-the-documentation-sync-section-to-file-declarations:
+  resolution: done
+  resolved: '2026-09-02'
+2026-08-18-add-the-xor-operator-to-the-logic-engine:
+  resolution: done
+  resolved: '2026-09-08'
+2026-08-18-conversation-primitive-and-terminal-argument-builder-inbox-restatement:
+  resolution: superseded
+  resolved: '2026-09-02'
+2026-08-18-cut-proposit-core-v4-1-0:
+  resolution: done
+  resolved: '2026-09-02'
+2026-08-18-link-the-patchexpressionappfields-item-to-its-epic-and-ship-the-public-engine-api:
+  resolution: superseded
+  resolved: '2026-09-02'
+2026-08-18-no-cli-surface-for-tier-aware-grammar-validation:
+  resolution: done
+  resolved: '2026-09-29'
+2026-08-18-scribe-pipeline-emits-no-source-anchors-and-permits-an-empty-evidence-quote:
+  resolution: superseded
+  resolved: '2026-09-02'
+2026-08-18-stop-counting-derivation-premises-in-the-surviving-supporting-premises-aggregate:
+  resolution: done
+  resolved: '2026-09-02'
+2026-08-28-a-rejected-derived-claim-should-falsify-its-derivation-premise:
+  resolution: superseded
+  resolved: '2026-09-08'
+2026-08-28-decide-whether-a-truth-preserving-rewrite-set-exists-over-belnap-four:
+  resolution: duplicate
+  resolved: '2026-09-24'
+2026-08-28-decompose-argumentengine-into-method-family-seam-files:
+  resolution: superseded
+  resolved: '2026-09-24'
+2026-08-28-decompose-premiseengine-into-method-family-seam-files:
+  resolution: superseded
+  resolved: '2026-09-24'
+2026-09-24-let-a-social-media-citation-carry-a-username-a-post-title-or-body-a-website-title-and-an-access-date:
+  resolution: done
+  resolved: '2026-09-24'
+2026-09-24-make-the-anchor-cost-test-measure-growth-with-document-size-instead-of-a-fixed-time-limit:
+  resolution: done
+  resolved: '2026-09-28'
+2026-09-24-shrink-argumentengine-by-moving-its-read-only-logic-into-module-functions:
+  resolution: done
+  resolved: '2026-09-28'
+2026-09-24-shrink-premiseengine-by-moving-its-read-only-logic-into-module-functions:
+  resolution: done
+  resolved: '2026-09-28'
+2026-09-24-swap-and-or-and-xor-in-place-at-any-arity-and-add-an-at-most-one-operator:
+  resolution: done
+  resolved: '2026-09-28'
+2026-09-25-scribe-import-attaches-every-linked-source-to-the-claim-it-supports:
+  resolution: done
+  resolved: '2026-09-29'
+2026-09-26-stop-premises-carrying-origin-anchors-enthymeme-marks-and-ingestion-source-anchors:
+  resolution: done
+  resolved: '2026-09-26'
+2026-09-28-document-and-guard-every-published-subpath-not-only-the-typedoc-entry-points:
+  resolution: done
+  resolved: '2026-09-28'
+2026-09-28-fail-the-build-when-a-public-api-member-disappears-from-the-generated-docs:
+  resolution: done
+  resolved: '2026-09-28'
+2026-09-28-include-assistive-normalization-s-changes-in-the-changeset-a-mutation-returns:
+  resolution: done
+  resolved: '2026-09-28'
+2026-09-28-list-a-removed-premise-s-own-expressions-and-stop-changesets-repeating-an-id-across-buckets:
+  resolution: done
+  resolved: '2026-09-28'
+2026-09-28-order-a-variable-s-rebinding-before-the-delete-of-the-premise-it-leaves-in-orderchangeset:
+  resolution: done
+  resolved: '2026-09-29'
+2026-09-28-order-an-expression-s-re-parent-after-the-insert-of-its-new-parent-in-orderchangeset:
+  resolution: done
+  resolved: '2026-09-28'
+2026-09-28-order-an-expression-update-after-the-insert-of-a-premise-it-moves-to-in-orderchangeset:
+  resolution: superseded
+  resolved: '2026-09-28'
+2026-09-28-report-a-mention-the-mention-stage-produced-that-no-claim-references:
+  resolution: done
+  resolved: '2026-09-28'
+2026-09-28-report-a-repeated-mention-id-s-resolution-once-not-once-per-copy:
+  resolution: done
+  resolved: '2026-09-28'
+2026-09-28-stop-the-high-load-stress-test-failing-on-a-busy-machine:
+  resolution: done
+  resolved: '2026-09-28'
+2026-09-28-test-that-live-checksums-equal-checksums-rebuilt-from-a-snapshot-across-random-mutations:
+  resolution: done
+  resolved: '2026-09-28'
+2026-09-29-skip-a-variable-that-is-both-modified-and-removed-in-orderchangeset:
+  resolution: done
+  resolved: '2026-09-29'

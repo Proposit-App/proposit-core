@@ -430,7 +430,7 @@ Consumers key their state by `claimId`; translate with `getVariableIdForClaim` /
 
 Convenience that merges caller `overrides` (`TCoreVariableAssignment`) over `deriveDefaultAssignment()` and calls `evaluate` in one step. Default-sourced **axiomatic-bound** keys are dropped before evaluation (the engine force-sets them `true`), so the defaults and the pre-pass agree without tripping `AXIOM_VARIABLE_ASSIGNMENT_FORBIDDEN`. An `override` that names an axiomatic variable is left intact, so `evaluate` still enforces the one-way rule. `options` is the same `TCoreArgumentEvaluationOptions` accepted by `evaluate`.
 
-**Axiom vs. citation asymmetry (important for consumers).** Only **axiomatic**-bound variables are engine-forced: `evaluate` force-sets them `true` and rejects any explicit assignment for them. **Citation**-bound variables are _free_ — the engine does not force them and does not reject an explicit citation assignment. Both read as `true` under `deriveDefaultAssignment`, but the axiom `true` comes from the engine while the **citation `true` is supplied by the map** and is therefore _kept_ (never dropped) when evaluating — dropping it would leave the citation unknown. Consequence for a consumer building its own effective assignment and calling `evaluate` directly (e.g. `@proposit/shared`'s overlay): strip axiomatic-bound keys, but **keep** citation-bound keys. Because citations are not locked, a citation default is reviewer-overridable; an axiom is not.
+**Axiom vs. citation asymmetry (important for consumers).** Only **axiomatic**-bound variables are engine-forced: `evaluate` force-sets them `true` and rejects any explicit assignment for them. **Citation**-bound variables are _free_ — the engine does not force them and does not reject an explicit citation assignment. Both read as `true` under `deriveDefaultAssignment`, but the axiom `true` comes from the engine while the **citation `true` is supplied by the map** and is therefore _kept_ (never dropped) when evaluating — dropping it would leave the citation unknown. Consequence for a consumer building its own effective assignment and calling `evaluate` directly: strip axiomatic-bound keys, but **keep** citation-bound keys. Because citations are not locked, a citation default is reviewer-overridable; an axiom is not.
 
 ---
 
@@ -1675,7 +1675,7 @@ Or at runtime via `engine.setBehavior(...)`. Switching `permissive → assistive
 | `TGrammarRuleCode` | Union of `'S-1'`..`'S-14'`, `'E-1'`+`'E-3'`..`'E-7'`, `'D-1'`..`'D-6'`, `'P-1'`..`'P-5'`. Codes `E-2` and `D-7` are reserved (not reused). |
 | `TViolation`       | `{ tier, code, message, argumentId?, premiseId?, expressionId?, variableId?, claimId?, … }`. Returned by `engine.validate(tier)`.          |
 
-All three types are defined as TypeBox schemas + derived TS types in `src/lib/grammar/types.ts` and re-exported from `@proposit/shared/schemas/grammar` for consumer ergonomics.
+All three types are defined as TypeBox schemas + derived TS types in `src/lib/grammar/types.ts` and exported from the package root.
 
 ---
 

@@ -274,7 +274,7 @@ Every premise carries an immutable `type` discriminator:
 
 A derivation premise's expression tree is constrained Structurally (S-14) to a root operator in `{ variable, implies, iff }` and Derivable-ly (D-1) to one of two canonical shapes:
 
-- **Naked-Q** — a single variable expression at the root, bound to `derivedClaimId`. This is the initial state created automatically on `createPremise({ type: "derivation", derivedClaimId })` and represents "no support given yet." Naked-Q is a **valid Derivable state** — `validate('derivable')` does not flag it. (Whether a naked-Q premise should be populated is an application-layer UX concern in `proposit-server`.)
+- **Naked-Q** — a single variable expression at the root, bound to `derivedClaimId`. This is the initial state created automatically on `createPremise({ type: "derivation", derivedClaimId })` and represents "no support given yet." Naked-Q is a **valid Derivable state** — `validate('derivable')` does not flag it. (Whether a naked-Q premise should be populated is a user-interface concern for the consuming application.)
 - **Populated form** — root `IMPLIES` with the consequent at position 1, and the antecedent being either a single claim variable (D-2) or `OR` of same-grounding-kind claim variables (D-3 — no mixing of citation and axiom claim variables in a single antecedent). At Presentable the `OR` is wrapped in a `formula` buffer (`IMPLIES(formula(OR(c, c, ...)), Q)`) per P-1.
 
 `IFF` is structurally allowed at a derivation premise's root (S-14, preserving the existing two-way-propagation evaluation feature for programmatic / CLI consumers) but is flagged as a Derivable violation (D-1 restricts the populated form to `IMPLIES`).

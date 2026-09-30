@@ -2,7 +2,7 @@
 // failures.
 //
 // These live in the SDK-free `src/lib/pipelines/` layer (no `openai`
-// import) so consumers — notably `proposit-server`'s global AI-budget
+// import) so consumers — for example an application-wide AI-budget
 // breaker — can import the wire-format code without pulling in the
 // OpenAI extension. `TProcessingFailure.code` is a bare `string`, so
 // matching against these exported constants (rather than re-typing the
