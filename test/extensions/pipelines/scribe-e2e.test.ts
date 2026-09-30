@@ -32,6 +32,7 @@ import {
     createRecordingLlmProvider,
     recordingMode,
 } from "./recording-provider.js"
+import { createDeterministicGenerateId } from "./fixtures.js"
 import type { TLlmProvider } from "../../../src/lib/llm/types.js"
 
 const FIXTURES_ROOT = path.join(import.meta.dirname, "fixtures")
@@ -93,17 +94,6 @@ function writeExpected(
         JSON.stringify(runtime, null, 2) + "\n",
         "utf-8"
     )
-}
-
-// Deterministic, counter-based generateId so minted variable/premise
-// ids are stable across record + replay (see the scholar driver for the
-// rationale).
-function createDeterministicGenerateId(prefix = "gid"): () => string {
-    let counter = 0
-    return () => {
-        counter += 1
-        return `${prefix}-${String(counter)}`
-    }
 }
 
 function buildProviderForMode(fixtureDir: string): TLlmProvider {
