@@ -97,6 +97,21 @@
   citation and axiom edge copies (now one method), the claim-reference rebuild
   and the fork-record creation into their own methods, and generates ids in
   the same order, so a fork produces the same ids as before.
+- The 0.2.0 to 0.5.0 changelog moved from `docs/CHANGELOG.md` to
+  `docs/changelogs/legacy-0.2-0.5.md`, and 0.5.0 is no longer labelled
+  unreleased.
+- `docs/api-reference.md` now documents `orderChangeset`: its ordering, the two
+  things a store must do (write only the fields an update carries, and check a
+  one-root-per-premise rule at the end of the transaction), and its known
+  exceptions.
+- `examples/texts/README.md` explains what the folder holds and which graph
+  belongs to which text.
+- CI now fails when the committed `formula-gen.js` does not match what
+  `formula.peggy` generates.
+- `tsconfig.json` no longer includes a path under an ignored local folder, or
+  lists `eslint.config.mjs` beside the `*.mjs` pattern that already covers it.
+- The pull request template asks about impact on applications that use the
+  library, without naming any.
 
 ## Removed
 
@@ -104,6 +119,11 @@
   empty key is passed directly.
 - The always-true `Value.Check({ type: "any" }, {})` choice of the turn
   pipeline's input schema, and the TypeBox imports only it used.
+- The migration guides for 0.2.0, 0.9.0 to 0.10.0 and 0.10.0 to 0.11.0
+  (`docs/migration-0.2.0.md`, `docs/migrations/`).
+- `scripts/rewrite-v2-expected.ts`, a one-off script for regenerating pipeline
+  test expectations that nothing referenced and that needed `tsx`, which is not
+  a dev dependency.
 
 ## Tests
 
