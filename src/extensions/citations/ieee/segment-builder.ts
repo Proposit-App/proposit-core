@@ -1,4 +1,4 @@
-import type { TCitationSegment } from "./formatting.js" // type-only — erased at runtime, no cycle
+import type { TCitationSegment } from "./segment-types.js"
 import type { TSegmentInstruction } from "./segment-templates.js"
 import type { TAuthor } from "./references.js"
 

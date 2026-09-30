@@ -1,6 +1,6 @@
 // IEEE Citation Segment Templates — declarative config arrays interpreted by buildSegments()
 
-import type { TCitationSegment } from "./formatting.js"
+import type { TCitationSegment } from "./segment-types.js"
 
 // ---------------------------------------------------------------------------
 // Instruction types
