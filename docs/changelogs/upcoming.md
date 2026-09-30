@@ -37,6 +37,14 @@
   and the abort check, in `src/extensions/llm-http/errors.ts`. Each provider's
   `classifyHttpError` still returns its own error classes, with the same
   messages. None of the shared code is exported.
+- The CLI no longer repeats the same small pieces of code across its command
+  files. The check that refuses to change a published argument version, the
+  check that a premise exists, and the conversion of a caught error to its
+  message now live once in `src/cli/guards.ts`. The expression commands load
+  their premise through `requireHydratedPremise` in `src/cli/engine.ts`. The
+  analysis commands read `true`/`false`/`unset` and
+  `accepted`/`rejected`/`unset` through one parser each. Command output, error
+  messages and exit codes are unchanged.
 
 ## Removed
 
