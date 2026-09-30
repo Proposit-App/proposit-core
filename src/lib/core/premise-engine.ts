@@ -1035,199 +1035,246 @@ export class PremiseEngine<
                     }
 
                     if (mergeTarget) {
-                        // --- MERGE ---
-                        // Reparent children of the dissolving operator under the merge target.
-                        // Use the dissolving operator's position slot for the first child,
-                        // compute midpoint positions for subsequent children.
-
-                        // If parent was a formula buffer, we'll dissolve that too
-                        const formulaToDissolve =
-                            parent?.type === "formula" ? parent : undefined
-
-                        // The position slot we're replacing
-                        const slotPosition = formulaToDissolve
-                            ? formulaToDissolve.position
-                            : target.position
-
-                        // Get the merge target's existing children sorted by position to find neighbors
-                        const mergeChildren =
-                            this.expressions.getChildExpressions(mergeTarget.id)
-
-                        // Find the position of the next sibling after the slot
-                        const slotIndex = mergeChildren.findIndex(
-                            (c) =>
-                                c.id === (formulaToDissolve?.id ?? expressionId)
+                        return this.mergeDissolvingOperator(
+                            collector,
+                            target,
+                            children,
+                            mergeTarget,
+                            parent
                         )
-                        const nextSibling = mergeChildren[slotIndex + 1]
-                        const nextPosition = nextSibling
-                            ? nextSibling.position
-                            : POSITION_MAX
-
-                        // Reparent each child
-                        for (let i = 0; i < children.length; i++) {
-                            const childPosition =
-                                i === 0
-                                    ? slotPosition
-                                    : midpoint(
-                                          i === 1
-                                              ? slotPosition
-                                              : children[i - 1].position,
-                                          nextPosition
-                                      )
-                            this.expressions.reparentExpression(
-                                children[i].id,
-                                mergeTarget.id,
-                                childPosition
-                            )
-                        }
-
-                        // Delete the dissolving operator (now has no children)
-                        this.expressions.deleteExpression(expressionId)
-
-                        // Delete the formula buffer if it existed (now has no children)
-                        if (formulaToDissolve) {
-                            this.expressions.deleteExpression(
-                                formulaToDissolve.id
-                            )
-                        }
-
-                        const changes =
-                            this.finalizeExpressionMutation(collector)
-                        return { result: null, changes }
                     } else {
-                        // --- SIMPLE CHANGE ---
-                        this.expressions.changeOperatorType(
+                        return this.changeOperatorTypeInPlace(
+                            collector,
                             expressionId,
                             newOperator
                         )
-
-                        const changes =
-                            this.finalizeExpressionMutation(collector)
-                        // Normalization runs inside finalize and may have
-                        // absorbed the node into a same-operator
-                        // grandparent; that reads as a dissolve, like a
-                        // merge.
-                        return {
-                            result:
-                                this.expressions.getExpression(expressionId) ??
-                                null,
-                            changes,
-                        }
                     }
                 } else {
-                    // --- SPLIT (>2 children, not swapped in place) ---
-                    if (!sourceChildId || !targetChildId) {
-                        throw new Error(
-                            `Operator "${expressionId}" has ${childCount} children — sourceChildId and targetChildId are required for split.`
-                        )
-                    }
-
-                    // Validate source and target are children of the operator
-                    const sourceChild =
-                        this.expressions.getExpression(sourceChildId)
-                    const targetChild =
-                        this.expressions.getExpression(targetChildId)
-                    if (!sourceChild || sourceChild.parentId !== expressionId) {
-                        throw new Error(
-                            `Expression "${sourceChildId}" is not a child of operator "${expressionId}".`
-                        )
-                    }
-                    if (!targetChild || targetChild.parentId !== expressionId) {
-                        throw new Error(
-                            `Expression "${targetChildId}" is not a child of operator "${expressionId}".`
-                        )
-                    }
-
-                    // Determine position for the formula buffer (min of the two children)
-                    const formulaPosition = Math.min(
-                        sourceChild.position,
-                        targetChild.position
+                    return this.splitOperatorChildren(
+                        collector,
+                        target,
+                        newOperator,
+                        childCount,
+                        sourceChildId,
+                        targetChildId,
+                        extraFields
                     )
-
-                    // Create the sub-operator and formula first as detached nodes,
-                    // then reparent children away from the parent (freeing their
-                    // position slots), and finally add formula + sub-operator.
-                    const formulaId = this.generateId()
-                    const newOpId = this.generateId()
-
-                    // Reparent source and target children to a temporary holding
-                    // position under the new sub-operator. We must reparent them
-                    // away from the parent BEFORE adding the formula at their old
-                    // position slot.
-                    const firstChild =
-                        sourceChild.position <= targetChild.position
-                            ? sourceChild
-                            : targetChild
-                    const secondChild =
-                        sourceChild.position <= targetChild.position
-                            ? targetChild
-                            : sourceChild
-
-                    // Reparent children to null temporarily (detach from parent)
-                    // so their position slots are freed.
-                    this.expressions.reparentExpression(
-                        firstChild.id,
-                        null,
-                        firstChild.position
-                    )
-                    this.expressions.reparentExpression(
-                        secondChild.id,
-                        null,
-                        secondChild.position
-                    )
-
-                    // Now add the formula buffer at the freed position
-                    const formulaExpr = {
-                        ...extraFields,
-                        id: formulaId,
-                        argumentId: target.argumentId,
-                        argumentVersion: target.argumentVersion,
-                        premiseId: target.premiseId,
-                        type: "formula",
-                        parentId: expressionId,
-                        position: formulaPosition,
-                    } as TExpressionInput<TExpr>
-                    this.expressions.addExpression(formulaExpr)
-
-                    // Add the new sub-operator under the formula
-                    const newOpExpr = {
-                        ...extraFields,
-                        id: newOpId,
-                        argumentId: target.argumentId,
-                        argumentVersion: target.argumentVersion,
-                        premiseId: target.premiseId,
-                        type: "operator",
-                        operator: newOperator,
-                        parentId: formulaId,
-                        position: POSITION_INITIAL,
-                    } as TExpressionInput<TExpr>
-                    this.expressions.addExpression(newOpExpr)
-
-                    // Now reparent the children under the new sub-operator,
-                    // using the midpoint-spaced pattern so future inserts
-                    // can bisect. S-8 checks arity only, so the same spacing
-                    // applies uniformly to all binary operators.
-                    this.expressions.reparentExpression(
-                        firstChild.id,
-                        newOpId,
-                        POSITION_INITIAL
-                    )
-                    this.expressions.reparentExpression(
-                        secondChild.id,
-                        newOpId,
-                        midpoint(POSITION_INITIAL, POSITION_MAX)
-                    )
-
-                    const changes = this.finalizeExpressionMutation(collector)
-                    return {
-                        result: this.expressions.getExpression(newOpId)!,
-                        changes,
-                    }
                 }
             } finally {
                 this.expressions.setCollector(null)
             }
         })
+    }
+
+    /**
+     * Dissolves a degenerate operator (fewer than two children) into a
+     * same-type ancestor: its children are reparented under the merge
+     * target in the operator's position slot, and the operator is
+     * deleted, together with the formula buffer between the two if
+     * there is one.
+     */
+    private mergeDissolvingOperator(
+        collector: ChangeCollector<TExpr, TVar, TPremise, TArg>,
+        target: TExpr,
+        children: TExpr[],
+        mergeTarget: TExpr,
+        parent: TExpr | undefined
+    ): TCoreMutationResult<TExpr | null, TExpr, TVar, TPremise, TArg> {
+        const expressionId = target.id
+        // Reparent children of the dissolving operator under the merge target.
+        // Use the dissolving operator's position slot for the first child,
+        // compute midpoint positions for subsequent children.
+
+        // If parent was a formula buffer, we'll dissolve that too
+        const formulaToDissolve =
+            parent?.type === "formula" ? parent : undefined
+
+        // The position slot we're replacing
+        const slotPosition = formulaToDissolve
+            ? formulaToDissolve.position
+            : target.position
+
+        // Get the merge target's existing children sorted by position to find neighbors
+        const mergeChildren = this.expressions.getChildExpressions(
+            mergeTarget.id
+        )
+
+        // Find the position of the next sibling after the slot
+        const slotIndex = mergeChildren.findIndex(
+            (c) => c.id === (formulaToDissolve?.id ?? expressionId)
+        )
+        const nextSibling = mergeChildren[slotIndex + 1]
+        const nextPosition = nextSibling ? nextSibling.position : POSITION_MAX
+
+        // Reparent each child
+        for (let i = 0; i < children.length; i++) {
+            const childPosition =
+                i === 0
+                    ? slotPosition
+                    : midpoint(
+                          i === 1 ? slotPosition : children[i - 1].position,
+                          nextPosition
+                      )
+            this.expressions.reparentExpression(
+                children[i].id,
+                mergeTarget.id,
+                childPosition
+            )
+        }
+
+        // Delete the dissolving operator (now has no children)
+        this.expressions.deleteExpression(expressionId)
+
+        // Delete the formula buffer if it existed (now has no children)
+        if (formulaToDissolve) {
+            this.expressions.deleteExpression(formulaToDissolve.id)
+        }
+
+        const changes = this.finalizeExpressionMutation(collector)
+        return { result: null, changes }
+    }
+
+    /**
+     * Changes an operator's type where it stands, keeping its children.
+     */
+    private changeOperatorTypeInPlace(
+        collector: ChangeCollector<TExpr, TVar, TPremise, TArg>,
+        expressionId: string,
+        newOperator: TCoreLogicalOperatorType
+    ): TCoreMutationResult<TExpr | null, TExpr, TVar, TPremise, TArg> {
+        this.expressions.changeOperatorType(expressionId, newOperator)
+
+        const changes = this.finalizeExpressionMutation(collector)
+        // Normalization runs inside finalize and may have
+        // absorbed the node into a same-operator
+        // grandparent; that reads as a dissolve, like a
+        // merge.
+        return {
+            result: this.expressions.getExpression(expressionId) ?? null,
+            changes,
+        }
+    }
+
+    /**
+     * Moves two named children of an operator with more than two
+     * children into a new sub-operator of type `newOperator`, wrapped in
+     * a formula buffer that takes the earlier child's position.
+     */
+    private splitOperatorChildren(
+        collector: ChangeCollector<TExpr, TVar, TPremise, TArg>,
+        target: TExpr,
+        newOperator: TCoreLogicalOperatorType,
+        childCount: number,
+        sourceChildId: string | undefined,
+        targetChildId: string | undefined,
+        extraFields: Partial<TExpr> | undefined
+    ): TCoreMutationResult<TExpr | null, TExpr, TVar, TPremise, TArg> {
+        const expressionId = target.id
+        if (!sourceChildId || !targetChildId) {
+            throw new Error(
+                `Operator "${expressionId}" has ${childCount} children — sourceChildId and targetChildId are required for split.`
+            )
+        }
+
+        // Validate source and target are children of the operator
+        const sourceChild = this.expressions.getExpression(sourceChildId)
+        const targetChild = this.expressions.getExpression(targetChildId)
+        if (!sourceChild || sourceChild.parentId !== expressionId) {
+            throw new Error(
+                `Expression "${sourceChildId}" is not a child of operator "${expressionId}".`
+            )
+        }
+        if (!targetChild || targetChild.parentId !== expressionId) {
+            throw new Error(
+                `Expression "${targetChildId}" is not a child of operator "${expressionId}".`
+            )
+        }
+
+        // Determine position for the formula buffer (min of the two children)
+        const formulaPosition = Math.min(
+            sourceChild.position,
+            targetChild.position
+        )
+
+        // Create the sub-operator and formula first as detached nodes,
+        // then reparent children away from the parent (freeing their
+        // position slots), and finally add formula + sub-operator.
+        const formulaId = this.generateId()
+        const newOpId = this.generateId()
+
+        // Reparent source and target children to a temporary holding
+        // position under the new sub-operator. We must reparent them
+        // away from the parent BEFORE adding the formula at their old
+        // position slot.
+        const firstChild =
+            sourceChild.position <= targetChild.position
+                ? sourceChild
+                : targetChild
+        const secondChild =
+            sourceChild.position <= targetChild.position
+                ? targetChild
+                : sourceChild
+
+        // Reparent children to null temporarily (detach from parent)
+        // so their position slots are freed.
+        this.expressions.reparentExpression(
+            firstChild.id,
+            null,
+            firstChild.position
+        )
+        this.expressions.reparentExpression(
+            secondChild.id,
+            null,
+            secondChild.position
+        )
+
+        // Now add the formula buffer at the freed position
+        const formulaExpr = {
+            ...extraFields,
+            id: formulaId,
+            argumentId: target.argumentId,
+            argumentVersion: target.argumentVersion,
+            premiseId: target.premiseId,
+            type: "formula",
+            parentId: expressionId,
+            position: formulaPosition,
+        } as TExpressionInput<TExpr>
+        this.expressions.addExpression(formulaExpr)
+
+        // Add the new sub-operator under the formula
+        const newOpExpr = {
+            ...extraFields,
+            id: newOpId,
+            argumentId: target.argumentId,
+            argumentVersion: target.argumentVersion,
+            premiseId: target.premiseId,
+            type: "operator",
+            operator: newOperator,
+            parentId: formulaId,
+            position: POSITION_INITIAL,
+        } as TExpressionInput<TExpr>
+        this.expressions.addExpression(newOpExpr)
+
+        // Now reparent the children under the new sub-operator,
+        // using the midpoint-spaced pattern so future inserts
+        // can bisect. S-8 checks arity only, so the same spacing
+        // applies uniformly to all binary operators.
+        this.expressions.reparentExpression(
+            firstChild.id,
+            newOpId,
+            POSITION_INITIAL
+        )
+        this.expressions.reparentExpression(
+            secondChild.id,
+            newOpId,
+            midpoint(POSITION_INITIAL, POSITION_MAX)
+        )
+
+        const changes = this.finalizeExpressionMutation(collector)
+        return {
+            result: this.expressions.getExpression(newOpId)!,
+            changes,
+        }
     }
 
     public getExpression(id: string): TExpr | undefined {
