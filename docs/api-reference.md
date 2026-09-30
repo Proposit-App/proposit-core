@@ -2,9 +2,11 @@
 
 ## `ArgumentEngine`
 
-### `new ArgumentEngine(argument, claimLibrary, claimCitationLibrary, options?)`
+### `new ArgumentEngine(argument, claimLibrary, options?)`
 
-Creates an engine scoped to `argument` (`{ id, version, title, description }`, without `checksum` — it is computed lazily). Requires a `claimLibrary` implementing `TClaimLookup` (used to validate claim references on variables) and a `claimCitationLibrary` implementing `TClaimConnectionLookup<TCitation>` (the global claim-citation graph; the parameter type narrowed to the generic connection lookup in v0.12.0). As of v0.10.0 the previously separate `sourceLibrary` and `claimSourceLibrary` are gone — sources are now claims with `type: 'citation'` and live in the unified `ClaimLibrary`. Accepts an optional `config?: TLogicEngineOptions` parameter with `checksumConfig?: TCoreChecksumConfig` (configures which fields are included in entity checksums) and `positionConfig?: TCorePositionConfig` (configures the position range for expression ordering — defaults to signed int32: `[-2147483647, 2147483647]` with initial `0`). `TLogicEngineOptions` is the universal config type accepted by all engine/manager classes.
+Creates an engine scoped to `argument` (`{ id, version }`, without `checksum` — it is computed lazily). Requires a `claimLibrary` implementing `TClaimLookup` (used to validate claim references on variables). The engine takes no citation library: the connection libraries are passed to the methods that read them, such as `populateFromCitations`. As of v0.10.0 the previously separate `sourceLibrary` and `claimSourceLibrary` are gone — sources are now claims with `type: 'citation'` and live in the unified `ClaimLibrary`. Accepts an optional `options?: TLogicEngineOptions` parameter with `checksumConfig?: TCoreChecksumConfig` (configures which fields are included in entity checksums), `positionConfig?: TCorePositionConfig` (configures the position range for expression ordering — defaults to signed int32: `[-2147483647, 2147483647]` with initial `0`), `behavior?: 'assistive' | 'permissive'` and `generateId?: () => string`.
+
+With the default type parameters the argument accepts only the core fields, and TypeScript rejects extra keys such as `title` or `description` in an object literal. To carry fields of your own, widen the type parameter (`ArgumentEngine<TCoreArgument & { title: string }>`, or the matching parameter on `PropositCore`). `TLogicEngineOptions` is the universal config type accepted by all engine/manager classes.
 
 ---
 
@@ -504,7 +506,13 @@ Reconstructs an `ArgumentEngine` from a previously captured snapshot. Requires t
 
 ---
 
-### `validate()` → `TInvariantValidationResult`
+### `validate(tier)` → `readonly TViolation[]`
+
+Runs the four-tier grammar validator and returns every violation from the Structural tier down to `tier` (`'structural' | 'evaluable' | 'derivable' | 'presentable'`). Each violation is `{ tier, code, message, argumentId?, premiseId?, expressionId?, variableId?, claimId? }`. See [Grammar and engine behavior](#grammar-and-engine-behavior).
+
+---
+
+### `validateInvariants()` → `TInvariantValidationResult`
 
 Runs a comprehensive invariant validation sweep on the entire argument. Delegates to `VariableManager.validate()` and each `PremiseEngine.validate()` (which delegates to `ExpressionManager.validate()`), then checks argument-level invariants: schema conformance, argument ownership on all entities, claim-bound variable references, internal premise-bound variable references, circularity detection, conclusion premise existence, and checksum consistency. Returns `{ ok: boolean, violations: TInvariantViolation[] }`. Called automatically after every mutation via the `withValidation` bracket — can also be called explicitly at any time.
 
@@ -620,7 +628,7 @@ Creates an empty library. `libraries` must include `claimLibrary` and `claimCita
 
 ### `create(argument)` → `ArgumentEngine`
 
-Constructs a new `ArgumentEngine` for the given argument (without `checksum` — it is computed lazily) and stores it. Throws if an engine with the same argument ID already exists.
+Constructs a new `ArgumentEngine` for the given argument (without `checksum` — it is computed lazily) and stores it. Throws if an engine with the same argument ID already exists. With the default type parameters TypeScript rejects keys beyond the core argument fields (`id`, `version`); widen the argument type parameter to add your own.
 
 ---
 
@@ -1115,7 +1123,7 @@ Creates an empty library. Accepts an optional `{ checksumConfig?, generateId? }`
 
 ### `create(claim)` → `TClaim`
 
-Creates a new claim at version `0` (unfrozen). The `claim` parameter omits `version`, `frozen`, and `checksum` fields — these are set automatically. The `type` field is required and is fixed for the lifetime of the claim. `id` may be omitted (auto-generated). Throws if a claim with the given ID already exists.
+Creates a new claim at version `0` (unfrozen). The `claim` parameter omits `version`, `frozen`, and `checksum` fields — these are set automatically. The `type` field is required and is fixed for the lifetime of the claim. `id` may be omitted (auto-generated). Throws if a claim with the given ID already exists. With the default `TClaim`, TypeScript rejects keys beyond the core claim fields, such as `text` or `title`; create the library as `ClaimLibrary<TCoreClaim & { text: string }>` (or widen `TClaim` on `PropositCore`) to add your own.
 
 ---
 
@@ -1197,7 +1205,9 @@ Returns all argument-level variables (shared across premises via the engine's `V
 
 Adds an expression (without `checksum` — it is computed lazily) to the tree with an explicit numeric position. Validates argument membership, variable references, root uniqueness, and structural constraints (operator type, child limits, position uniqueness, operator nesting). This is the low-level escape hatch — prefer `appendExpression` or `addExpressionRelative` for most use cases.
 
-Throws if a non-`not` operator would become a direct child of another operator expression. Wrap the child in a `formula` node to nest operators.
+A non-`not` operator placed directly under another operator does not throw: in `assistive` behavior AN-1 inserts the `formula` buffer, and in `permissive` behavior the shape is reported as `P-1` by `validate('presentable')`.
+
+**Build trees in `permissive` behavior.** In the default `assistive` behavior the engine tidies the tree after every mutation, and AN-3 removes an operator that has no children yet — so adding an operator and then its children one call at a time fails with "Parent expression … does not exist". Call `engine.setBehavior('permissive')`, add the nodes, then `engine.setBehavior('assistive')` and `engine.normalize()`. The same applies to `appendExpression` and `addExpressionRelative`.
 
 ---
 
@@ -1205,7 +1215,7 @@ Throws if a non-`not` operator would become a direct child of another operator e
 
 Appends an expression as the last child of `parentId` (or as a root if `parentId` is `null`). Position is computed automatically using the engine's `positionConfig`: `initial` for the first child, or the midpoint between the last child's position and `max` for subsequent children. The `expression` argument omits the `position` field (`TExpressionWithoutPosition`).
 
-Throws if a non-`not` operator would become a direct child of another operator expression.
+Does not throw when a non-`not` operator becomes a direct child of another operator (see `addExpression`, which also explains why trees should be built in `permissive` behavior).
 
 ---
 
@@ -1213,15 +1223,15 @@ Throws if a non-`not` operator would become a direct child of another operator e
 
 Inserts an expression before or after an existing sibling. `relativePosition` is `"before"` or `"after"`. Position is computed as the midpoint between the sibling and its neighbor (or `config.min`/`config.max` at the boundaries). The `expression` argument omits the `position` field (`TExpressionWithoutPosition`).
 
-Throws if a non-`not` operator would become a direct child of another operator expression.
+Does not throw when a non-`not` operator becomes a direct child of another operator (see `addExpression`).
 
 ---
 
-### `removeExpression(expressionId)` → `TCoreMutationResult<TPropositionalExpression | undefined>`
+### `removeExpression(expressionId, deleteSubtree)` → `TCoreMutationResult<TPropositionalExpression | undefined>`
 
-Removes an expression and its subtree, then collapses degenerate ancestor operators. Returns the removed root expression, or `undefined` if not found.
+With `deleteSubtree: true`, removes the expression and all its descendants. With `deleteSubtree: false`, removes only the expression and promotes its single child (if any) into its slot; this throws if the expression has more than one child, or if the promoted child is an `implies`/`iff` that would leave the root. Returns the removed expression, or `undefined` if not found.
 
-Throws if removal would promote a non-`not` operator as a direct child of another operator expression via collapse.
+The method itself does not collapse the surviving parent. In `assistive` behavior AN-3 then removes an operator or formula left with no children and replaces one left with a single child by that child; in `permissive` behavior the parent stays as it is and an under-filled operator is reported as `E-1` by `validate('evaluable')`.
 
 ---
 
@@ -1229,7 +1239,7 @@ Throws if removal would promote a non-`not` operator as a direct child of anothe
 
 Splices `expression` into the tree. At least one of `leftNodeId` / `rightNodeId` must be provided. `leftNodeId` becomes position 0 and `rightNodeId` position 1 under the new expression.
 
-Throws if a non-`not` operator would become a direct child of another operator expression.
+Does not throw when a non-`not` operator becomes a direct child of another operator (see `addExpression`).
 
 ---
 
@@ -1237,7 +1247,7 @@ Throws if a non-`not` operator would become a direct child of another operator e
 
 Wraps an existing expression with a new operator and a new sibling in a single atomic operation. The operator takes the existing node's slot in the tree. Both the existing node and the new sibling become children of the operator. Exactly one of `leftNodeId` / `rightNodeId` must be provided — it identifies the existing node and which child slot it occupies.
 
-Throws if a non-`not` operator would become a direct child of another operator expression.
+Does not throw when a non-`not` operator becomes a direct child of another operator (see `addExpression`).
 
 ---
 
@@ -1283,9 +1293,9 @@ Returns the root expression ID.
 
 ---
 
-### `getPremiseType()` → `"inference" | "constraint"`
+### `getPremiseType()` → `string`
 
-Derived from the root expression.
+Returns the premise's stored `type`: `"freeform"` or `"derivation"`. Whether the premise is an inference or a constraint is a different question, answered from the root expression by `isInference()` (root is `implies` or `iff`) and `isConstraint()`.
 
 ---
 
@@ -1380,9 +1390,9 @@ Reconstructs a `PremiseEngine` from a snapshot, with the argument and `VariableM
 
 _Added in v1.0._ The pre-1.0 `ManagedDerivationPremiseEngine` subclass and its `populateFromSupports` helper are **removed**. Derivation-premise canonical shape is now enforced by the Derivable-tier rules (D-1..D-6 — see `docs/Proposit_Grammar.md` §3.3) and surfaced through `engine.validate('derivable')`. Mutations on derivation premises go through the regular `PremiseEngine` and never throw on Derivable violations. The replacement APIs live on `ArgumentEngine` (not on a subclass).
 
-### `populateFromCitations(premiseId, citationLib)` → `TPopulateResult`
+### `populateFromCitations(derivedClaimId, citationLib)` → `TPopulateResult`
 
-Factory that constructs the per-claim derivation premise's expression tree in its **fully populated** form from the relevant citation connections for the premise's `derivedClaimId`, and **atomically replaces** the existing naked-Q tree.
+Factory that constructs the per-claim derivation premise's expression tree in its **fully populated** form from the relevant citation connections, and **atomically replaces** the existing naked-Q tree. The first parameter is the **derived claim's id**, not the premise id: the engine finds the derivation premise whose `derivedClaimId` matches, and throws if there is none.
 
 - `n = 0` citation connections — `kind: 'no-op'`; the premise stays in naked-Q form.
 - `n = 1` citation connection — produces `IMPLIES(VariableExpression(S1), VariableExpression(Q))` (D-2 single-citation form).
@@ -1402,9 +1412,9 @@ Return shape (`TPopulateResult`):
 
 If the target premise is **not naked-Q** (already populated), the factory **no-ops and returns `{ kind: 'no-op', state }`** — it does **not** throw. D-3 (no mixing axioms and citations) is a non-Structural rule, so mutations never throw on it. To switch grounding kinds, the caller must explicitly empty the antecedent via a clearing repair primitive first; this satisfies the no-changes-without-consent principle while still respecting the Structural-only mutation-throw contract.
 
-### `populateFromAxioms(premiseId, axiomLib)` → `TPopulateResult`
+### `populateFromAxioms(derivedClaimId, axiomLib)` → `TPopulateResult`
 
-Same factory pattern as `populateFromCitations`, but reads from the global axiom library (`core.axioms`) and produces an axiom-grounded antecedent. Like the citation variant, returns `{ kind: 'no-op', state }` on already-populated premises instead of throwing.
+Same factory pattern as `populateFromCitations`, and likewise takes the derived claim's id, but reads from the global axiom library (`core.axioms`) and produces an axiom-grounded antecedent. Like the citation variant, returns `{ kind: 'no-op', state }` on already-populated premises instead of throwing.
 
 A typical "populate this derivation premise from whichever grounding kind exists" flow runs `populateFromCitations` first; if it produces `kind: 'populated'`, the subsequent `populateFromAxioms` call no-ops (the target is no longer naked-Q). If no citations exist, `populateFromAxioms` takes effect with whatever axiom connections are present. This matches D-3's "no mixing" rule.
 

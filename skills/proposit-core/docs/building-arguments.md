@@ -202,7 +202,7 @@ Ways to add an expression, on `PremiseEngine`:
 
 Other edits:
 
-- `removeExpression(id)` removes a node and everything under it. An operator left with one child is replaced by that child, and one left with none is removed.
+- `removeExpression(id, deleteSubtree)` removes a node. With `true` it also removes everything under it; with `false` it moves the node's single child into its place. In assistive behavior the tidying then replaces an operator left with one child by that child and removes one left with none; in permissive behavior they stay and `validate("evaluable")` reports them.
 - `toggleNegation(id)` wraps a node in `not`, or removes the `not`.
 - `changeOperator(id, newOperator)` changes an operator in place. With two child ids, it moves those two children of a larger `and`, `or` or `xor` into a new operator of their own.
 - `updateExpression(id, changes)` edits fields.

@@ -171,19 +171,12 @@ import { PropositCore } from "@proposit/proposit-core"
 
 const core = new PropositCore()
 
-// Create a normal claim in the global claim library
-const claim = core.claims.create({
-    id: "claim-1",
-    type: "normal",
-    text: "All men are mortal",
-})
+// Create a normal claim in the global claim library. Core claims carry no
+// text — see "No application metadata" for adding fields of your own.
+const claim = core.claims.create({ id: "claim-1", type: "normal" })
 
 // Create a citation claim (the v0.10.0 replacement for the former Source entity)
-const citationClaim = core.claims.create({
-    id: "citation-1",
-    type: "citation",
-    text: "Aristotle, Categories, ~350 BCE",
-})
+const citationClaim = core.claims.create({ id: "citation-1", type: "citation" })
 
 // Cite the citation claim as supporting the normal claim
 core.citations.add({
@@ -195,12 +188,7 @@ core.citations.add({
 })
 
 // Create an argument engine — libraries are wired automatically
-const engine = core.arguments.create({
-    id: "arg-1",
-    version: 0,
-    title: "Socrates is mortal",
-    description: "",
-})
+const engine = core.arguments.create({ id: "arg-1", version: 0 })
 
 // Fork the argument — clones claims (including citation-typed ones) + citation edges, records provenance
 const { engine: forked, remapTable } = core.forkArgument("arg-1", "arg-2")
@@ -222,6 +210,36 @@ library rather than refusing it.
 ### No application metadata
 
 The core library does not deal in user IDs, timestamps, or display text. These are application-level concerns. The CLI adds some metadata (e.g., `createdAt`, `publishedAt`) for its own purposes, but the core schemas are intentionally minimal. Applications extend core entity types via generic parameters.
+
+With the default type parameters, TypeScript rejects keys beyond the core fields in an object literal — `core.claims.create({ type: "normal", text: "…" })` or `core.arguments.create({ id, version, title })` does not compile. Widen the types to add fields of your own:
+
+```typescript
+import { PropositCore } from "@proposit/proposit-core"
+import type {
+    TCoreArgument,
+    TCoreClaim,
+    TCorePremise,
+    TCorePropositionalExpression,
+    TCorePropositionalVariable,
+} from "@proposit/proposit-core"
+
+type TMyArgument = TCoreArgument & { title: string }
+type TMyClaim = TCoreClaim & { text: string }
+// Type parameters, in order: argument, premise, expression, variable, claim, …
+const core = new PropositCore<
+    TMyArgument,
+    TCorePremise,
+    TCorePropositionalExpression,
+    TCorePropositionalVariable,
+    TMyClaim
+>()
+const claim = core.claims.create({ type: "normal", text: "All men are mortal" })
+const engine = core.arguments.create({
+    id: "arg-1",
+    version: 0,
+    title: "Mortality",
+})
+```
 
 An origin document's `text` is the one string the core schemas carry that a
 reader might mistake for display text. It is not: core stores it, digests it,
@@ -285,13 +303,10 @@ import { PropositCore } from "@proposit/proposit-core"
 const core = new PropositCore()
 
 // Create the claim to be derived
-const claim = core.claims.create({ type: "normal", text: "It rains" })
+const claim = core.claims.create({ type: "normal" })
 
 // Create a citation claim (external support)
-const citeA = core.claims.create({
-    type: "citation",
-    text: "Weather report, 2024",
-})
+const citeA = core.claims.create({ type: "citation" })
 
 // Add a citation connection: claim is supported by citeA
 core.citations.add({
@@ -302,12 +317,7 @@ core.citations.add({
     supportingClaimVersion: citeA.version,
 })
 
-const engine = core.arguments.create({
-    id: "arg-1",
-    version: 0,
-    title: "Rain argument",
-    description: "",
-})
+const engine = core.arguments.create({ id: "arg-1", version: 0 })
 
 // Create a derivation premise — auto-initializes to naked-Q form
 const { result: pm } = engine.createPremise({
@@ -315,8 +325,9 @@ const { result: pm } = engine.createPremise({
     derivedClaimId: claim.id,
 })
 
-// Populate from citations (factory; atomic replacement of the naked-Q tree)
-const result = engine.populateFromCitations(pm.getId(), core.citations)
+// Populate from citations (factory; atomic replacement of the naked-Q tree).
+// The first parameter is the derived claim's id, not the premise id.
+const result = engine.populateFromCitations(claim.id, core.citations)
 // result = { kind: 'populated' | 'no-op', state, resolved? }
 ```
 
@@ -372,22 +383,29 @@ Each expression carries:
 ### Creating an engine and premises
 
 ```typescript
-import { ArgumentEngine, POSITION_INITIAL } from "@proposit/proposit-core"
-import type { TPropositionalExpression } from "@proposit/proposit-core"
+import {
+    ArgumentEngine,
+    ClaimLibrary,
+    POSITION_INITIAL,
+} from "@proposit/proposit-core"
 
-// The constructor accepts an argument without checksum — it is computed lazily.
-const argument = {
-    id: "arg-1",
-    version: 1,
-    title: "Modus Ponens",
-    description: "",
-}
+// Variables stand for claims, so the engine needs a claim lookup.
+const claims = new ClaimLibrary()
+const claimP = claims.create({ type: "normal" })
+const claimQ = claims.create({ type: "normal" })
 
-const eng = new ArgumentEngine(argument)
+// new ArgumentEngine(argument, claimLookup, options?). The argument is passed
+// without checksum — it is computed lazily.
+// Build in "permissive" behavior: in the default "assistive" behavior the
+// engine tidies the tree after every mutation and removes an operator that
+// has no children yet, so its children could not be attached one by one.
+const eng = new ArgumentEngine({ id: "arg-1", version: 1 }, claims, {
+    behavior: "permissive",
+})
 
-const { result: premise1 } = eng.createPremise("P implies Q") // PremiseEngine
-const { result: premise2 } = eng.createPremise("P")
-const { result: conclusion } = eng.createPremise("Q")
+const { result: premise1 } = eng.createPremise() // PremiseEngine
+const { result: premise2 } = eng.createPremise()
+const { result: conclusion } = eng.createPremise()
 ```
 
 ### Adding variables and expressions
@@ -399,12 +417,16 @@ const varP = {
     argumentId: "arg-1",
     argumentVersion: 1,
     symbol: "P",
+    claimId: claimP.id,
+    claimVersion: claimP.version,
 }
 const varQ = {
     id: "var-q",
     argumentId: "arg-1",
     argumentVersion: 1,
     symbol: "Q",
+    claimId: claimQ.id,
+    claimVersion: claimQ.version,
 }
 
 // Register variables once on the engine — they are shared across all premises
@@ -416,6 +438,7 @@ premise1.addExpression({
     id: "op-implies",
     argumentId: "arg-1",
     argumentVersion: 1,
+    premiseId: premise1.getId(),
     type: "operator",
     operator: "implies",
     parentId: null,
@@ -425,6 +448,7 @@ premise1.addExpression({
     id: "expr-p1",
     argumentId: "arg-1",
     argumentVersion: 1,
+    premiseId: premise1.getId(),
     type: "variable",
     variableId: "var-p",
     parentId: "op-implies",
@@ -434,6 +458,7 @@ premise1.addExpression({
     id: "expr-q",
     argumentId: "arg-1",
     argumentVersion: 1,
+    premiseId: premise1.getId(),
     type: "variable",
     variableId: "var-q",
     parentId: "op-implies",
@@ -447,6 +472,7 @@ premise2.addExpression({
     id: "expr-p2",
     argumentId: "arg-1",
     argumentVersion: 1,
+    premiseId: premise2.getId(),
     type: "variable",
     variableId: "var-p",
     parentId: null,
@@ -458,11 +484,16 @@ conclusion.addExpression({
     id: "expr-q2",
     argumentId: "arg-1",
     argumentVersion: 1,
+    premiseId: conclusion.getId(),
     type: "variable",
     variableId: "var-q",
     parentId: null,
     position: POSITION_INITIAL,
 })
+
+// The trees are complete: return to "assistive" behavior and tidy once.
+eng.setBehavior("assistive")
+eng.normalize()
 ```
 
 ### Setting roles
@@ -480,7 +511,7 @@ eng.setConclusionPremise(conclusion.getId())
 All mutating methods on `PremiseEngine` and `ArgumentEngine` return `TCoreMutationResult<T>`, which wraps the direct result with an entity-typed changeset:
 
 ```typescript
-const { result: pm, changes } = eng.createPremise("My premise")
+const { result: pm, changes } = eng.createPremise()
 // pm is a PremiseEngine
 // changes.premises?.added contains the new premise data
 
@@ -488,6 +519,7 @@ const { result: expr, changes: exprChanges } = pm.addExpression({
     id: "expr-1",
     argumentId: "arg-1",
     argumentVersion: 1,
+    premiseId: pm.getId(),
     type: "variable",
     variableId: "var-p",
     parentId: null,
@@ -579,10 +611,11 @@ if (validity.ok) {
 
 ```tsx
 import { useSyncExternalStore } from "react"
-import { ArgumentEngine } from "@proposit/proposit-core"
+import { ArgumentEngine, ClaimLibrary } from "@proposit/proposit-core"
 
 // Create the engine outside of React (or in a ref/context)
-const engine = new ArgumentEngine({ id: "arg-1", version: 1 })
+const claims = new ClaimLibrary()
+const engine = new ArgumentEngine({ id: "arg-1", version: 1 }, claims)
 
 function ArgumentView() {
     // Subscribe to the full snapshot
@@ -643,11 +676,14 @@ function AddVariableButton() {
     return (
         <button
             onClick={() => {
+                const claim = claims.create({ type: "normal" })
                 engine.addVariable({
                     id: crypto.randomUUID(),
                     argumentId: "arg-1",
                     argumentVersion: 1,
                     symbol: "R",
+                    claimId: claim.id,
+                    claimVersion: claim.version,
                 })
             }}
         >
@@ -661,55 +697,59 @@ function AddVariableButton() {
 
 ### Inserting an expression into the tree
 
-`insertExpression` splices a new node between existing nodes. The new expression inherits the **anchor** node's current slot in the tree (`leftNodeId ?? rightNodeId`).
+`insertExpression(expression, leftNodeId?, rightNodeId?)` splices a new node above nodes already in the tree. The new expression inherits the **anchor** node's current slot in the tree (`leftNodeId ?? rightNodeId`). A premise has exactly one root, so a new node cannot first be added loose and then spliced in; to add a new node and a new operator together, use `wrapExpression(operator, newSibling, leftNodeId?, rightNodeId?)`, which puts the operator in the existing node's slot with the existing node and the new sibling as its children.
 
 ```typescript
-// Extend  P → Q  into  (P ∧ R) → Q  by inserting an `and` above expr-p1.
-const varR = {
+// Extend  P → Q  into  (P ∧ R) → Q  by wrapping expr-p1 in an `and`.
+const claimR = claims.create({ type: "normal" })
+eng.addVariable({
     id: "var-r",
     argumentId: "arg-1",
     argumentVersion: 1,
     symbol: "R",
-}
-eng.addVariable(varR)
-premise1.addExpression({
-    id: "expr-r",
-    argumentId: "arg-1",
-    argumentVersion: 1,
-    type: "variable",
-    variableId: "var-r",
-    parentId: null,
-    position: POSITION_INITIAL,
+    claimId: claimR.id,
+    claimVersion: claimR.version,
 })
-premise1.insertExpression(
+premise1.wrapExpression(
     {
         id: "op-and",
         argumentId: "arg-1",
         argumentVersion: 1,
+        premiseId: premise1.getId(),
         type: "operator",
         operator: "and",
-        parentId: null, // overwritten by insertExpression
-        position: POSITION_INITIAL,
+        parentId: null, // set by wrapExpression
     },
-    "expr-p1", // becomes child at position 0
-    "expr-r" // becomes child at position 1
+    {
+        id: "expr-r",
+        argumentId: "arg-1",
+        argumentVersion: 1,
+        premiseId: premise1.getId(),
+        type: "variable",
+        variableId: "var-r",
+        parentId: null, // set by wrapExpression
+    },
+    "expr-p1" // the existing node, which becomes the left child
 )
 
-console.log(premise1.toDisplayString()) // ((P ∧ R) → Q)
+// In assistive behavior a formula buffer is added between → and ∧.
+console.log(premise1.toDisplayString()) // (((P ∧ R)) → Q)
 ```
 
 ### Removing expressions
 
-Removing an expression also removes its entire descendant subtree. After the subtree is gone, ancestor operators left with fewer than two children are automatically collapsed:
+`removeExpression(id, deleteSubtree)` with `deleteSubtree: true` removes the expression and its entire descendant subtree (with `false`, it removes only the expression and promotes its single child). The method does not collapse the parent itself; in the default `assistive` behavior the post-mutation tidying (AN-3) then collapses ancestor operators left with fewer than two children:
 
 - **0 children remaining** — the operator is deleted; the check recurses upward.
 - **1 child remaining** — the operator is deleted and that child is promoted into the operator's former slot.
 
+In `permissive` behavior the under-filled operator stays and is reported by `validate('evaluable')` (`E-1`).
+
 ```typescript
 // Remove expr-r from the and-cluster.
-// op-and now has only expr-p1 → op-and is deleted, expr-p1 is promoted back
-// to position 0 under op-implies.
-premise1.removeExpression("expr-r")
+// op-and now has only expr-p1 → op-and (and its formula buffer) is deleted,
+// and expr-p1 is promoted back under op-implies.
+premise1.removeExpression("expr-r", true)
 
 console.log(premise1.toDisplayString()) // (P → Q)
 ```
@@ -918,11 +958,11 @@ Naked-Q (a derivation premise whose tree is a single variable bound to `derivedC
 
 These are not errors — they're intentional structural maintenance:
 
-| Trigger                | Cascade behavior                                                                                                                                                                                                                                    |
-| ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `removeVariable(id)`   | All expressions referencing the variable are deleted across all premises, triggering operator collapse                                                                                                                                              |
-| `removePremise(id)`    | All variables bound to the premise are removed (which cascades to their expressions). If the premise was the conclusion, the conclusion becomes unset.                                                                                              |
-| `removeExpression(id)` | The expression's subtree is deleted. Ancestor operators with 0 remaining children are deleted. Operators with 1 remaining child promote that child into their slot (operator collapse). Promotions are checked against nesting and root-only rules. |
+| Trigger                      | Cascade behavior                                                                                                                                                                                                                                                                                       |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `removeVariable(id)`         | All expressions referencing the variable are deleted across all premises, triggering operator collapse                                                                                                                                                                                                 |
+| `removePremise(id)`          | All variables bound to the premise are removed (which cascades to their expressions). If the premise was the conclusion, the conclusion becomes unset.                                                                                                                                                 |
+| `removeExpression(id, true)` | The expression's subtree is deleted. In `assistive` behavior, ancestor operators with 0 remaining children are then deleted and operators with 1 remaining child promote that child into their slot (operator collapse); in `permissive` behavior they are left for `validate('evaluable')` to report. |
 
 ### Engine behavior (`assistive` vs `permissive`)
 
@@ -974,7 +1014,7 @@ $PROPOSIT_HOME/
           <premise-id>/
             meta.json    # id, title?
             data.json    # type, rootExpressionId?, variables[], expressions[]
-        <analysis>.json  # named analysis files (default: analysis.json)
+        <analysis>.json  # named analysis files (default names: analysis-1.json, analysis-2.json, …)
   claims.json          # global claim library
   citations.json       # citation connections
   axioms.json          # axiom connections
@@ -1233,16 +1273,16 @@ proposit-core <id> <ver> expressions show <premise_id> <expression_id> [--json]
 
 Common options for `create` and `insert`:
 
-| Option               | Description                                                            |
-| -------------------- | ---------------------------------------------------------------------- |
-| `--type <type>`      | `variable`, `operator`, or `formula` (required)                        |
-| `--id <id>`          | Explicit expression ID (default: generated UUID)                       |
-| `--parent-id <id>`   | Parent expression ID (omit for root)                                   |
-| `--position <n>`     | Explicit numeric position (low-level escape hatch)                     |
-| `--before <id>`      | Insert before this sibling (computes position automatically)           |
-| `--after <id>`       | Insert after this sibling (computes position automatically)            |
-| `--variable-id <id>` | Variable ID (required for `type=variable`)                             |
-| `--operator <op>`    | `not`, `and`, `or`, `implies`, or `iff` (required for `type=operator`) |
+| Option               | Description                                                                   |
+| -------------------- | ----------------------------------------------------------------------------- |
+| `--type <type>`      | `variable`, `operator`, or `formula` (required)                               |
+| `--id <id>`          | Explicit expression ID (default: generated UUID)                              |
+| `--parent-id <id>`   | Parent expression ID (omit for root)                                          |
+| `--position <n>`     | Explicit numeric position (low-level escape hatch)                            |
+| `--before <id>`      | Insert before this sibling (computes position automatically)                  |
+| `--after <id>`       | Insert after this sibling (computes position automatically)                   |
+| `--variable-id <id>` | Variable ID (required for `type=variable`)                                    |
+| `--operator <op>`    | `not`, `and`, `or`, `xor`, `implies`, or `iff` (required for `type=operator`) |
 
 When none of `--position`, `--before`, or `--after` is specified, the expression is appended as the last child of the parent. `--before`/`--after` cannot be combined with `--position`.
 
@@ -1250,16 +1290,16 @@ When none of `--position`, `--before`, or `--after` is specified, the expression
 
 #### analysis
 
-An **analysis file** stores a variable assignment (symbol → boolean) for a specific argument version.
+An **analysis file** stores a variable assignment (symbol → `true`, `false` or unset) and operator decisions for a specific argument version.
 
 ```
 proposit-core <id> <ver> analysis create [filename] [--default <true|false>]
 proposit-core <id> <ver> analysis list [--json]
 proposit-core <id> <ver> analysis show [--file <filename>] [--json]
-proposit-core <id> <ver> analysis set <symbol> <true|false> [--file <filename>]
-proposit-core <id> <ver> analysis reset [--file <filename>] [--value <true|false>]
-proposit-core <id> <ver> analysis reject <expression_id> [--file <filename>]
-proposit-core <id> <ver> analysis accept <expression_id> [--file <filename>]
+proposit-core <id> <ver> analysis set <symbol> <true|false|unset> [--file <filename>]
+proposit-core <id> <ver> analysis reset [--file <filename>] [--value <true|false|unset>]
+proposit-core <id> <ver> analysis set-operator <expression_id> <accepted|rejected|unset> [--file <filename>]
+proposit-core <id> <ver> analysis set-all-operators <accepted|rejected|unset> [--file <filename>]
 proposit-core <id> <ver> analysis validate-assignments [--file <filename>] [--json]
 proposit-core <id> <ver> analysis delete [--file <filename>] [--confirm]
 proposit-core <id> <ver> analysis evaluate [--file <filename>] [options]
@@ -1269,10 +1309,10 @@ proposit-core <id> <ver> analysis refs [--json]
 proposit-core <id> <ver> analysis export [--json]
 ```
 
-`--file` defaults to `analysis.json` throughout. Key subcommands:
+`analysis create` without a filename names the file `analysis-1.json`, then `analysis-2.json`, and so on; `--file` defaults to the latest analysis file throughout. Key subcommands:
 
-- **`reject`** — records a rejection against an expression, which strikes its whole premise from the evaluated set. The premise is still evaluated and reported; it simply stops contributing, and nothing is forced `false`.
-- **`accept`** — removes an expression from the rejected list (restores normal computation).
+- **`set-operator … rejected`** — records a rejection against an operator, which strikes its whole premise from the evaluated set. The premise is still evaluated and reported; it simply stops contributing, and nothing is forced `false`.
+- **`set-operator … accepted`** — records that the reader grants the step, so values are carried through it; **`unset`** clears the decision (normal computation). `set-all-operators` sets every operator at once.
 - **`evaluate`** — resolves symbol→ID, evaluates the argument, and reports the facts: admissibility, surviving support, struck premises, the conclusion's value and attribution, and premise-set satisfiability.
 - **`check-validity`** — runs the full truth-table search (`--mode first-counterexample|exhaustive`). Any other `--mode` value is refused with an error.
 - **`validate-argument`** — checks that the argument is ready to evaluate (a conclusion is set, the premises are well-formed, and so on). `--tier <tier>` also checks the grammar rules from Structural down to that tier (`structural`, `evaluable`, `derivable` or `presentable`), in addition to the readiness checks rather than instead of them, so a tier never reports `ok` for an argument the plain command calls `invalid`. Each rule broken prints as `<tier> <code>: <message>`, for example `presentable P-6: …`; with `--json`, the output gains `tier` and a `violations` array.
