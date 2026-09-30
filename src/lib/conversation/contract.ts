@@ -1,10 +1,10 @@
 // Conversation contract types — thin schema composition for multi-turn
-// exchanges. Consumed by both the server adapter (proposit-server) and
+// exchanges. Consumed by a consuming application's server adapter and
 // any future interactive consumer.
 //
 // These are TypeBox-style shape descriptions, not class hierarchies.
-// The types live in core (forced by dependency direction: shared depends
-// on core, not vice-versa).
+// The types live in core because consumers depend on core, never the
+// reverse.
 
 import type { TResponseId } from "../llm/types.js"
 

@@ -6199,9 +6199,9 @@ describe("ArgumentEngine — auto-conclusion on first premise", () => {
 // conclusion (1.0.2)
 // ---------------------------------------------------------------------------
 //
-// A smoke-test on proposit-server v0.13.0 (Derivable gate
+// A downstream consumer's smoke test (with the Derivable gate
 // activated for normal-mode users) exposed E-7 firing on the first
-// premise of a freshly-created argument. The trigger was the shared
+// premise of a freshly-created argument. The trigger was the consumer's
 // `mutateCreatePremise` helper, which after `createPremiseWithId`
 // calls `engine.clearConclusionPremise()` to honor a caller-supplied
 // `role: "supporting"` — pre-1.0.2 that successfully cleared the

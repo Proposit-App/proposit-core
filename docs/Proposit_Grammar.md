@@ -8,10 +8,9 @@
 > `normalize(tier?)` API surface, the rule-code wire format, and the
 > migration notes for readers upgrading from pre-1.0 versions.
 >
-> The 1.0 grammar model was specified in the cross-repo design at
-> `proposit-orchestration/docs/superpowers/specs/2026-05-13-grammar-tiers-design.md`
-> (the source of truth for §2–§6 of this doc during the
-> initial 1.0 rollout). This file is now the canonical reference.
+> The 1.0 grammar model was first specified in a separate design document,
+> which was the source of truth for §2–§6 of this doc during the initial 1.0
+> rollout. This file is now the canonical reference.
 
 ## 1. Formula-string parser grammar
 
@@ -249,9 +248,7 @@ Every rule is identified by a stable string code. The codes live in
 `@proposit/proposit-core/src/lib/grammar/types.ts` (`TGrammarRuleCode`
 
 - the TypeBox `GrammarRuleCodeSchema`) — proposit-core owns the wire
-  format. `@proposit/shared` re-exports the same names from
-  `@proposit/shared/schemas/grammar` for consumer ergonomics; server and
-  mobile may import from either location. Adding or renaming a code
+  format, and consumers import the names from it. Adding or renaming a code
   extends the TypeBox union and the validator implementation in the
   same single-repo commit; TypeScript catches drift at build time.
 
@@ -824,8 +821,8 @@ v1.0.
 
 A single grammar violation. Defined in
 `@proposit/proposit-core/src/lib/grammar/types.ts` (the `ViolationSchema`
-TypeBox object plus the derived `TViolation` type), and re-exported from
-`@proposit/shared/schemas/grammar` for downstream consumers:
+TypeBox object plus the derived `TViolation` type), and exported from the
+package root for downstream consumers:
 
 ```ts
 type TViolation = {
@@ -866,9 +863,8 @@ promoted/restated elsewhere in the spec and their codes are reserved
 renaming a code is a single-repo coordinated change — extend the
 TypeBox union in `src/lib/grammar/types.ts` and ship the validator
 implementation in the same commit. TypeScript catches drift at build
-time. After a core publish, `@proposit/shared` bumps and re-exports
-the updated union from `@proposit/shared/schemas/grammar`; server and
-mobile pick up the change via dep bumps.
+time. After a core publish, consumers pick up the change by upgrading
+their dependency.
 
 ### 6.3 Example validation responses
 

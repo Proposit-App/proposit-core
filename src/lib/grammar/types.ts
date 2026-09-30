@@ -1,9 +1,8 @@
 // Grammar wire format — TypeBox schemas + derived TypeScript types.
 //
-// proposit-core owns these types. proposit-shared re-exports them from
-// `@proposit/shared/schemas/grammar` for consumer ergonomics; server and
-// mobile may import from either repo. The 422 response envelope that
-// composes ViolationSchema lives in shared (`@proposit/shared/schemas/api/grammar-violations`).
+// proposit-core owns these types. Consumers may re-export them, and any
+// transport envelope that carries a ViolationSchema (such as an HTTP error
+// response) belongs to the consumer, not to this library.
 //
 // The four grammar tiers form a strict subset chain
 // (Structural ⊇ Evaluable ⊇ Derivable ⊇ Presentable). See
