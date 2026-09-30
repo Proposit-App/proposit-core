@@ -175,3 +175,6 @@
 2026-09-29-skip-a-variable-that-is-both-modified-and-removed-in-orderchangeset:
   resolution: done
   resolved: '2026-09-29'
+2026-09-30-clean-up-the-repository-s-structure-and-readability-without-changing-behaviour:
+  resolution: done
+  resolved: '2026-09-30'
