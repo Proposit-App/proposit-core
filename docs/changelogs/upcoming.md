@@ -147,6 +147,11 @@
 - `scripts/rewrite-v2-expected.ts`, a one-off script for regenerating pipeline
   test expectations that nothing referenced and that needed `tsx`, which is not
   a dev dependency.
+- The example text `examples/texts/06-singer-solution-to-world-poverty.txt`
+  and its graph `06.svg`, because the essay is still under copyright.
+- `.broker/config.json`, which named this repository for an external
+  messaging tool; nothing in the repository reads it, and the tool falls back
+  to the package name, which is the same.
 
 ## Tests
 

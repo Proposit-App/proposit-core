@@ -11,7 +11,7 @@
 // `outputSchema`.
 //
 // **Why Federalist 10.** A comparable-size text (the Singer "Solution
-// to World Poverty" essay, 15.5 KB, kept in `examples/texts/`) instead
+// to World Poverty" essay, 15.5 KB) instead
 // triggers OpenAI's content-policy filter: `status: "incomplete"` with
 // `incomplete_details.reason: "content_filter"` rather than
 // `"max_output_tokens"`. That case is deterministic and covered by the
