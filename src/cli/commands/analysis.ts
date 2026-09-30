@@ -30,6 +30,32 @@ function isGrammarTier(value: string): value is TGrammarTier {
     return (GRAMMAR_TIERS as readonly string[]).includes(value)
 }
 
+/**
+ * Reads "true", "false" or "unset" as a variable assignment, where "unset"
+ * means no value. Anything else exits with an error that names the input by
+ * `label` ("Default" or "Value").
+ */
+function parseAssignmentValue(
+    raw: string,
+    label: "Default" | "Value"
+): boolean | null {
+    if (raw === "true") return true
+    if (raw === "false") return false
+    if (raw === "unset") return null
+    errorExit(`${label} must be "true", "false", or "unset", got "${raw}".`)
+}
+
+/**
+ * Accepts "accepted", "rejected" or "unset" as an operator state and exits
+ * with an error for anything else.
+ */
+function parseOperatorState(raw: string): "accepted" | "rejected" | "unset" {
+    if (raw === "accepted" || raw === "rejected" || raw === "unset") {
+        return raw
+    }
+    errorExit(`State must be "accepted", "rejected", or "unset", got "${raw}".`)
+}
+
 export function registerAnalysisCommands(
     versionedCmd: Command,
     argumentId: string,
@@ -101,17 +127,10 @@ export function registerAnalysisCommands(
                     return
                 }
 
-                if (!["true", "false", "unset"].includes(opts.default)) {
-                    errorExit(
-                        `Default must be "true", "false", or "unset", got "${opts.default}".`
-                    )
-                }
-                const defaultValue =
-                    opts.default === "true"
-                        ? true
-                        : opts.default === "false"
-                          ? false
-                          : null
+                const defaultValue = parseAssignmentValue(
+                    opts.default,
+                    "Default"
+                )
                 const variables = await readVariables(argumentId, version)
                 const assignments: Record<string, boolean | null> = {}
                 for (const v of variables) {
@@ -203,16 +222,7 @@ export function registerAnalysisCommands(
                     )
                 }
 
-                const parsedValue =
-                    valueArg === "true"
-                        ? true
-                        : valueArg === "false"
-                          ? false
-                          : valueArg === "unset"
-                            ? null
-                            : errorExit(
-                                  `Value must be "true", "false", or "unset", got "${valueArg}".`
-                              )
+                const parsedValue = parseAssignmentValue(valueArg, "Value")
 
                 const data = await readAnalysis(argumentId, version, filename)
                 data.assignments[symbol] = parsedValue
@@ -236,17 +246,7 @@ export function registerAnalysisCommands(
                 argumentId,
                 version
             )
-            if (!["true", "false", "unset"].includes(opts.value)) {
-                errorExit(
-                    `Value must be "true", "false", or "unset", got "${opts.value}".`
-                )
-            }
-            const resetValue =
-                opts.value === "true"
-                    ? true
-                    : opts.value === "false"
-                      ? false
-                      : null
+            const resetValue = parseAssignmentValue(opts.value, "Value")
             const data = await readAnalysis(argumentId, version, filename)
             for (const symbol of Object.keys(data.assignments)) {
                 data.assignments[symbol] = resetValue
@@ -262,14 +262,10 @@ export function registerAnalysisCommands(
         .action(
             async (
                 operatorExpressionId: string,
-                state: string,
+                stateArg: string,
                 opts: { file?: string }
             ) => {
-                if (!["accepted", "rejected", "unset"].includes(state)) {
-                    errorExit(
-                        `State must be "accepted", "rejected", or "unset", got "${state}".`
-                    )
-                }
+                const state = parseOperatorState(stateArg)
                 const filename = await resolveAnalysisFilename(
                     opts.file,
                     argumentId,
@@ -284,9 +280,7 @@ export function registerAnalysisCommands(
                 if (state === "unset") {
                     delete data.operatorAssignments[operatorExpressionId]
                 } else {
-                    data.operatorAssignments[operatorExpressionId] = state as
-                        | "accepted"
-                        | "rejected"
+                    data.operatorAssignments[operatorExpressionId] = state
                 }
                 await writeAnalysis(argumentId, version, filename, data)
                 printLine("success")
@@ -299,12 +293,8 @@ export function registerAnalysisCommands(
             "Set all operator expressions to a state (accepted, rejected, or unset)"
         )
         .option("--file <filename>", "Analysis filename (default: latest)")
-        .action(async (state: string, opts: { file?: string }) => {
-            if (!["accepted", "rejected", "unset"].includes(state)) {
-                errorExit(
-                    `State must be "accepted", "rejected", or "unset", got "${state}".`
-                )
-            }
+        .action(async (stateArg: string, opts: { file?: string }) => {
+            const state = parseOperatorState(stateArg)
             const filename = await resolveAnalysisFilename(
                 opts.file,
                 argumentId,
@@ -326,9 +316,7 @@ export function registerAnalysisCommands(
                     )
                     for (const expr of premiseData.expressions) {
                         if (expr.type === "operator") {
-                            data.operatorAssignments[expr.id] = state as
-                                | "accepted"
-                                | "rejected"
+                            data.operatorAssignments[expr.id] = state
                         }
                     }
                 }
