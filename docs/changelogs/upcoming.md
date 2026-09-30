@@ -45,6 +45,20 @@
   analysis commands read `true`/`false`/`unset` and
   `accepted`/`rejected`/`unset` through one parser each. Command output, error
   messages and exit codes are unchanged.
+- Internal files moved to where their contents belong; the public API and
+  behaviour are unchanged. The derivation-premise shape check moved to
+  `src/lib/grammar/derivation-validation.ts`; `src/lib/consts.ts`, which held
+  only checksum configuration, is now `src/lib/checksum-config.ts`;
+  `shortenToLength` moved from `parsing/` to `src/lib/utils/strings.ts`; the
+  expression manager's helper files moved into
+  `src/lib/core/expression-manager/`; the CLI's `llm/index.ts` became
+  `src/cli/llm.ts` and its diff renderer moved to `src/cli/diff-renderer.ts`.
+  The ingestion input schema and the two ingestion pipeline ids now each live
+  in one file (`src/extensions/pipelines/ingestion/input-schema.ts` and
+  `pipeline-ids.ts`) that the scholar and scribe factories and
+  `getCanonicalStageIds` import. The IEEE citation segment types moved to
+  `segment-types.ts`, removing an import cycle; `formatting.ts` still exports
+  them. The root export file is grouped into commented sections.
 
 ## Removed
 
