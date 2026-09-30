@@ -41,11 +41,13 @@ import {
     OUTPUT_SCHEMA_INVALID,
 } from "./failure-codes.js"
 import {
-    StageAbortedError,
-    stashTokenUsage,
     DEFAULT_RETRY_POLICY,
-} from "./stage-helpers.js"
-import type { TRetryPolicy, TRetryReason } from "./stage-helpers.js"
+    LlmStageRetryExhaustedError,
+    StageAbortedError,
+    now,
+    stashTokenUsage,
+} from "./stage-primitives.js"
+import type { TRetryPolicy, TRetryReason } from "./stage-primitives.js"
 
 const TRUNCATION_SUFFIX = "…<truncated>"
 
@@ -63,35 +65,6 @@ function truncateValidationError(error: string, capBytes: number): string {
     }
     const head = Math.max(0, capBytes - TRUNCATION_SUFFIX.length)
     return error.slice(0, head) + TRUNCATION_SUFFIX
-}
-
-/**
- * Thrown internally by `llmStage` after retry exhaustion. The
- * executor catches it and converts it into a `ProcessingFailure`.
- */
-export class LlmStageRetryExhaustedError extends Error {
-    public readonly reason: TRetryReason
-    public readonly code: string
-    public readonly attempts: number
-    public readonly stageId: string
-    public readonly failureContext: Record<string, unknown> | undefined
-
-    constructor(args: {
-        stageId: string
-        reason: TRetryReason
-        code: string
-        attempts: number
-        message: string
-        context?: Record<string, unknown>
-    }) {
-        super(args.message)
-        this.name = "LlmStageRetryExhaustedError"
-        this.stageId = args.stageId
-        this.reason = args.reason
-        this.code = args.code
-        this.attempts = args.attempts
-        this.failureContext = args.context
-    }
 }
 
 function classifyError(err: unknown): TRetryReason | "non_retryable" {
@@ -140,12 +113,6 @@ function emitRetry(
         at: now(),
     }
     ctx.emit(event)
-}
-
-function now(): number {
-    return typeof performance !== "undefined" && performance.now
-        ? performance.now()
-        : Date.now()
 }
 
 // -- LLM-stage seam (package-internal) ----------------------------------
