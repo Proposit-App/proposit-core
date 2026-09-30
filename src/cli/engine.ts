@@ -3,7 +3,10 @@ import {
     ArgumentEngine,
     type TArgumentEngineSnapshot,
 } from "../lib/core/argument-engine.js"
-import type { TPremiseEngineSnapshot } from "../lib/core/premise-engine.js"
+import type {
+    PremiseEngine,
+    TPremiseEngineSnapshot,
+} from "../lib/core/premise-engine.js"
 import { ClaimLibrary } from "../lib/core/claim-library.js"
 import { PropositCore } from "../lib/core/proposit-core.js"
 import type {
@@ -14,6 +17,8 @@ import type {
 import { isClaimBound } from "../lib/schemata/index.js"
 import type { TCliArgumentMeta, TCliArgumentVersionMeta } from "./schemata.js"
 import { getPremisesDir } from "./config.js"
+import { assertPremiseExists } from "./guards.js"
+import { errorExit } from "./output.js"
 import {
     readArgumentMeta,
     readVersionMeta,
@@ -194,6 +199,24 @@ export async function hydrateEngine(
     )
 
     return engine
+}
+
+/**
+ * Checks the premise exists on disk, loads the argument version into an
+ * engine, and returns the engine with that premise. Exits with an error if
+ * the premise is missing on disk, or present on disk but absent from the
+ * loaded engine; the two cases have different messages.
+ */
+export async function requireHydratedPremise(
+    argumentId: string,
+    version: number,
+    premiseId: string
+): Promise<{ engine: ArgumentEngine; pm: PremiseEngine }> {
+    await assertPremiseExists(argumentId, version, premiseId)
+    const engine = await hydrateEngine(argumentId, version)
+    const pm = engine.getPremise(premiseId)
+    if (!pm) errorExit(`Premise "${premiseId}" not found in engine.`)
+    return { engine, pm }
 }
 
 /**

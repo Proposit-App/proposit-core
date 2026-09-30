@@ -1,8 +1,7 @@
 import { Command } from "commander"
 import { hydrateEngine } from "../engine.js"
-import { errorExit, printJson, printLine } from "../output.js"
-import { assertNotPublished } from "../guards.js"
-import { premiseExists } from "../storage/premises.js"
+import { printJson, printLine } from "../output.js"
+import { assertNotPublished, assertPremiseExists } from "../guards.js"
 import { readRoles, writeRoles } from "../storage/roles.js"
 
 export function registerRoleCommands(
@@ -41,9 +40,12 @@ export function registerRoleCommands(
         .description("Set the designated conclusion premise")
         .action(async (premiseId: string) => {
             await assertNotPublished(argumentId, version)
-            if (!(await premiseExists(argumentId, version, premiseId))) {
-                errorExit(`Premise "${premiseId}" does not exist.`)
-            }
+            await assertPremiseExists(
+                argumentId,
+                version,
+                premiseId,
+                `Premise "${premiseId}" does not exist.`
+            )
             const state = await readRoles(argumentId, version)
             await writeRoles(argumentId, version, {
                 ...state,

@@ -3,14 +3,10 @@ import { Command } from "commander"
 import type { TCoreLogicalOperatorType } from "../../lib/schemata/index.js"
 import type { TExpressionInput } from "../../lib/core/expression-manager.js"
 import { POSITION_INITIAL } from "../../lib/utils/position.js"
-import { hydrateEngine } from "../engine.js"
 import { errorExit, printJson, printLine } from "../output.js"
-import { assertNotPublished } from "../guards.js"
-import {
-    premiseExists,
-    readPremiseData,
-    writePremiseData,
-} from "../storage/premises.js"
+import { requireHydratedPremise } from "../engine.js"
+import { assertNotPublished, assertPremiseExists } from "../guards.js"
+import { readPremiseData, writePremiseData } from "../storage/premises.js"
 
 function typeSpecificInfo(expr: {
     type: string
@@ -58,13 +54,11 @@ export async function runCreateExpression(
     opts: TCreateExpressionOptions
 ): Promise<string> {
     await assertNotPublished(argumentId, version)
-    if (!(await premiseExists(argumentId, version, premiseId))) {
-        errorExit(`Premise "${premiseId}" not found.`)
-    }
-
-    const engine = await hydrateEngine(argumentId, version)
-    const pm = engine.getPremise(premiseId)
-    if (!pm) errorExit(`Premise "${premiseId}" not found in engine.`)
+    const { engine, pm } = await requireHydratedPremise(
+        argumentId,
+        version,
+        premiseId
+    )
 
     const id = opts.id ?? randomUUID()
     const parentId = opts.parentId ?? null
@@ -240,14 +234,11 @@ export function registerExpressionCommands(
                         "At least one of --left-node-id or --right-node-id is required."
                     )
                 }
-                if (!(await premiseExists(argumentId, version, premiseId))) {
-                    errorExit(`Premise "${premiseId}" not found.`)
-                }
-
-                const engine = await hydrateEngine(argumentId, version)
-                const pm = engine.getPremise(premiseId)
-                if (!pm)
-                    errorExit(`Premise "${premiseId}" not found in engine.`)
+                const { engine, pm } = await requireHydratedPremise(
+                    argumentId,
+                    version,
+                    premiseId
+                )
 
                 const id = opts.id ?? randomUUID()
                 const parentId = opts.parentId ?? null
@@ -330,13 +321,11 @@ export function registerExpressionCommands(
         .description("Remove an expression and its subtree")
         .action(async (premiseId: string, expressionId: string) => {
             await assertNotPublished(argumentId, version)
-            if (!(await premiseExists(argumentId, version, premiseId))) {
-                errorExit(`Premise "${premiseId}" not found.`)
-            }
-
-            const engine = await hydrateEngine(argumentId, version)
-            const pm = engine.getPremise(premiseId)
-            if (!pm) errorExit(`Premise "${premiseId}" not found in engine.`)
+            const { pm } = await requireHydratedPremise(
+                argumentId,
+                version,
+                premiseId
+            )
 
             const { result: removed } = pm.removeExpression(expressionId, true)
             if (!removed) errorExit(`Expression "${expressionId}" not found.`)
@@ -354,9 +343,7 @@ export function registerExpressionCommands(
         .description("List all expressions in a premise")
         .option("--json", "Output as JSON")
         .action(async (premiseId: string, opts: { json?: boolean }) => {
-            if (!(await premiseExists(argumentId, version, premiseId))) {
-                errorExit(`Premise "${premiseId}" not found.`)
-            }
+            await assertPremiseExists(argumentId, version, premiseId)
             const data = await readPremiseData(argumentId, version, premiseId)
             const sorted = [...data.expressions].sort((a, b) =>
                 a.id.localeCompare(b.id)
@@ -383,9 +370,7 @@ export function registerExpressionCommands(
                 expressionId: string,
                 opts: { json?: boolean }
             ) => {
-                if (!(await premiseExists(argumentId, version, premiseId))) {
-                    errorExit(`Premise "${premiseId}" not found.`)
-                }
+                await assertPremiseExists(argumentId, version, premiseId)
                 const data = await readPremiseData(
                     argumentId,
                     version,
@@ -430,14 +415,11 @@ export function registerExpressionCommands(
                 opts: { enthymeme?: boolean }
             ) => {
                 await assertNotPublished(argumentId, version)
-                if (!(await premiseExists(argumentId, version, premiseId))) {
-                    errorExit(`Premise "${premiseId}" not found.`)
-                }
-
-                const engine = await hydrateEngine(argumentId, version)
-                const pm = engine.getPremise(premiseId)
-                if (!pm)
-                    errorExit(`Premise "${premiseId}" not found in engine.`)
+                const { engine, pm } = await requireHydratedPremise(
+                    argumentId,
+                    version,
+                    premiseId
+                )
                 const expr = pm.getExpression(expressionId)
                 if (!expr) {
                     errorExit(`Expression "${expressionId}" not found.`)
@@ -477,13 +459,11 @@ export function registerExpressionCommands(
         .description("Toggle negation on an expression (wrap in NOT or unwrap)")
         .action(async (premiseId: string, expressionId: string) => {
             await assertNotPublished(argumentId, version)
-            if (!(await premiseExists(argumentId, version, premiseId))) {
-                errorExit(`Premise "${premiseId}" not found.`)
-            }
-
-            const engine = await hydrateEngine(argumentId, version)
-            const pm = engine.getPremise(premiseId)
-            if (!pm) errorExit(`Premise "${premiseId}" not found in engine.`)
+            const { pm } = await requireHydratedPremise(
+                argumentId,
+                version,
+                premiseId
+            )
 
             try {
                 pm.toggleNegation(expressionId)
@@ -525,14 +505,11 @@ export function registerExpressionCommands(
                 }
             ) => {
                 await assertNotPublished(argumentId, version)
-                if (!(await premiseExists(argumentId, version, premiseId))) {
-                    errorExit(`Premise "${premiseId}" not found.`)
-                }
-
-                const engine = await hydrateEngine(argumentId, version)
-                const pm = engine.getPremise(premiseId)
-                if (!pm)
-                    errorExit(`Premise "${premiseId}" not found in engine.`)
+                const { pm } = await requireHydratedPremise(
+                    argumentId,
+                    version,
+                    premiseId
+                )
 
                 try {
                     pm.changeOperator(
