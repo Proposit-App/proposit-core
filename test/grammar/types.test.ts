@@ -34,7 +34,7 @@ describe("GrammarTierSchema", () => {
     })
 })
 
-// The canonical rule-code inventory, lifted from spec §7.1. Any change here
+// The canonical rule-code inventory (see docs/Proposit_Grammar.md). Any change here
 // is a coordinated single-repo change — extend the TypeBox union, ship the
 // validator implementation. TypeScript catches drift at build time.
 const ALL_CODES = [
@@ -80,17 +80,17 @@ describe("GrammarRuleCodeSchema", () => {
 
     it("has exactly 31 codes (Structural 14 + Evaluable 6 + Derivable 6 + Presentable 5)", () => {
         // Cross-check the count so a future edit that adds/removes a code
-        // notices when the union grows past spec §7.1's inventory.
+        // notices when the union grows past this inventory.
         // 14 + 6 + 6 + 5 = 31. Reserved codes 'E-2' and 'D-7' are NOT in the
         // count — they are excluded from the union.
         expect(ALL_CODES.length).toBe(31)
     })
 
-    it("rejects 'E-2' (reserved; promoted to Structural as S-13 per spec §4.2)", () => {
+    it("rejects 'E-2' (reserved; the rule is Structural S-13)", () => {
         expect(Value.Check(GrammarRuleCodeSchema, "E-2")).toBe(false)
     })
 
-    it("rejects 'D-7' (reserved; restated as E-6 per spec §4.3)", () => {
+    it("rejects 'D-7' (reserved; the rule is Evaluable E-6)", () => {
         expect(Value.Check(GrammarRuleCodeSchema, "D-7")).toBe(false)
     })
 
@@ -127,7 +127,7 @@ describe("ViolationSchema", () => {
     })
 
     it("accepts rule-specific context fields beyond the documented locators (extension slot)", () => {
-        // Spec §7.1: "additional rule-specific context fields as needed".
+        // A violation may carry additional rule-specific context fields.
         // The TypeBox schema must allow additional properties so a future
         // rule can attach extra context without a wire-format break.
         const withExtras = {

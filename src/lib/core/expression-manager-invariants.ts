@@ -150,13 +150,10 @@ export function validateExpressionManagerInvariants<
             })
         }
 
-        // The pre-v1.0 3g `EXPR_FORMULA_BETWEEN_OPERATORS_VIOLATED`
-        // legacy-validate() check (gated on
-        // `grammarConfig.enforceFormulaBetweenOperators`) is gone.
-        // P-1 is now surfaced via the grammar-tier validators —
+        // P-1 (formula buffer between operators) is not an invariant
+        // checked here; it is surfaced by the grammar-tier validators —
         // call `engine.validate('presentable')` and look for the
-        // `P-1` code. The `EXPR_FORMULA_BETWEEN_OPERATORS_VIOLATED`
-        // engine-error constant is gone in lockstep.
+        // `P-1` code.
 
         // Collect positions for uniqueness check
         const parentKey = expr.parentId

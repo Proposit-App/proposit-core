@@ -301,6 +301,6 @@ export function createConclusionSelectionStage(
     }
 }
 
-/** Backward-compatible default-options stage. */
+/** The stage with default options, the same as `createConclusionSelectionStage()` with no arguments. */
 export const conclusionSelectionStage: TStage<TConclusionSelectionOutput> =
     createConclusionSelectionStage()

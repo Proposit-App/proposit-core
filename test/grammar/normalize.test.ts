@@ -1,12 +1,12 @@
 // ArgumentEngine.normalize(tier?) global pass tests.
 //
-// Per spec §6 (and CLAUDE.md "Key design rules"):
 //   - normalize() is an explicit user-initiated global pass that runs the
 //     AN rule set everywhere it can fire. It DOES NOT auto-fire on
 //     `setBehavior('permissive' → 'assistive')`; the UI prompts the user.
-//   - In v1.0 every AN rule (AN-1..AN-4) targets a Presentable invariant,
-//     so calls with `tier` ∈ {structural, evaluable, derivable} are
-//     effectively no-ops; the parameter is forward-compatible API surface.
+//   - Every AN rule (AN-1..AN-4) targets a Presentable invariant, so
+//     calls with `tier` ∈ {structural, evaluable, derivable} are
+//     effectively no-ops; the parameter leaves room for rules at other
+//     tiers.
 //   - Non-destructive in the logical-meaning sense: never deletes a
 //     variable, changes a claim reference, or modifies operator semantics.
 //   - Cannot recover from Evaluable / Derivable violations (those require
@@ -79,7 +79,7 @@ describe("ArgumentEngine.normalize(tier?)", () => {
         expect(hasP1Violation(pe.getExpressions())).toBe(false)
     })
 
-    it("normalize('derivable') is a no-op in v1.0 (forward-compat)", () => {
+    it("normalize('derivable') is a no-op", () => {
         const eng = new ArgumentEngine(ARG, EMPTY_CLAIM_LOOKUP, {
             behavior: "permissive",
         })
@@ -106,7 +106,7 @@ describe("ArgumentEngine.normalize(tier?)", () => {
         expect(hasP1Violation(pe.getExpressions())).toBe(true)
     })
 
-    it("normalize('evaluable') and normalize('structural') are also no-ops in v1.0", () => {
+    it("normalize('evaluable') and normalize('structural') are also no-ops", () => {
         const eng = new ArgumentEngine(ARG, EMPTY_CLAIM_LOOKUP, {
             behavior: "permissive",
         })

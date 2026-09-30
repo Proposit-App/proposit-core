@@ -1,5 +1,5 @@
 // Exhaustive unit tests for the `variable-assignment` deterministic
-// stage. Covers the spec §7.2 row 8 behavior:
+// stage. Covers this behavior:
 //
 //   - Valid suggested symbol passes through verbatim.
 //   - Symbol-validation regex: reserved-word-shaped strings are still

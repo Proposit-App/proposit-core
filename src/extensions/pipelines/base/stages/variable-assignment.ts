@@ -1,7 +1,7 @@
 // `variable-assignment` — deterministic stage that mints one
 // `TParsedVariable`-shaped record per canonical claim.
 //
-// Behavior (spec §7.2 row 8):
+// Behavior:
 //   1. Read `claim-canonicalization.canonicalClaims` (in canonicalization
 //      order).
 //   2. For each claim, attempt to use its `suggestedSymbol` as the

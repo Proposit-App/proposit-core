@@ -177,7 +177,7 @@ export function forkArgumentEngine<
         snap.config = { ...snap.config, positionConfig: options.positionConfig }
     }
 
-    // D5 — thread `behavior` through the fork path. `engine.snapshot()`
+    // Thread `behavior` through the fork path. `engine.snapshot()`
     // intentionally omits `behavior` (snapshot/restore is one path; fork
     // is another) so the forked engine would otherwise restore as the
     // default `'assistive'`. Inheritance from the source is the

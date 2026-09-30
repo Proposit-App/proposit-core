@@ -73,13 +73,11 @@ export type TRetrievedResponse = {
      * The envelope's `incomplete_details.reason`, present when
      * `status === "incomplete"` (e.g. `max_output_tokens`,
      * `content_filter`). Lets a completion-side consumer classify an
-     * incomplete response without re-deriving it. Additive (since
-     * v1.11.0).
+     * incomplete response without re-deriving it.
      */
     incompleteReason?: string
     /**
      * The envelope's `error.message`, present when `status === "failed"`.
-     * Additive (since v1.11.0).
      */
     errorMessage?: string
 }
@@ -271,7 +269,7 @@ export async function cancelResponse(
  * immediately.
  *
  * **No-tools precondition:** background mode does not support function
- * tools in V1 — a tool-bearing request throws {@link NonRetryableLlmError},
+ * tools here — a tool-bearing request throws {@link NonRetryableLlmError},
  * matching `respond`'s background guard.
  *
  * @param req - The structured-output request (system/user prompts +

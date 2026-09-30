@@ -4,8 +4,8 @@
 //   - The factory constructs a pipeline whose DAG validates at
 //     executor build time (no cycles, no unknown deps, no self-deps,
 //     no duplicate ids).
-//   - Pipeline declares 12 stages with the spec-aligned ids.
-//   - `finalize.dependsOn` declares the spec-aligned required +
+//   - Pipeline declares 12 stages with the expected ids.
+//   - `finalize.dependsOn` declares the expected required +
 //     optional deps.
 //   - With a fully-mocked LLM, the pipeline produces a coherent
 //     argument response (the happy path).
@@ -49,7 +49,7 @@ import { createMockLlmProvider } from "../../mocks/llm.js"
 import type { TParsedArgumentResponse } from "../../../src/lib/parsing/index.js"
 
 describe("createScholarPipeline — shape", () => {
-    it("constructs a pipeline with 12 stages + the spec-aligned ids", () => {
+    it("constructs a pipeline with 12 stages + the expected ids", () => {
         const pipeline = createScholarPipeline(basicsExtension)
         expect(pipeline.stages).toHaveLength(12)
         const ids = pipeline.stages.map((s) => s.id).sort()
@@ -71,7 +71,7 @@ describe("createScholarPipeline — shape", () => {
         )
     })
 
-    it("declares the spec-aligned finalize.dependsOn (3 required + 7 optional)", () => {
+    it("declares the expected finalize.dependsOn (3 required + 7 optional)", () => {
         const pipeline = createScholarPipeline(basicsExtension)
         const required = pipeline.finalize.dependsOn
             .filter((d) => typeof d === "string")
@@ -438,14 +438,14 @@ describe("createScholarPipeline — failure paths", () => {
 // pipeline's finalize output) being JSON round-trippable: a value persisted
 // as jsonb and read back must deep-equal the original. This pins the
 // "JSON serializable" half of the contract for the whole rehydration
-// surface — all 12 v2 stage outputs plus a finalize output. It is a VALUE
+// surface — all 12 stage outputs plus a finalize output. It is a VALUE
 // round-trip (`JSON.parse(JSON.stringify(v))` deep-equals `v`), NOT a
 // schema→JSON→schema check: the finalize output schema is intentionally
 // `additionalProperties: true`, so a schema-level round-trip would be
 // inaccurate. (For the stage schemas we additionally assert the round-
 // tripped value still satisfies the schema.)
 
-describe("v2 stage + finalize outputs are JSON round-trippable", () => {
+describe("stage + finalize outputs are JSON round-trippable", () => {
     const roundTrip = (v: unknown): unknown => JSON.parse(JSON.stringify(v))
 
     // One representative, schema-conformant value per stage output. Two

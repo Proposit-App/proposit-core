@@ -167,9 +167,9 @@ export class ExpressionManager<
      * maps (`expressions`, `childExpressionIdsByParentId`,
      * `childPositionsByParentId`) and notifies the change collector.
      *
-     * As of v1.0 the legacy per-mutation P-1 buffer-insertion branches
-     * (`addExpression`/`insertExpression`/`wrapExpression`) are gone —
-     * AN-1 (post-mutation hook in assistive mode, see
+     * The mutation methods (`addExpression`/`insertExpression`/
+     * `wrapExpression`) never insert a formula buffer themselves — AN-1
+     * (post-mutation hook in assistive mode, see
      * `src/lib/grammar/an-rules.ts`) is the sole formula-buffer
      * insertion path. This helper is invoked from `wrapInFormula` (the
      * public AN-1 primitive on `PremiseEngine`) which calls it once per
@@ -321,13 +321,10 @@ export class ExpressionManager<
                 )
             }
 
-            // P-1 (non-not operator under operator) is no longer
-            // enforced at mutation time. Assistive mode inserts the
-            // formula buffer via AN-1 post-hook; permissive mode
-            // leaves the un-buffered state and `validate('presentable')`
-            // flags it. The pre-v1.0 inline buffer-insertion fallback +
-            // throw both lived here under `grammarConfig.enforceFormula
-            // BetweenOperators` and are gone.
+            // P-1 (non-not operator under operator) is not enforced at
+            // mutation time. Assistive mode inserts the formula buffer
+            // via the AN-1 post-hook; permissive mode leaves the
+            // un-buffered state and `validate('presentable')` flags it.
 
             if (parent.type === "operator") {
                 this.assertChildLimit(parent.operator, expression.parentId)
@@ -382,10 +379,9 @@ export class ExpressionManager<
         let position = midpoint(lastChild.position, this.positionConfig.max)
 
         if (position === lastChild.position) {
-            // Composite-mutation behavior (spec §8 / S-9): always shift
-            // colliding siblings as part of the bundled op. The pre-v1.0
-            // `repositionOnCollision` flag gating is gone — composites
-            // never leave a Structural violation by design.
+            // Composite-mutation behavior (S-9): always shift colliding
+            // siblings as part of the bundled op, so a composite never
+            // leaves a Structural violation.
             this.repositionSiblings(
                 parentId,
                 lastChild.position,
@@ -430,9 +426,8 @@ export class ExpressionManager<
             position = midpoint(prevPosition, sibling.position)
 
             if (position === prevPosition || position === sibling.position) {
-                // Composite-mutation behavior (spec §8 / S-9): always shift
-                // colliding siblings as part of the bundled op. The
-                // pre-v1.0 `repositionOnCollision` flag gating is gone.
+                // Composite-mutation behavior (S-9): always shift
+                // colliding siblings as part of the bundled op.
                 this.repositionSiblings(
                     sibling.parentId,
                     siblingIndex > 0
@@ -458,7 +453,7 @@ export class ExpressionManager<
             position = midpoint(sibling.position, nextPosition)
 
             if (position === sibling.position || position === nextPosition) {
-                // Composite-mutation behavior (spec §8 / S-9): always
+                // Composite-mutation behavior (S-9): always
                 // shift colliding siblings as part of the bundled op.
                 this.repositionSiblings(
                     sibling.parentId,
@@ -552,10 +547,9 @@ export class ExpressionManager<
         // Mark the updated expression and its ancestors dirty for hierarchical checksum recomputation.
         this.markExpressionDirty(expressionId)
 
-        // The pre-v1.0 same-operator absorption inline cascade
-        // (gated on `absorbSameOperator`) is gone. AN-4 (post-mutation
-        // hook in assistive mode) handles same-operator absorption
-        // through a formula buffer.
+        // No same-operator absorption here. AN-4 (post-mutation hook in
+        // assistive mode) handles same-operator absorption through a
+        // formula buffer.
 
         return this.expressions.get(expressionId) ?? updated
     }
@@ -570,8 +564,7 @@ export class ExpressionManager<
      * child (if any) is promoted into the removed expression's slot. If the
      * expression has more than one child, an error is thrown.
      *
-     * As of v1.0 the pre-removal collapse-cascade (the legacy
-     * `collapseIfNeeded` / `simulateCollapseChain`) is gone — AN-3
+     * This method does not collapse the surviving parent — AN-3
      * (post-mutation hook in assistive mode) handles 0/1-child
      * operator/formula collapse on the surviving parent.
      *
@@ -638,10 +631,8 @@ export class ExpressionManager<
             this.markExpressionDirty(parentId)
         }
 
-        // The pre-v1.0 `collapseIfNeeded(parentId)` inline cascade
-        // (gated on `collapseEmptyFormula`) is gone. AN-3 (post-mutation
-        // hook in assistive mode) handles 0/1-child operator/formula
-        // collapse.
+        // No collapse of the parent here. AN-3 (post-mutation hook in
+        // assistive mode) handles 0/1-child operator/formula collapse.
 
         return target
     }
@@ -721,11 +712,9 @@ export class ExpressionManager<
         return target
     }
 
-    // There is no shared `promoteChild` helper: the inline collapse
-    // cascade (`collapseIfNeeded`) and the legacy
-    // `ExpressionManager.normalize()` sweep it once served are gone,
-    // replaced by the AN-1..AN-4 post-mutation hooks in
-    // `src/lib/grammar/an-rules.ts`. The `removeAndPromote` 1-child
+    // There is no shared `promoteChild` helper: collapse and
+    // normalization are the AN-1..AN-4 post-mutation hooks in
+    // `src/lib/grammar/an-rules.ts`, and the `removeAndPromote` 1-child
     // branch in `removeExpression` writes the promoted child directly.
 
     /**
@@ -838,16 +827,12 @@ export class ExpressionManager<
     }
 
     /**
-     * Pre-flight before {@link removeExpression} mutates state. As of v1.0
-     * the only structural failure mode for `removeAndPromote`'s 1-child
-     * branch is the root-only-operator promotion rule (S-5): an
-     * `implies`/`iff` child cannot be promoted into a non-root slot. The
-     * pre-v1.0 P-1 promote-on-remove check is gone, along with the rest
-     * of the `grammarConfig.enforceFormulaBetweenOperators` machinery;
-     * the legacy `collapseEmptyFormula` cascade simulation
-     * (`simulateCollapseChain` / `simulatePostPromotionCollapse`) is
-     * gone in lockstep — AN-3 (post-mutation hook in assistive mode)
-     * handles every collapse case.
+     * Pre-flight before {@link removeExpression} mutates state. The only
+     * structural failure mode for `removeAndPromote`'s 1-child branch is
+     * the root-only-operator promotion rule (S-5): an `implies`/`iff`
+     * child cannot be promoted into a non-root slot. P-1 is not checked
+     * here, and no collapse is simulated — AN-3 (post-mutation hook in
+     * assistive mode) handles every collapse case.
      */
     private assertRemovalSafe(
         expressionId: string,
@@ -866,8 +851,8 @@ export class ExpressionManager<
 
     /**
      * Checks whether promoting `child` into a slot with the given `newParentId`
-     * would violate the root-only rule (S-5). The pre-v1.0 nesting check
-     * (P-1 / `enforceFormulaBetweenOperators`) is gone.
+     * would violate the root-only rule (S-5). P-1 nesting is not checked
+     * here.
      */
     private assertPromotionSafe(
         child: TExpr,
@@ -987,8 +972,8 @@ export class ExpressionManager<
         )
 
         // Compute child positions (midpoint-spaced for future bisection),
-        // matching the pattern used by wrapExpression. As of core 1.0.2
-        // S-8 is arity-only — `implies`/`iff` siblings may sit at any
+        // matching the pattern used by wrapExpression. S-8 checks arity
+        // only — `implies`/`iff` siblings may sit at any
         // `[a, b]` with `a < b` (S-9 still guards uniqueness), so no
         // operator-specific branching is needed here.
         let leftPosition: number
@@ -1077,8 +1062,7 @@ export class ExpressionManager<
             )
 
         // Determine child positions (midpoint-spaced for future bisection).
-        // As of core 1.0.2 S-8 is arity-only — `implies`/`iff` siblings
-        // may sit at any `[a, b]` with `a < b` (S-9 still guards
+        // S-8 checks arity only — `implies`/`iff` siblings may sit at any `[a, b]` with `a < b` (S-9 still guards
         // uniqueness), so the same midpoint pattern used for `and`/`or`
         // applies to all binary wraps.
         const existingPosition =
@@ -1163,7 +1147,7 @@ export class ExpressionManager<
      * formula's sole child at position 0.
      *
      * Used by the native AN-1 (formula-buffer insertion) pass in
-     * `src/lib/grammar/an-rules.ts` per spec §5.1. Composing this from
+     * `src/lib/grammar/an-rules.ts`. Composing this from
      * `addExpression` + `reparentExpression` is not possible without
      * trip-wires: `addExpression(formula, parent, childPosition)` would
      * throw S-9 (child still occupies that slot), and `assertChildLimit`
@@ -1327,8 +1311,9 @@ export class ExpressionManager<
     }
 
     /**
-     * Loads expressions in BFS order, respecting the current grammar config.
-     * Used by restoration paths (fromData, rollback) that load existing data.
+     * Registers the given expressions as-is, in the order given, with no
+     * grammar validation or normalization. Used by restoration paths
+     * (fromData, rollback) that load existing data.
      */
     public loadExpressions(expressions: TExpressionInput<TExpr>[]): void {
         this.loadInitialExpressions(expressions)

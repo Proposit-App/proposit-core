@@ -387,7 +387,7 @@ export function importArgumentFromYaml(yamlString: string): {
     // `engine.normalize()` at the end so AN-1 / AN-2 / AN-3 / AN-4
     // fire on the fully-built tree. The returned engine is in
     // canonical assistive state.
-    // D3 — unify with populate-from's pattern: `normalize()` runs only
+    // As in populate-from, `normalize()` runs only
     // on the success path (inside `try` after all builds succeed).
     // Behavior restoration runs on both success and failure paths via
     // a `catch` that rethrows. Running `normalize()` from a `finally`

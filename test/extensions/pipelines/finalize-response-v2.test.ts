@@ -1,6 +1,6 @@
 // Unit tests for `finalizeResponseV2` premise-title composition.
 //
-// `finalizeResponseV2` assembles the v2 pipeline's final response from
+// `finalizeResponseV2` assembles the ingestion pipeline's final response from
 // the accumulated per-stage outputs. These tests pin the *premise
 // title* behavior: titles must read as natural-language prose composed
 // from the LLM-authored claim titles (mirroring `buildArgumentTitle`)
@@ -523,7 +523,7 @@ describe("finalizeResponseV2 — title resolution is pipeline-independent", () =
 // source/target (a propositional antecedent or consequent). The claim
 // stays typed `citation` and finalize attaches an explicit
 // `UnparsedCitation` whose `text` carries the display string — so a
-// url-less reference no longer renders blank — instead of being demoted
+// reference without a url still renders its text — and is not demoted
 // to `normal`.
 //
 //   c1  "Pooley case reports imprisonment"  → citation, source of r1

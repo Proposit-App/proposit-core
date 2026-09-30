@@ -1,4 +1,4 @@
-// Dispatcher per spec §7.1. Returns the union of violations across all
+// Validation dispatcher. Returns the union of violations across all
 // tiers up to and including the requested tier (Structural is the most
 // permissive tier; Presentable the strictest):
 //

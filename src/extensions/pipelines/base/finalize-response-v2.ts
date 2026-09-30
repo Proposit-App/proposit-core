@@ -1,9 +1,8 @@
-// `finalize-response-v2` — assembles the v2 multi-stage pipeline's
+// `finalize-response-v2` — assembles the multi-stage ingestion pipeline's
 // final `TParsedArgumentResponse`-shaped output from accumulated
 // per-stage outputs.
 //
-// Behavior per spec §7.2 finalize row + §7.4 (role derivation) +
-// §7.5 (failure model):
+// Behavior, including role derivation and the failure cases:
 //
 //   - When `claim-canonicalization.canonicalClaims` is empty:
 //     `{ argument: null, failureText: "No claims could be extracted
@@ -23,12 +22,11 @@
 //     field is `conclusion-selection.rationale` (or null when the
 //     stage is missing).
 //
-// **`processingFailures` slot.** Mirroring v1's convention, finalize
+// **`processingFailures` slot.** Finalize
 // always emits an empty `processingFailures: []` array on the output.
 // The full list of per-stage failures lives on `PipelineResult.failures`
 // — consumers that want them read that field. The slot on the response
-// object is a forward-compat hook; the framework doesn't have a clean
-// way for `finalize.run` to consult the executor's accumulated failure
+// object stays empty because the framework gives no way for `finalize.run` to consult the executor's accumulated failure
 // list (which would require widening `TStageContext`).
 
 import type { TParsedArgumentResponse } from "../../../lib/parsing/index.js"
@@ -166,7 +164,7 @@ function buildClaimToRole(args: {
     const out: Record<string, "premise" | "conclusion" | "intermediate"> = {}
     // Claims that participate in any relation (source or target) are
     // "premise" by default; claims that don't appear in any relation
-    // are "intermediate" (per spec §7.4). The conclusion overrides.
+    // are "intermediate". The conclusion overrides.
     const claimsInRelations = new Set<string>()
     for (const rel of args.relations) {
         for (const antecedent of rel.antecedents)
@@ -713,13 +711,13 @@ export type TFinalizeResponseV2Input = {
 }
 
 /**
- * Assembles the v2 pipeline's final response from the
+ * Assembles the ingestion pipeline's final response from the
  * `TStageContext`'s accumulated upstream outputs.
  */
 export function finalizeResponseV2(
     input: TFinalizeResponseV2Input
 ): TParsedArgumentResponse {
-    void input.extension // forward-compat (extension-specific assembly hooks)
+    void input.extension // accepted but not read by the assembly
     const { ctx } = input
     const canon = ctx.get<TClaimCanonicalizationOutput>(
         STAGE_IDS.claimCanonicalization
@@ -756,9 +754,9 @@ export function finalizeResponseV2(
             argument: null,
             failureText: FINALIZE_V2_FAILURE_TEXTS.noClaims,
             ...baseResponse,
-            // `processingFailures` is a side-channel slot the v1
-            // finalize also attaches; the response schema permits
-            // additional properties.
+            // `processingFailures` is an extra slot outside the parsed
+            // response type; the response schema permits additional
+            // properties.
 
             processingFailures,
         } as TParsedArgumentResponse
@@ -870,7 +868,7 @@ export function finalizeResponseV2(
         }
         // A claim classified `citation` stays `citation` and carries an
         // explicit `UnparsedCitation` (its `text` is the display text, so
-        // a url-less reference no longer renders blank). Premise
+        // a reference without a url still renders its text). Premise
         // placement is handled upstream by the deterministic relation
         // sort, which keeps citation claims out of freeform premises — so a
         // citation never lands as a freeform antecedent here, and there is

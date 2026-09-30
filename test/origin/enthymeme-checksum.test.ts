@@ -8,11 +8,11 @@ import { CHECKSUM_FIXTURES } from "./checksum-fixtures.js"
 
 // The most dangerous change in this area is not a bug in new code — it is a
 // silent shift in the checksum of every premise and expression that already
-// exists. The mark lives on variable expressions only; premises used to carry
-// it too, and their checksums ignore it now. `entityChecksum` includes a field only `if (field in entity)`, and
+// exists. The mark lives on variable expressions only; a premise's checksum
+// ignores any enthymeme key stored on it. `entityChecksum` includes a field only `if (field in entity)`, and
 // `createChecksumConfig` unions additional fields onto the defaults rather
 // than replacing them, so adding an optional field to the schema and to the
-// default field set is backward compatible with no migration.
+// default field set leaves existing checksums unchanged, with no migration.
 //
 // That guarantee holds only while an unmarked entity omits the key entirely.
 // Persisting `enthymeme: null` makes `"enthymeme" in entity` true and changes
@@ -130,8 +130,8 @@ describe("a present enthymeme key does change an expression's checksum", () => {
 })
 
 describe("a premise's enthymeme key does not affect its checksum", () => {
-    // Premises no longer carry the mark. One stored before that must hash as
-    // if unmarked, whatever value it holds.
+    // Premises do not carry the mark, but stored data may still hold the
+    // key. Such a premise must hash as if unmarked, whatever value it holds.
     for (const [name, kind, entity] of CHECKSUM_FIXTURES.filter(
         ([, kind]) => kind === "premise"
     )) {

@@ -26,8 +26,8 @@
 // trying to add a child of IMPLIES throws "Parent does not exist".
 // To avoid this, the factory switches to `permissive` for the build
 // and runs a single explicit `engine.normalize()` at the end (only
-// when the caller was originally in assistive mode). This is the
-// canonical incremental-builder pattern for the v1.0 grammar model.
+// when the caller was originally in assistive mode). Any code that
+// builds a tree step by step should follow the same pattern.
 //
 // **Atomicity contract.** The factory is observed-atomic: callers
 // never see a half-populated tree. The expression-tree replacement

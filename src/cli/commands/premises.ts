@@ -434,7 +434,7 @@ export function registerPremiseCommands(
                 )
             }
 
-            // v1.0 model — D-3 prohibits mixing citation-bound and
+            // D-3 prohibits mixing citation-bound and
             // axiom-bound variables in the same antecedent. Call
             // populateFromCitations first; if citations populate the
             // antecedent, populateFromAxioms no-ops (target is no

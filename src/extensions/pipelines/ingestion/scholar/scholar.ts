@@ -197,8 +197,8 @@ export function createScholarPipeline(
         inputSchema: INGESTION_INPUT_SCHEMA,
         // The pipeline's advertised `outputSchema` is the extension's
         // raw `responseSchema` (the LLM-shaped response). Finalize
-        // also attaches a `processingFailures` slot at runtime; the
-        // asymmetry mirrors v1's contract.
+        // also attaches a `processingFailures` slot at runtime, which
+        // this schema does not describe.
         outputSchema: extension.responseSchema,
         stages,
         finalize: {

@@ -188,8 +188,8 @@ export function canonicalizeOperatorAssignments(
 ): Record<string, TCoreOperatorAssignment> {
     const out: Record<string, TCoreOperatorAssignment> = {}
 
-    // Expand premise-scope entries. TEvaluablePremise exposes
-    // getDecidableOperatorExpressions (added in Task 2).
+    // Expand premise-scope entries via
+    // TEvaluablePremise.getDecidableOperatorExpressions.
     for (const [premiseId, value] of Object.entries(input.premiseScope)) {
         const premise = ctx.getPremise(premiseId)
         if (!premise) continue

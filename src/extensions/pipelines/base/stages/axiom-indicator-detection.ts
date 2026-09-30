@@ -66,6 +66,6 @@ export function createAxiomIndicatorDetectionStage(
     })
 }
 
-/** Backward-compatible default-options stage. */
+/** The stage with default options, the same as `createAxiomIndicatorDetectionStage()` with no arguments. */
 export const axiomIndicatorDetectionStage: TStage<TAxiomIndicatorDetectionOutput> =
     createAxiomIndicatorDetectionStage()

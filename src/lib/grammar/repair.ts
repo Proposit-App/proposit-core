@@ -1,4 +1,4 @@
-// Targeted repair primitives per spec §7.
+// Targeted repair primitives.
 //
 // Each primitive is a **user-initiated** destructive fix for a specific
 // Evaluable or Derivable violation that `normalize()` cannot resolve
@@ -158,8 +158,7 @@ export function removeDuplicateDerivationPremises<
 /**
  * Resolve D-3 (mixed-grounding antecedent: axioms + citations in one
  * derivation premise) by deleting every axiom-bound variable expression
- * from the antecedent subtree, leaving citations behind. Mirrors the
- * v1.0 migration repair (spec §9.2) for runtime use when an
+ * from the antecedent subtree, leaving citations behind. For use when an
  * advanced-mode user reaches a mixed state in a permissive engine.
  *
  * In `'assistive'` mode, the per-mutation AN post-hook runs after each
@@ -271,8 +270,8 @@ function pickLargestAntecedent<
             // Count variable expressions whose ancestor chain reaches the
             // position-0 child of the implies/iff root.
             //
-            // Note (1.0.2): S-8 relaxed to arity-only — binary children
-            // may now sit at any `[a, b]` with `a < b` (e.g.,
+            // Note: S-8 checks arity only — binary children may sit at
+            // any `[a, b]` with `a < b` (e.g.,
             // midpoint-spaced `[0, 1073741823]`). This `position === 0`
             // lookup is therefore brittle in principle: a producer that
             // wrote non-zero positions would cause this to miss the
@@ -319,8 +318,8 @@ function pickLargestAntecedent<
  * to find one bound to `claimId/claimVersion` and reaching for the
  * resolved claim via the validator-context shape.
  *
- * Simpler approach: a future `engine.getClaim(id, version)` accessor
- * would clean this up. For v1.0 we route through the public surface.
+ * An `engine.getClaim(id, version)` accessor would make this simpler;
+ * until one exists this routes through the public surface.
  */
 function lookupClaim<
     TArg extends TCoreArgument,

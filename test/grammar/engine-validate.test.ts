@@ -7,9 +7,8 @@
 // from the engine's live state. `validate(tier)` takes a required
 // `TGrammarTier` argument and returns `readonly TViolation[]`.
 //
-// The pre-1.0 no-arg `validate()` (invariant validation returning
-// `TInvariantValidationResult`) has been renamed to
-// `validateInvariants()`.
+// Invariant validation (returning `TInvariantValidationResult`) is
+// the separate `validateInvariants()` method.
 
 import { describe, it, expect } from "vitest"
 import { ArgumentEngine } from "../../src/lib/core/argument-engine.js"
@@ -106,13 +105,11 @@ describe("ArgumentEngine.validate(tier)", () => {
         expect(() => eng.validate("presentable")).not.toThrow()
     })
 
-    it("exposes the legacy invariant sweep via validateInvariants()", () => {
-        // The pre-1.0 no-arg `validate()` overload was renamed to
-        // `validateInvariants()` for unambiguous contrast with the
-        // tier-aware `validate(tier)` grammar validator. The legacy
-        // invariant sweep (schema conformance, reference integrity,
-        // ownership, conclusion ref, circularity, checksums) stays
-        // accessible under the new name.
+    it("exposes the invariant sweep via validateInvariants()", () => {
+        // `validateInvariants()` is distinct from the tier-aware
+        // `validate(tier)` grammar validator. The invariant sweep
+        // covers schema conformance, reference integrity, ownership,
+        // conclusion ref, circularity and checksums.
         const eng = new ArgumentEngine(ARG, EMPTY_CLAIM_LOOKUP)
         const result = eng.validateInvariants()
         expect(result).toHaveProperty("ok")

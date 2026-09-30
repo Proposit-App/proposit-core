@@ -266,8 +266,8 @@ const VAR_R = makeVar("var-r", "R")
 /**
  * Create a premise (via ArgumentEngine) with P, Q, R pre-loaded.
  *
- * **Permissive build.** Under the v1.0 AN post-mutation hook
- * (spec §5), assistive mode collapses 0-child operators eagerly (AN-3)
+ * **Permissive build.** Under the AN post-mutation hook,
+ * assistive mode collapses 0-child operators eagerly (AN-3)
  * between consecutive `addExpression` calls. The test suite below
  * builds expression trees incrementally (`addExpression(op)` then
  * `addExpression(child, parentId=op)`) and asserts the resulting
@@ -721,18 +721,14 @@ describe("insertExpression", () => {
         ).toThrow(/leftNodeId and rightNodeId must be different/)
     })
 
-    // --- S-8 regression: implies/iff children sit at midpoint-spaced
-    // positions (relaxed S-8, post-1.0.2) ---
+    // --- S-8: implies/iff children sit at midpoint-spaced positions ---
     //
-    // History: pre-1.0.1 insertExpression assigned `[POSITION_INITIAL,
+    // insertExpression assigns `[POSITION_INITIAL,
     // midpoint(POSITION_INITIAL, POSITION_MAX)]` to all binary children.
-    // Cycle 1.0.1 (b9b898b) pinned `implies`/`iff` to exact [0, 1] to
-    // satisfy the over-strict S-8 position check. Cycle 1.0.2 relaxed
-    // S-8 to arity-only and reverted insertExpression to the uniform
-    // midpoint-spaced pattern — `[0, 1]` and `[0, 1073741823]` are both
-    // valid for binary operators under the relaxed rule. These tests
-    // pin the post-1.0.2 behavior: midpoint-spaced positions land on
-    // implies/iff just like and/or, and S-8 emits no violations.
+    // S-8 checks arity only, so `[0, 1]` and `[0, 1073741823]` are both
+    // valid for binary operators. These tests pin that midpoint-spaced
+    // positions land on implies/iff just like and/or, and S-8 emits no
+    // violations.
 
     it("insertExpression with implies + both nodes at root uses midpoint-spaced positions (S-8 clean)", () => {
         // Pre-state: op-and (root) → [expr-p (pos 0), expr-q (pos 1)].
@@ -1419,15 +1415,12 @@ describe("formula", () => {
         ).toThrow(/is not an operator expression/)
     })
 
-    // No formula-cascade tests live here ("collapses the formula
-    // when its only child is removed" / "cascades formula collapse up
-    // multiple levels"). Those asserted on the pre-v1.0 inline AN
-    // cascade fired from inside `removeExpression`. Under the v1.0
-    // post-mutation hook the cascade is owned by AN-3 + AN-1 and is
-    // covered by `test/grammar/an-rules.test.ts`. Fixtures here build
-    // via `premiseWithVars` (permissive, no AN), so the cascade is not
-    // observable at this layer — asserting it would test legacy
-    // implementation details, not user-facing behavior.
+    // Formula collapse after a removal (a formula losing its only
+    // child, possibly up several levels) is done by the AN
+    // post-mutation hook (AN-3 + AN-1) and is covered by
+    // `test/grammar/an-rules.test.ts`. Fixtures here build via
+    // `premiseWithVars` (permissive, no AN), so the collapse is not
+    // observable at this layer.
 
     it("insertExpression wraps a node in a formula", () => {
         const premise = premiseWithVars()
@@ -1666,11 +1659,9 @@ describe("PremiseEngine — addExpression / removeExpression / insertExpression"
         expect(pm.toDisplayString()).toBe("¬(P)")
     })
 
-    // No "rootExpressionId updates when collapse promotes a new root"
-    // test lives here. Same legacy-cascade rationale as above: it
-    // would assert pre-v1.0 inline AN-3 1-child-promotion behavior
-    // fired from inside `removeExpression`. The v1.0 post-hook covers
-    // this contract; see `test/grammar/an-rules.test.ts` (AN-3 rule 2).
+    // Root promotion when a collapse leaves one child is also done by
+    // the AN post-mutation hook, not by `removeExpression`; see
+    // `test/grammar/an-rules.test.ts` (AN-3 rule 2).
 })
 
 describe("PremiseEngine — toDisplayString", () => {
@@ -1908,7 +1899,7 @@ describe("ArgumentEngine — roles and evaluation", () => {
         )
     }
 
-    it("supports role APIs and auto-reassigns conclusion to lowest-id remaining premise when conclusion is deleted (1.0.2 invariant guard)", () => {
+    it("supports role APIs and auto-reassigns conclusion to lowest-id remaining premise when conclusion is deleted (invariant guard)", () => {
         const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         eng.addVariable(VAR_P)
         eng.addVariable(VAR_Q)
@@ -1929,10 +1920,9 @@ describe("ArgumentEngine — roles and evaluation", () => {
             conclusionPremiseId: conclusion.getId(),
         })
 
-        // Pre-1.0.2: removing the conclusion left
-        // `conclusionPremiseId = undefined` even when other premises
-        // remained, tripping E-7 post-mutation. Post-1.0.2: the
-        // invariant guard auto-reassigns conclusion to the lowest-id
+        // Removing the conclusion while other premises remain must not
+        // leave `conclusionPremiseId` undefined (that would trip E-7):
+        // the invariant guard auto-reassigns conclusion to the lowest-id
         // remaining premise — here, `support` is the only premise
         // left, so it becomes the new conclusion.
         eng.removePremise(conclusion.getId())
@@ -4911,13 +4901,10 @@ describe("PremiseEngine — mutation changesets", () => {
         expect(changes.expressions?.removed).toEqual([])
     })
 
-    // No "removeExpression with collapse returns all affected
-    // expressions" test lives here. It would assert the changeset
-    // produced by the pre-v1.0 inline AN-3 1-child-promotion cascade
-    // fired from inside removeExpression. The v1.0 contract is: a
-    // single mutation produces a single changeset reflecting only that
-    // mutation; AN runs as a separate post-hook pass. The cascade
-    // contract is covered by `test/grammar/an-rules.test.ts`.
+    // A single mutation produces a single changeset reflecting only
+    // that mutation; AN runs as a separate post-hook pass, so
+    // removeExpression's changeset holds no collapse changes. The
+    // collapse contract is covered by `test/grammar/an-rules.test.ts`.
 
     it("insertExpression returns added expression and records reparented children", () => {
         const { pm } = setup()
@@ -5216,7 +5203,7 @@ describe("ArgumentEngine — mutation changesets", () => {
     })
 
     it("clearConclusionPremise on a non-empty argument is a no-op (invariant guard)", () => {
-        // 1.0.2 invariant guard: a non-empty argument always has a
+        // Invariant guard: a non-empty argument always has a
         // conclusion designated. clearConclusionPremise on a
         // non-empty argument refuses to clear; the call returns the
         // current (unchanged) role state with an empty changeset.
@@ -6011,14 +5998,7 @@ describe("ArgumentEngine — variable management", () => {
         expect(pm2.getExpression("e-p2")).toBeUndefined()
     })
 
-    // No "removeVariable triggers operator collapse" or
-    // "removeVariable deletes subtrees when removing from implies"
-    // tests live here. Both would assert that the pre-v1.0 inline AN
-    // cascade (fired from deep within removeVariable's cascade-delete
-    // loop) would
-    // collapse the resulting 1-child operator and promote the
-    // surviving sibling. Under the v1.0 contract, removeVariable
-    // still cascade-deletes referencing expressions Structurally,
+    // removeVariable cascade-deletes referencing expressions Structurally,
     // but the operator's 1-child cleanup is owned by the AN-3
     // post-hook (assistive) or left as a P-3 violation surfaced via
     // validate('presentable') (permissive). The cascade-delete
@@ -6057,13 +6037,8 @@ describe("PremiseEngine — deleteExpressionsUsingVariable", () => {
         expect(changes.expressions?.removed.length).toBeGreaterThan(0)
     })
 
-    // No "deletes multiple expressions referencing the same variable"
-    // or "handles already-removed expressions from subtree cascade"
-    // tests live here. Both would assert on the pre-v1.0 inline AN
-    // cascade fired alongside deleteExpressionsUsingVariable. The
-    // v1.0 contract is that deleteExpressionsUsingVariable cascade-
-    // deletes only the matching expressions (and their subtrees);
-    // any resulting operator/formula cleanup is owned by the AN-3
+    // deleteExpressionsUsingVariable deletes only the matching
+    // expressions (and their subtrees); any resulting operator/formula cleanup is owned by the AN-3
     // post-hook. The primitive's own cascade behavior is covered by
     // "deletes a single variable expression" + the assistive
     // post-hook tests in `test/grammar/auto-normalize.test.ts`.
@@ -6154,7 +6129,7 @@ describe("ArgumentEngine — auto-conclusion on first premise", () => {
     })
 
     it("createPremise after the argument is fully drained re-fires auto-conclusion-assignment", () => {
-        // The 1.0.2 invariant guard makes `clearConclusionPremise` a
+        // The invariant guard makes `clearConclusionPremise` a
         // no-op while premises exist, so the only path to a no-conclusion
         // state on a previously non-empty argument is to drain all
         // premises. Once drained, `clearConclusionPremise` is allowed
@@ -6196,41 +6171,31 @@ describe("ArgumentEngine — auto-conclusion on first premise", () => {
 
 // ---------------------------------------------------------------------------
 // E-7 invariant guard — engine refuses to leave non-empty argument without
-// conclusion (1.0.2)
+// conclusion
 // ---------------------------------------------------------------------------
 //
-// A downstream consumer's smoke test (with the Derivable gate
-// activated for normal-mode users) exposed E-7 firing on the first
-// premise of a freshly-created argument. The trigger was the consumer's
-// `mutateCreatePremise` helper, which after `createPremiseWithId`
-// calls `engine.clearConclusionPremise()` to honor a caller-supplied
-// `role: "supporting"` — pre-1.0.2 that successfully cleared the
-// auto-assigned conclusion, leaving the engine in a 1 premise / no
-// conclusion state that tripped E-7 and produced 422.
+// A consumer that creates the first premise of a fresh argument and
+// then calls `engine.clearConclusionPremise()` (to honor a caller's
+// `role: "supporting"`) must not be able to leave the argument with one
+// premise and no conclusion, which would trip E-7.
 //
-// The 1.0.2 fix is an engine-enforced invariant: a non-empty argument
-// always has a conclusion designated. `clearConclusionPremise()` on
-// a non-empty argument is a no-op; the auto-assigned conclusion
-// survives even when downstream callers ask to clear it. The shared
-// helper's clear call becomes a structural no-op, the post-mutation
-// state is `1 premise / that premise is the conclusion`, and E-7
-// passes.
+// The engine enforces the invariant: a non-empty argument always has a
+// conclusion designated. `clearConclusionPremise()` on a non-empty
+// argument is a no-op; the auto-assigned conclusion survives even when
+// a caller asks to clear it, so the state is `1 premise / that premise
+// is the conclusion`, and E-7 passes.
 //
-// E-7 itself retains its strict pre-1.0.2 reading; the validate-time
-// safety net still catches snapshot loads or direct data-shape
+// E-7 itself stays strict; the validate-time safety net still catches snapshot loads or direct data-shape
 // construction that the mutation-time guard cannot intercept.
 describe("ArgumentEngine — E-7 invariant guard on non-empty argument", () => {
-    it("smoke-test reproducer: createPremise + clearConclusionPremise on fresh argument keeps the premise as conclusion", () => {
-        // Reproduces the server-side call sequence:
-        //   sharedCreatePremise(engine, premiseId, { role: "supporting" })
-        // which expands to:
+    it("createPremise + clearConclusionPremise on fresh argument keeps the premise as conclusion", () => {
+        // Call sequence:
         //   1. engine.createPremiseWithId(premiseId, { type: "freeform" })
         //      → core auto-sets conclusionPremiseId = premiseId
         //   2. engine.clearConclusionPremise()
-        //      → shared asks core to honor "supporting" by clearing
-        // Pre-1.0.2: step 2 succeeded → 1 premise / no conclusion →
-        // E-7 → 422. Post-1.0.2: step 2 is a no-op → 1 premise / that
-        // premise is still the conclusion → E-7 passes.
+        //      → the caller asks to honor "supporting" by clearing
+        // Step 2 is a no-op → 1 premise / that premise is still the
+        // conclusion → E-7 passes.
         const eng = new ArgumentEngine({ id: "arg1", version: 0 }, aLib(), {
             behavior: "assistive",
         })
@@ -6245,7 +6210,7 @@ describe("ArgumentEngine — E-7 invariant guard on non-empty argument", () => {
         expect(violations.filter((v) => v.code === "E-7")).toEqual([])
     })
 
-    it("validate('presentable') is empty for the smoke-test state (no E-7 leakage at any tier)", () => {
+    it("validate('presentable') is empty after clearConclusionPremise on a one-premise argument (no E-7 leakage at any tier)", () => {
         // Presentable is the strictest tier (Structural + Evaluable +
         // Derivable + Presentable). The invariant-guard post-mutation
         // state must satisfy every tier including E-7 at Evaluable.
@@ -6309,11 +6274,10 @@ describe("ArgumentEngine — E-7 invariant guard on non-empty argument", () => {
     })
 
     // --- removePremise(conclusionPremiseId) — auto-reassign on
-    // multi-premise argument (1.0.2 invariant guard) ---
+    // multi-premise argument (invariant guard) ---
     //
-    // Pre-1.0.2 behavior was "delete conclusion premise → clear
-    // conclusionPremiseId", leaving E-7-violating state when other
-    // premises remained. Post-1.0.2 the engine atomically reassigns
+    // Deleting the conclusion premise while other premises remain must
+    // not leave an E-7-violating state: the engine atomically reassigns
     // conclusion to the lowest-id remaining premise (sorted
     // lexicographically) so the invariant holds across the delete.
 
@@ -6340,7 +6304,7 @@ describe("ArgumentEngine — E-7 invariant guard on non-empty argument", () => {
     })
 
     it("removePremise cycle: 3-premise argument → delete middle conclusion → delete next conclusion → both auto-promote", () => {
-        // Reviewer-requested coverage: walk the auto-promote chain
+        // Walk the auto-promote chain
         // across two consecutive deletes to confirm the lowest-id
         // selector composes cleanly.
         const eng = new ArgumentEngine({ id: "arg1", version: 0 }, aLib(), {
@@ -6801,14 +6765,11 @@ describe("removeExpression — deleteSubtree parameter", () => {
         return { eng, pm }
     }
 
-    // No "deleteSubtree: true — same as original behavior (collapse
-    // promotes sibling)" test lives here. It would assert the
-    // pre-v1.0 inline AN-3 1-child-promotion cascade fired from
-    // removeExpression(_, deleteSubtree=true). Under v1.0, the
-    // promotion is owned by the AN-3 post-hook (assistive mode); the
-    // primitive's own deleteSubtree behavior is asserted by the
-    // remaining tests in this describe block (which assert on the
-    // direct removal without the cascade assumption).
+    // When removeExpression(_, deleteSubtree=true) leaves an operator
+    // with one child, promoting that child is done by the AN-3
+    // post-hook (assistive mode), not by the primitive; the primitive's own
+    // deleteSubtree behavior is asserted by the tests in this describe
+    // block.
 
     it("deleteSubtree: false — promotes single child (operator)", () => {
         const { pm } = setup()
@@ -6887,10 +6848,7 @@ describe("removeExpression — deleteSubtree parameter", () => {
         expect(pm.getRootExpressionId()).toBe("op-and")
     })
 
-    // No "deleteSubtree: false — leaf node with collapse on parent"
-    // test lives here. Same legacy-cascade rationale as the
-    // "deleteSubtree: true" sibling above. The
-    // removeExpression(_, false) primitive's own promotion semantics
+    // The removeExpression(_, false) primitive's own promotion semantics
     // for 1-child-after-removal cases are covered by the other
     // "deleteSubtree: false — promotes single child" tests in this
     // block; the multi-step cascade behavior is owned by the AN-3
@@ -9264,7 +9222,7 @@ describe("ArgumentEngine subscribe", () => {
     })
 
     it("notifies subscriber when conclusion is cleared on an empty argument", () => {
-        // Under the 1.0.2 invariant guard `clearConclusionPremise` is a
+        // Under the invariant guard `clearConclusionPremise` is a
         // no-op on a non-empty argument and therefore does NOT notify.
         // The notification path is only exercised on the zero-premise
         // branch (or when transitioning the conclusion from set →
@@ -9279,7 +9237,7 @@ describe("ArgumentEngine subscribe", () => {
         // undefined throughout — then we verify the subscriber path
         // still fires on the role-state mutation.
         //
-        // Realistically the post-1.0.2 contract is: `clearConclusionPremise`
+        // The contract is: `clearConclusionPremise`
         // notifies only when it actually transitions state. The
         // simplest reproducer is to call it on a zero-premise engine
         // whose conclusionPremiseId happens to be set (only reachable
@@ -10078,11 +10036,9 @@ describe("wrapExpression", () => {
         expect(result2.rootValue).toBe(true)
     })
 
-    // No "wrap then remove operator triggers collapse" test lives
-    // here. It would assert that after wrapExpression + removeExpression
-    // of one child, the pre-v1.0 inline AN-3 cascade promoted the
-    // surviving child to root. Same legacy-cascade rationale as the
-    // sibling tests above; AN-3's contract is covered by
+    // Promoting the surviving child to root after wrapExpression +
+    // removeExpression of one child is done by the AN-3 post-hook, not
+    // by these primitives; AN-3's contract is covered by
     // `test/grammar/an-rules.test.ts`.
 
     it("children get midpoint-spaced positions, not consecutive integers", () => {
@@ -10124,17 +10080,13 @@ describe("wrapExpression", () => {
         expect(right.position).toBe(midpoint(POSITION_INITIAL, POSITION_MAX))
     })
 
-    // --- S-8 regression: implies/iff children sit at midpoint-spaced
-    // positions (relaxed S-8, post-1.0.2) ---
+    // --- S-8: implies/iff children sit at midpoint-spaced positions ---
     //
-    // History: pre-1.0.1 wrapExpression assigned `[POSITION_INITIAL,
+    // wrapExpression assigns `[POSITION_INITIAL,
     // midpoint(POSITION_INITIAL, POSITION_MAX)]` to all binary children.
-    // Cycle 1.0.1 (c303aa4) pinned `implies`/`iff` to exact [0, 1] to
-    // satisfy the over-strict S-8 position check. Cycle 1.0.2 relaxed
-    // S-8 to arity-only and reverted wrapExpression to the uniform
-    // midpoint-spaced pattern — `[0, 1]` and `[0, 1073741823]` are both
-    // valid for binary operators under the relaxed rule. These tests
-    // pin the post-1.0.2 behavior across all four binary wrap shapes
+    // S-8 checks arity only, so `[0, 1]` and `[0, 1073741823]` are both
+    // valid for binary operators. These tests pin that behavior across
+    // all four binary wrap shapes
     // (implies/iff × left-existing/right-existing) plus and/or regression
     // guards.
 
@@ -10200,8 +10152,8 @@ describe("wrapExpression", () => {
     })
 
     it("wrapExpression with and retains midpoint-spaced positions (regression guard)", () => {
-        // Asserts the and/or path was unaffected by the binary-op
-        // refactoring across 1.0.1 → 1.0.2.
+        // Asserts the and/or path gets the same midpoint spacing as
+        // implies/iff.
         const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         eng.addVariable(VAR_P)
         eng.addVariable(VAR_Q)
@@ -10317,10 +10269,8 @@ describe("toggleNegation", () => {
         expect(premise.toDisplayString()).toBe("(P ∧ Q)")
     })
 
-    // There is no "works on operator expressions" test: the pre-v1.0
-    // `negationInsertFormula` AN-flag behavior — toggleNegation on a
-    // non-`not` operator inserting a formula buffer between the new NOT
-    // and the operator — is gone. Under v1.0 toggleNegation wraps
+    // toggleNegation on a non-`not` operator does not itself insert a
+    // formula buffer between the new NOT and the operator. It wraps
     // Structurally and any resulting P-1 violation is repaired by the
     // AN-1 post-hook in assistive mode. The buffer-insertion contract
     // is covered by `test/grammar/an-rules.test.ts`; toggleNegation's
@@ -14779,13 +14729,8 @@ describe("hierarchical checksum propagation", () => {
         expect(engine.checksum()).toBe(argMetaBefore)
     })
 
-    // No "operator collapse after removeExpression doesn't break
-    // flush" test lives here. It would assert that after the
-    // pre-v1.0 inline 1-child collapse cascade fired by
-    // removeExpression, the engine's flushChecksums() still works
-    // correctly. Under v1.0 the cascade no longer fires inside
-    // removeExpression — the post-hook AN-3 does it instead, and
-    // that path's checksum-flush correctness is implicit in the
+    // Operator collapse does not happen inside removeExpression — the
+    // AN-3 post-hook does it, and that path's checksum-flush correctness is implicit in the
     // post-hook tests in `test/grammar/auto-normalize.test.ts` (the
     // post-hook runs through full PE mutation paths). Hierarchical
     // checksum flush correctness for ordinary removeExpression
@@ -15487,15 +15432,12 @@ describe("changeOperator", () => {
         }
     })
 
-    // --- Merge (no longer triggers for 2-child operators) ---
+    // --- Merge (does not trigger for 2-child operators) ---
 
-    // No changeOperator absorb tests live here ("absorbs:
-    // OR(formula(AND(P, Q)), R) → change AND to OR yields
-    // OR(P, Q, R)" and "absorbs: formula dissolved when inner
-    // operator changes to match parent"). Both would assert on the
-    // pre-v1.0 inline AN-4 same-operator absorption cascade fired
-    // from inside changeOperator. Under v1.0 the absorption is
-    // owned by the AN-4 post-hook; the contract is covered by
+    // changeOperator does not itself absorb a formula whose inner
+    // operator now matches its parent (for example
+    // OR(formula(AND(P, Q)), R) with AND changed to OR). That
+    // same-operator absorption is owned by the AN-4 post-hook; the contract is covered by
     // `test/grammar/an-rules.test.ts` (AN-4 + the multi-child
     // absorption regression-guard tests).
 
@@ -15707,11 +15649,9 @@ describe("changeOperator", () => {
 
     // --- No-merge for 2-child operators ---
 
-    // No "absorbs: AND(formula(OR(P, Q)), R) → change OR to AND yields
-    // AND(P, Q, R)" test lives here. Same legacy-cascade rationale as
-    // the absorb tests above; AN-4's same-operator absorption is owned
-    // by the post-hook and covered by
-    // `test/grammar/an-rules.test.ts`.
+    // The same applies to AND(formula(OR(P, Q)), R) with OR changed to
+    // AND: AN-4's same-operator absorption is owned by the post-hook
+    // and covered by `test/grammar/an-rules.test.ts`.
 
     it("no merge: OR(formula(OR(P, Q)), R) → change inner OR to AND yields OR(formula(AND(P, Q)), R)", () => {
         const pm = premiseWithVars()
@@ -15766,9 +15706,7 @@ describe("changeOperator", () => {
         expect(innerChildren).toHaveLength(2)
     })
 
-    // No "absorbs with tight positions: AND(P, formula(OR(Q, R)), S)
-    // at 0,1,2" test lives here. Same legacy-cascade rationale; the
-    // tight-position AN-4 absorption + redistribute path is covered by
+    // The tight-position AN-4 absorption + redistribute path is covered by
     // `test/grammar/an-rules.test.ts`'s AN-4 redistribute
     // regression-guard tests.
 
@@ -15807,14 +15745,9 @@ describe("toggleNegation extraFields", () => {
         expect((stored as Record<string, unknown>).creatorId).toBe("user-42")
     })
 
-    // There is no "merges extraFields into the NOT expression
-    // (operator target with formula buffer)" test. Such a test would
-    // assert that toggleNegation on an operator produces a formula
-    // buffer between the new NOT and the wrapped operator, and that
-    // extraFields propagate to that buffer. That buffer insertion
-    // was the pre-v1.0 `negationInsertFormula` AN-flag behavior, which
-    // is gone. Under v1.0 the buffer is owned by the AN-1
-    // post-hook (which doesn't get extraFields — it operates on
+    // toggleNegation on an operator does not itself insert a formula
+    // buffer between the new NOT and the wrapped operator. That buffer
+    // is owned by the AN-1 post-hook (which doesn't get extraFields — it operates on
     // already-mutated state). The extraFields propagation contract
     // is covered by the extraFields tests in this
     // describe block (variable-target + checksum variants).
@@ -15982,7 +15915,7 @@ describe("forkArgument", () => {
     })
 
     // -----------------------------------------------------------------------
-    // Task 9: Internal reference remapping
+    // Internal reference remapping
     // -----------------------------------------------------------------------
 
     it("remaps parentId chains, variableIds, boundPremiseId, rootExpressionId, and conclusion", () => {
@@ -16141,7 +16074,7 @@ describe("forkArgument", () => {
     })
 
     // -----------------------------------------------------------------------
-    // Task 10: Remap table accuracy and engine independence
+    // Remap table accuracy and engine independence
     // -----------------------------------------------------------------------
 
     it("remap table covers all entities and all mapped IDs differ from originals", () => {
@@ -16238,7 +16171,7 @@ describe("forkArgument", () => {
     })
 
     // -----------------------------------------------------------------------
-    // Task 11: Mutability and checksum divergence
+    // Mutability and checksum divergence
     // -----------------------------------------------------------------------
 
     it("forked entities are fully mutable", () => {
@@ -16386,7 +16319,7 @@ describe("forkArgument", () => {
     })
 
     // -----------------------------------------------------------------------
-    // Task 12: diffArguments with fork-aware matchers
+    // diffArguments with fork-aware matchers
     // -----------------------------------------------------------------------
 
     it("diffArguments without matchers sees forked entities as removed + added", () => {
@@ -17407,9 +17340,8 @@ describe("PremiseEngine — validate", () => {
 })
 
 describe("ArgumentEngine — validateInvariants", () => {
-    // The legacy no-arg `validate()` overload was renamed to
-    // `validateInvariants()` for unambiguous contrast with the
-    // tier-aware `validate(tier)` grammar validator. This describe
+    // `validateInvariants()` is distinct from the tier-aware
+    // `validate(tier)` grammar validator. This describe
     // block exercises the invariant sweep (schema conformance,
     // reference integrity, ownership, conclusion ref, circularity);
     // the four-tier grammar validator is tested separately under
@@ -19301,7 +19233,7 @@ describe("forkArgumentEngine", () => {
         ).not.toThrow()
     })
 
-    // D5 — behavior threading through the fork path
+    // Behavior threading through the fork path
     it("inherits permissive behavior from the source engine", () => {
         const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         expect(eng.behavior).toBe("permissive")
@@ -20152,7 +20084,7 @@ describe("PropositCore", () => {
             ).toBe(true)
         })
 
-        // D5 — behavior threads through PropositCore.forkArgument too,
+        // Behavior threads through PropositCore.forkArgument too,
         // via the shared `TForkArgumentOptions` shape passed down to
         // `forkArgumentEngine`.
         it("inherits behavior from the source engine through PropositCore.forkArgument", () => {
@@ -23125,7 +23057,7 @@ describe("ensureClaimBoundVariable", () => {
 })
 
 // ---------------------------------------------------------------------------
-// createPremise typed-bag overload + derivation init flow (Task 9)
+// createPremise typed-bag overload + derivation init flow
 // ---------------------------------------------------------------------------
 
 describe("createPremise with type and derivedClaimId", () => {
@@ -23226,7 +23158,7 @@ describe("createPremise with type and derivedClaimId", () => {
     })
 })
 
-describe("createPremise legacy positional signature (backward compat)", () => {
+describe("createPremise positional signature", () => {
     it("accepts no arguments", () => {
         const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         const { result: pm } = eng.createPremise()
@@ -23308,7 +23240,7 @@ describe("createPremiseWithId with derivation type", () => {
         expect(expressions[0].type).toBe("variable")
     })
 
-    it("legacy positional still works via createPremiseWithId", () => {
+    it("positional extras work via createPremiseWithId", () => {
         const { argumentEngine } = setupArgumentWithClaim()
         const { result: pm } = argumentEngine.createPremiseWithId(
             "00000000-0000-0000-0000-000000000333",
@@ -23346,7 +23278,7 @@ describe("createPremiseWithId with derivation type", () => {
 })
 
 // ---------------------------------------------------------------------------
-// Derivation premise extras handling (Task 9 regression)
+// Derivation premise extras handling
 // ---------------------------------------------------------------------------
 
 describe("derivation premise extras handling", () => {
@@ -23388,7 +23320,7 @@ describe("derivation premise extras handling", () => {
 })
 
 // ---------------------------------------------------------------------------
-// Fork integration with derivation premises (Task 10)
+// Fork integration with derivation premises
 // ---------------------------------------------------------------------------
 
 describe("Fork integration with derivation premises", () => {
@@ -23461,7 +23393,7 @@ describe("Fork integration with derivation premises", () => {
 })
 
 // ---------------------------------------------------------------------------
-// validateEvaluability derivation pre-flight + validateDerivationStructures (Task 11)
+// validateEvaluability derivation pre-flight + validateDerivationStructures
 // ---------------------------------------------------------------------------
 
 describe("ArgumentEngine validateEvaluability with derivation pre-flight", () => {
@@ -23511,12 +23443,10 @@ describe("ArgumentEngine validateEvaluability with derivation pre-flight", () =>
         return { argumentEngine: engine }
     }
 
-    // Pre-1.0 these tests asserted on `DERIVATION_STRUCTURE_INVALID_AT_EVALUATION`
-    // (the wrapper-overridden code). That override is gone —
-    // `validateEvaluability` / `validateDerivationStructures` now pass
+    // `validateEvaluability` / `validateDerivationStructures` pass
     // through the underlying `DERIVATION_STRUCTURE_INVALID` code from
-    // the derivation-validation utility. Naked-Q is a no-throw skip
-    // per spec §4.2; the structurally-broken case (empty tree, no
+    // the derivation-validation utility unchanged. Naked-Q is a
+    // no-throw skip; the structurally-broken case (empty tree, no
     // root) still surfaces as a `DERIVATION_STRUCTURE_INVALID`
     // violation through these wrapper APIs.
     it("flags a structurally-broken derivation premise with DERIVATION_STRUCTURE_INVALID", () => {
@@ -23588,11 +23518,9 @@ describe("ArgumentEngine.validateDerivationStructures", () => {
         const { argumentEngine } = setupArgumentWithBrokenDerivation()
         const result = argumentEngine.validateDerivationStructures()
         expect(result.violations.length).toBeGreaterThan(0)
-        // Pre-1.0 the wrapper overrode this to
-        // `DERIVATION_STRUCTURE_INVALID_AT_EVALUATION`; that override is
-        // gone, so the underlying `DERIVATION_STRUCTURE_INVALID`
-        // code (from `validateDerivationStructure`) flows through
-        // unchanged.
+        // The wrapper does not rename the code: the underlying
+        // `DERIVATION_STRUCTURE_INVALID` code (from
+        // `validateDerivationStructure`) flows through unchanged.
         for (const v of result.violations) {
             expect(v.code).toBe("DERIVATION_STRUCTURE_INVALID")
         }
@@ -23743,7 +23671,7 @@ describe("ArgumentEngine.fromData — premise extras preservation", () => {
     })
 })
 
-describe("ClaimLibrary axiomatic claim type (v0.12)", () => {
+describe("ClaimLibrary axiomatic claim type", () => {
     it("creates a claim with type 'axiomatic'", () => {
         const lib = new ClaimLibrary()
         const claim = lib.create({ type: "axiomatic" })
@@ -23765,7 +23693,7 @@ describe("ClaimLibrary axiomatic claim type (v0.12)", () => {
     })
 })
 
-describe("ClaimAxiomLibrary (v0.12)", () => {
+describe("ClaimAxiomLibrary", () => {
     function setup() {
         const claims = new ClaimLibrary()
         const normalClaim = claims.create({ type: "normal" })
@@ -23898,7 +23826,7 @@ describe("ClaimAxiomLibrary (v0.12)", () => {
     })
 })
 
-describe("PropositCore axioms field (v0.12)", () => {
+describe("PropositCore axioms field", () => {
     it("exposes axioms as a public field", () => {
         const core = new PropositCore()
         expect(core.axioms).toBeInstanceOf(ClaimAxiomLibrary)
@@ -23941,7 +23869,7 @@ describe("PropositCore axioms field (v0.12)", () => {
         const legacy = {
             arguments: { arguments: [] },
             claims: { claims: [] },
-            claimCitations: { claimCitations: [] }, // pre-v0.12 shape
+            claimCitations: { claimCitations: [] }, // older stored shape, rejected
             axioms: { connections: [] },
             forks: {
                 arguments: [],
@@ -23957,7 +23885,7 @@ describe("PropositCore axioms field (v0.12)", () => {
     })
 })
 
-describe("PropositCore.forkArgument transitive closure across axioms (v0.12)", () => {
+describe("PropositCore.forkArgument transitive closure across axioms", () => {
     it("clones a normal claim, its cited citation, and its supporting axiom", () => {
         const core = new PropositCore()
         const normalClaim = core.claims.create({ type: "normal" })
@@ -24041,11 +23969,10 @@ describe("PropositCore.forkArgument transitive closure across axioms (v0.12)", (
 })
 
 // ---------------------------------------------------------------------------
-// Task 17: ArgumentEngine.evaluate / checkValidity axiom force-true semantics
-// (v0.12) — failing tests, to be made green by Tasks 18-20.
+// ArgumentEngine.evaluate / checkValidity axiom force-true semantics
 // ---------------------------------------------------------------------------
 
-describe("ArgumentEngine.evaluate axiom force-true (v0.12)", () => {
+describe("ArgumentEngine.evaluate axiom force-true", () => {
     it("forces axiomatic-bound variables to true with no caller assignment", () => {
         const core = new PropositCore()
         const claim = core.claims.create({ type: "axiomatic" })
@@ -24109,7 +24036,7 @@ describe("ArgumentEngine.evaluate axiom force-true (v0.12)", () => {
     it("rejects an explicit `undefined` assignment of an axiomatic-bound variable", () => {
         // Regression: a caller passing { [varId]: undefined } previously slipped
         // past the `!== undefined` guard and was silently overwritten to true.
-        // Per Change 2 in v0.12.1, ANY explicit key on the assignment map for
+        // ANY explicit key on the assignment map for
         // an axiomatic-bound variable must throw, including an explicit undefined.
         const core = new PropositCore()
         const claim = core.claims.create({ type: "axiomatic" })
@@ -24125,15 +24052,12 @@ describe("ArgumentEngine.evaluate axiom force-true (v0.12)", () => {
         ).toThrow(/AXIOM_VARIABLE_ASSIGNMENT_FORBIDDEN/)
     })
 
-    // The forward direction relies on `populateFromSupports` (Task 22) to build
-    // an `IMPLIES(axiomVar, Q)` antecedent and then swap the root to `iff`. The
-    // helper does not yet exist; the test is skipped here and will be revisited
-    // alongside Task 22.
-    it.skip("iff-rooted derivation backed by an axiom forces consequent Q to true (blocked by Task 22 populateFromSupports)", () => {
+    it("iff-rooted derivation backed by an axiom forces consequent Q to true", () => {
         // An axiom-backed derivation whose root operator is iff propagates
-        // bidirectionally: axiom forces antecedent true → Q true; and
-        // a known-true Q would force the antecedent true. Verify the forward
-        // direction lands Q at true.
+        // both ways: the axiom is true, so once the reader accepts the step,
+        // Q is forced true. The derivation premise is a supporting premise and
+        // a separate premise holding only Q is the conclusion, so Q's value
+        // comes from the derivation step, not from Q's own premise.
         const core = new PropositCore()
         const derivedClaim = core.claims.create({ type: "normal" })
         const axiomClaim = core.claims.create({ type: "axiomatic" })
@@ -24147,48 +24071,39 @@ describe("ArgumentEngine.evaluate axiom force-true (v0.12)", () => {
         const argId = crypto.randomUUID()
         core.arguments.create({ id: argId, version: 0 })
         const engine = core.arguments.get(argId)!
-        const { result: premEngine } = engine.createPremise({
+        const { result: conclusion } = engine.createPremise({
+            type: "freeform",
+        })
+        const consequentVar = engine.ensureClaimBoundVariable(derivedClaim.id)
+        conclusion.addExpression({
+            id: crypto.randomUUID(),
+            argumentId: argId,
+            argumentVersion: 0,
+            premiseId: conclusion.toPremiseData().id,
+            parentId: null,
+            position: POSITION_INITIAL,
+            type: "variable",
+            variableId: consequentVar.id,
+        })
+        const { result: derivation } = engine.createPremise({
             type: "derivation",
             derivedClaimId: derivedClaim.id,
         })
-        // Populate the antecedent via supports, then swap root operator
-        // implies → iff. `populateFromSupports` is Task 22; until it exists
-        // this test is skipped.
-        ;(
-            premEngine as unknown as {
-                populateFromSupports: (
-                    c: typeof core.citations,
-                    a: typeof core.axioms,
-                    e: typeof engine
-                ) => void
-            }
-        ).populateFromSupports(core.citations, core.axioms, engine)
-        const root = (premEngine as unknown as { rootExpressionId: string })
-            .rootExpressionId
-        ;(
-            premEngine as unknown as {
-                changeOperator: (id: string, op: string) => void
-            }
-        ).changeOperator(root, "iff")
-        engine.setConclusionPremise(premEngine.toPremiseData().id)
-        const result = engine.evaluate({
-            variables: {},
-            operatorAssignments: {},
+        engine.populateFromAxioms(derivedClaim.id, core.axioms)
+        const rootId = derivation.getRootExpression()!.id
+        derivation.changeOperator(rootId, "iff")
+        engine.setConclusionPremise(conclusion.toPremiseData().id)
+        expect(derivation.getRootExpression()).toMatchObject({
+            type: "operator",
+            operator: "iff",
         })
-        const consequentVar = engine
-            .getVariables()
-            .find(
-                (v) =>
-                    isClaimBound(v as unknown as TCorePropositionalVariable) &&
-                    (v as unknown as TClaimBoundVariable).claimId ===
-                        derivedClaim.id
-            )
-        expect(consequentVar).toBeDefined()
-        // Inspect the conclusion premise's variable values map (no
-        // propagatedVariableValues without includeDiagnostics).
-        expect(result.conclusion?.variableValues?.[consequentVar!.id]).toBe(
-            true
+
+        const result = engine.evaluate(
+            { variables: {}, operatorAssignments: { [rootId]: "accepted" } },
+            { includeDiagnostics: true }
         )
+        expect(result.propagatedVariableValues?.[consequentVar.id]).toBe(true)
+        expect(result.conclusion?.rootValue).toBe(true)
     })
 
     it("checkValidity excludes axiomatic-bound variables from enumeration", () => {
@@ -24252,10 +24167,10 @@ describe("ArgumentEngine.evaluate axiom force-true (v0.12)", () => {
 })
 
 // ---------------------------------------------------------------------------
-// Task 20: Propagator interaction with axiomatic variables (v0.12)
+// Propagator interaction with axiomatic variables
 // ---------------------------------------------------------------------------
 
-describe("Propagator interaction with axiomatic variables (v0.12)", () => {
+describe("Propagator interaction with axiomatic variables", () => {
     it("rejecting an operator whose only unknown child is axiom-bound does not flip the axiom", () => {
         const core = new PropositCore()
         const axiomClaim = core.claims.create({ type: "axiomatic" })
@@ -24329,10 +24244,10 @@ describe("Propagator interaction with axiomatic variables (v0.12)", () => {
 })
 
 describe("PremiseEngine.reparentExpression", () => {
-    // Public bundled-composite mutation per spec §8. Atomically moves an
+    // Public bundled-composite mutation. Atomically moves an
     // existing expression onto a new parent at a given position with no
-    // externally observable transient orphan state. Used by native AN-1
-    // (formula-buffer insertion) and native AN-4 (multi-child
+    // externally observable transient orphan state. Used by AN-1
+    // (formula-buffer insertion) and AN-4 (multi-child
     // same-operator absorption) in `src/lib/grammar/an-rules.ts`.
     //
     // Throws only on Structural rules + entity-not-found: S-1 (FK
@@ -24393,7 +24308,7 @@ describe("PremiseEngine.reparentExpression", () => {
         expect(pe.getChildExpressions("f1")).toHaveLength(0)
     })
 
-    it("supports newPosition: 0 cleanly (used by native AN-1)", () => {
+    it("supports newPosition: 0 cleanly (used by AN-1)", () => {
         // Setup: F → OR (the formula has the OR at some non-zero
         // position). Reparent OR to position 0 under F.
         const pe = permissivePremise()

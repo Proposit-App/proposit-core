@@ -1,5 +1,5 @@
 // Mutations enforce Structural rules and throw on violation
-// regardless of `behavior`. Per spec §4, Structural is the floor —
+// regardless of `behavior`. Structural is the floor —
 // even permissive engines reject Structural violations at mutation
 // time. Only Evaluable / Derivable / Presentable violations are
 // allowed to surface via validate(tier) without throwing.
@@ -59,8 +59,8 @@ function varExpr(
 describe("Mutations throw on Structural violations", () => {
     // Test setup uses the permissive-build + setBehavior(assistive)
     // pattern. The Structural-rule contract is "mutations throw on
-    // Structural violations regardless of `behavior`" (spec §8). With
-    // the new AN post-mutation hook (assistive mode), the eager AN-3
+    // Structural violations regardless of `behavior`". With
+    // the AN post-mutation hook (assistive mode), the eager AN-3
     // collapse of 0-child operators would tear down the partial tree
     // the test is constructing before the violating mutation can fire.
     // To exercise the Structural enforcement in both modes, we build

@@ -1326,7 +1326,7 @@ describe("mid-flight abort surfaces as skipped", () => {
         expect(result.stageOutcomes.a).toBe("skipped")
         expect(result.failures.find((f) => f.stage === "a")).toBeUndefined()
         // The finalize was bypassed because its required dep `a` is
-        // not `completed`. Per spec §5.4 step 6, output is null.
+        // not `completed`, so the output is null.
         expect(result.output).toBeNull()
         const aEnd = events.find(
             (e) => e.kind === "stage:end" && e.stageId === "a"
@@ -1826,9 +1826,9 @@ describe("llmStage — stage:llm-call event", () => {
     })
 })
 
-// ---------------- A2 — stage:llm-request event ----------------
+// ---------------- stage:llm-request event ----------------
 //
-// Tests for the new additive `stage:llm-request` event variant. It must
+// Tests for the `stage:llm-request` event variant. It must
 // fire from `llmStage` INSIDE the retry loop, after `attempt += 1` and
 // after the request is built, immediately BEFORE the provider call
 // resolves — carrying the prompts as-sent on this attempt (the user

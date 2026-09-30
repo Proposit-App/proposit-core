@@ -37,7 +37,7 @@ function buildResponse(parts: {
 // freeform premises. Their support is carried in `derivationBacking`
 // (consequent claim → its citation/axiomatic supporters); the parser
 // materializes each backing entry into a ClaimCitationLibrary /
-// ClaimAxiomLibrary edge. Premise formula structure no longer drives edges.
+// ClaimAxiomLibrary edge. Premise formula structure does not drive edges.
 describe("ArgumentParser — derivation-backing citation/axiom edges", () => {
     it("extracts a single citation edge from derivation backing", () => {
         const response = buildResponse({

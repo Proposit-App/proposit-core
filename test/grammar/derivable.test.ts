@@ -991,7 +991,7 @@ describe("grammar/derivable", () => {
 
         it("rejects axiomatic-bound variable at the naked-Q root of a derivation premise", () => {
             // Naked-Q form: the single variable at root IS the consequent
-            // (per spec §4.3 D-1). An axiomatic-bound variable there is
+            // (per D-1). An axiomatic-bound variable there is
             // misplaced — the consequent must bind to a 'normal' claim.
             // `isInDerivationAntecedent` has an explicit short-circuit for
             // this case (root.type === 'variable' → false).
@@ -1269,7 +1269,7 @@ describe("grammar/derivable", () => {
         })
     })
 
-    // D-7 reserved — see spec §4.3. No test block.
+    // D-7 is a reserved code with no rule. No test block.
 
     describe("aggregator validateDerivable", () => {
         it("concatenates every per-rule validator's output", () => {

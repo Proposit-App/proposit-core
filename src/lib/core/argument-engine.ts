@@ -622,10 +622,8 @@ export class ArgumentEngine<
      * UI is expected to prompt the user before invoking `normalize()`
      * explicitly.
      *
-     * As of v1.0 behavior is enforced entirely via the AN
-     * post-mutation hook in `runAssistiveNormalization` — the legacy
-     * per-flag `grammarConfig` plumbing that bridged behavior to
-     * premise-level enforcement is gone. Switching `permissive →
+     * Behavior is enforced entirely via the AN post-mutation hook in
+     * `runAssistiveNormalization`. Switching `permissive →
      * assistive` makes the next successful Structural mutation trigger
      * the AN pass; switching the other direction stops the AN pass
      * from running until the user opts back in.
@@ -1024,14 +1022,14 @@ export class ArgumentEngine<
             }
             this.premises.delete(premiseId)
             collector.removedPremise(data)
-            // Invariant guard (1.0.2): a non-empty argument always
-            // has a conclusion designated. When the removed premise was
+            // Invariant guard: a non-empty argument always has a
+            // conclusion designated. When the removed premise was
             // the conclusion AND other premises remain, atomically
             // reassign the role to the lowest-id remaining premise
             // rather than leaving conclusionPremiseId === undefined
             // (which would trip E-7). When the removed premise was the
             // conclusion AND no premises remain, the invariant is
-            // vacuously satisfied — clear the role as before.
+            // vacuously satisfied — clear the role.
             //
             // Why lowest-id: core premises carry no `position` field
             // (sibling ordering at the premise level is server-side
@@ -1699,7 +1697,7 @@ export class ArgumentEngine<
     }
 
     /**
-     * Global normalize pass per spec §6. Runs the AN rule set
+     * Global normalize pass. Runs the AN rule set
      * (AN-1..AN-4) everywhere it can fire, converging the argument
      * toward `tier` (defaults to `'presentable'`).
      *
@@ -1708,10 +1706,10 @@ export class ArgumentEngine<
      * operator semantics. Recovery from Evaluable or Derivable violations
      * requires user intent and is exposed via the repair primitives.
      *
-     * In v1.0 every AN rule targets a Presentable invariant, so calls
+     * Every AN rule currently targets a Presentable invariant, so calls
      * with `tier` ∈ {'structural', 'evaluable', 'derivable'} are
-     * effectively no-ops. The parameter exists as forward-compatible
-     * API surface for a future submit/finalize gate.
+     * effectively no-ops. The parameter is reserved so a future
+     * submit/finalize gate can add lower-tier rules without an API break.
      *
      * **Bypasses `behavior`.** `normalize()` is user-initiated (the UI
      * invokes it after the user confirms a Tidy / Normalize action), so
@@ -1773,8 +1771,8 @@ export class ArgumentEngine<
         TArg
     > {
         return this.withValidation(() => {
-            // Invariant guard (1.0.2): a non-empty argument always
-            // has a conclusion designated. If premises exist, this call
+            // Invariant guard: a non-empty argument always has a
+            // conclusion designated. If premises exist, this call
             // is a no-op rather than a state change — the caller's
             // intent ("remove the conclusion designation") is structurally
             // incompatible with the premise count, and the only way to
@@ -1788,8 +1786,8 @@ export class ArgumentEngine<
             // and the post-mutation state is `1 premise / that premise
             // is the conclusion`, which satisfies the invariant.
             //
-            // When there are zero premises the original semantics apply
-            // — clearing on an empty argument is fine because the
+            // When there are zero premises the call clears the role —
+            // clearing on an empty argument is fine because the
             // invariant ("non-empty argument has a conclusion") is
             // vacuously satisfied.
             if (this.premises.size > 0) {
@@ -1854,11 +1852,9 @@ export class ArgumentEngine<
                 // path (`forkArgumentEngine` / `PropositCore.forkArgument`)
                 // explicitly threads the source engine's `behavior` into
                 // the forked engine's config (see `fork.ts`), so fork
-                // callers don't lose the setting.
-                //
-                // The legacy `grammarConfig` field is gone — all
-                // P-1 / AN behavior is driven by `engine.behavior` +
-                // the AN post-mutation hook.
+                // callers don't lose the setting. All P-1 / AN behavior
+                // is driven by `engine.behavior` + the AN post-mutation
+                // hook.
             } as TLogicEngineOptions,
         }
     }
@@ -1957,10 +1953,8 @@ export class ArgumentEngine<
             verifySnapshotChecksums(engine, snapshot)
         }
 
-        // Load-time invariant validation no longer needs the
-        // PERMISSIVE swap — the legacy `EXPR_FORMULA_BETWEEN_OPERATORS_VIOLATED`
-        // check was removed alongside the rest of `grammarConfig`. P-1
-        // is now surfaced via `engine.validate('presentable')`
+        // Load-time invariant validation covers no grammar rule: P-1 and
+        // the other lower-tier rules surface via `engine.validate(tier)`
         // post-load. Non-grammar invariants (schema conformance,
         // reference integrity, conclusion ref, circularity, etc.)
         // still throw at load time, routed through the public
@@ -2030,8 +2024,8 @@ export class ArgumentEngine<
             // an entity-id or hierarchical-checksum field is a project extra.
             // Pull `type` / `derivedClaimId` out explicitly and pass the rest
             // under the typed-bag's `extras` slot so they survive the parser.
-            // Previously, passing the row directly tripped the
-            // typed-bag heuristic on `type: string` and dropped every sibling.
+            // Passing the row directly would trip the typed-bag heuristic
+            // on `type: string` and drop every sibling.
             const {
                 id: _id,
                 argumentId: _argumentId,
@@ -2080,7 +2074,8 @@ export class ArgumentEngine<
             group.push(expr)
         }
 
-        // Add expressions via loadExpressions (bypasses nesting check for legacy data)
+        // Add expressions via loadExpressions, which loads them as-is
+        // without grammar checks.
         for (const [premiseId, pe] of premiseEngines) {
             const premiseExprs = exprsByPremise.get(premiseId) ?? []
             pe.loadExpressions(premiseExprs)
@@ -2095,16 +2090,15 @@ export class ArgumentEngine<
 
         // No post-load normalization. See the matched note in
         // `fromSnapshot` above. Load is non-mutating; lower-tier
-        // violations surface via `engine.validate(tier)`. There is no
-        // legacy grammarConfig parameter.
+        // violations surface via `engine.validate(tier)`.
 
         if (checksumVerification === "strict") {
             engine.flushChecksums()
             verifyDataChecksums(engine, argument, variables, premises)
         }
 
-        // PERMISSIVE-gated load-time validation (see matched comment
-        // in `fromSnapshot` above). Non-grammar invariants still throw at
+        // Load-time invariant validation (see matched comment in
+        // `fromSnapshot` above). Non-grammar invariants still throw at
         // load; lower-tier grammar violations surface post-load via
         // `engine.validate(tier)`, routed through the public
         // `validateInvariants()` method.
@@ -2310,24 +2304,23 @@ export class ArgumentEngine<
     }
 
     /**
-     * Four-tier grammar validation per spec §4. Returns the union of
+     * Four-tier grammar validation. Returns the union of
      * violations from Structural up through `tier` — `'structural'`
      * returns S-rule violations only, `'evaluable'` returns S + E,
      * `'derivable'` returns S + E + D, `'presentable'` returns the full
      * union. Empty array means the argument is at the requested tier
      * or stricter. Never throws on grammar issues.
      *
-     * For the legacy pre-1.0 invariant sweep (schema conformance,
-     * reference integrity, ownership, conclusion ref, circularity,
-     * checksums) use {@link validateInvariants} instead. The pre-1.0
-     * no-arg overload of `validate()` has been removed.
+     * For the invariant sweep (schema conformance, reference integrity,
+     * ownership, conclusion ref, circularity, checksums) use
+     * {@link validateInvariants} instead.
      */
     public validate(tier: TGrammarTier): readonly TViolation[] {
         return validateGrammar(tier, this.asGrammarValidatorContext())
     }
 
     /**
-     * Legacy invariant sweep — schema conformance, reference integrity,
+     * Invariant sweep — schema conformance, reference integrity,
      * ownership, conclusion-ref + circularity, checksum stability, and
      * per-premise validation. Returns a `TInvariantValidationResult`.
      * Used internally by mutation-rollback and snapshot-load paths and
@@ -2341,8 +2334,7 @@ export class ArgumentEngine<
      * covers schema/reference/structural-bookkeeping invariants that
      * sit outside the tier hierarchy.
      *
-     * @since 1.0.0 — replaces the legacy `validate()` no-arg overload,
-     *   which has been removed.
+     * @since 1.0.0
      */
     public validateInvariants(): TInvariantValidationResult {
         return validateArgumentStandalone(this.asValidationContext())
@@ -2409,11 +2401,9 @@ export class ArgumentEngine<
      * evaluation pipeline.
      *
      * Violations carry the underlying `DERIVATION_STRUCTURE_INVALID` code
-     * (per the derivation-validation utility). The pre-1.0
-     * `DERIVATION_STRUCTURE_INVALID_AT_EVALUATION` override was removed
-     * alongside the legacy `validate()` no-arg overload — naked-Q
-     * is a valid Derivable state (per spec §4.2) and is skipped by
-     * evaluation rather than thrown.
+     * (per the derivation-validation utility). A naked-Q derivation
+     * premise is a valid Derivable state and is skipped by evaluation
+     * rather than thrown.
      *
      * @since 0.11.0
      */
@@ -2504,9 +2494,8 @@ export class ArgumentEngine<
         // Naked-Q derivation premises (single variable expression at
         // root, type='derivation') contribute nothing to evaluation. The
         // evaluator-context's premise listings filter them out so they
-        // are entirely invisible to evaluate() and checkValidity(). This
-        // replaces the pre-1.0 DERIVATION_STRUCTURE_INVALID_AT_EVALUATION
-        // throw on naked-Q. Filter applies uniformly to conclusion,
+        // are entirely invisible to evaluate() and checkValidity() —
+        // evaluation never throws on naked-Q. Filter applies uniformly to conclusion,
         // supporting, and full premise listings. The predicate lives in
         // `src/lib/grammar/naked-q.ts` so the populate-from factory and
         // this filter share one definition.

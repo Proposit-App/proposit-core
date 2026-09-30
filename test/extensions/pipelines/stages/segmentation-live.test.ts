@@ -1,34 +1,24 @@
-// Live-LLM reproducer + regression for the v1.3.0 segmentation
-// truncation bug. The v2 multi-stage pipeline originally dispatched
-// the segmentation stage with no `maxOutputTokens` cap;
-// for inputs above ~10 KB the Responses API would emit a truncated
-// JSON payload that surfaced as a JSON-parse error in
-// `safeParseJson` ("Unterminated string in JSON at position 290 /
-// 310"). The framework classified the throw as
-// `LLM_TRANSIENT_ERROR` and re-ran the stage; the second attempt hit
-// the same wall and the whole pipeline reported `output: null`.
+// Live-LLM regression for segmentation output truncation. Without a
+// `maxOutputTokens` cap, for inputs above ~10 KB the Responses API
+// can emit a truncated JSON payload that fails to parse
+// ("Unterminated string in JSON at position N"); a retry hits the same
+// limit and the whole pipeline reports `output: null`.
 //
 // This test runs the real segmentation stage against Madison's
-// "Federalist No. 10" (18 KB / ~4.5 k input tokens). With the v1.3.1
-// fix in place it must finish without truncation, return a non-empty
+// "Federalist No. 10" (18 KB / ~4.5 k input tokens). With the stage's
+// output cap it must finish without truncation, return a non-empty
 // segments array, and not trigger `validationError` on the stage's
 // `outputSchema`.
 //
-// **Why Federalist 10 + not the original reproducer text.** The
-// v1.3.1 cycle initially used the Singer "Solution to World Poverty"
-// fixture (15.5 KB), which is the exact text the user reported the
-// bug with. Post-validation, the live test against that text
-// surfaced a *different* failure mode: OpenAI's content-policy
-// filter returns `status: "incomplete"` with
+// **Why Federalist 10.** A comparable-size text (the Singer "Solution
+// to World Poverty" essay, 15.5 KB, kept in `examples/texts/`) instead
+// triggers OpenAI's content-policy filter: `status: "incomplete"` with
 // `incomplete_details.reason: "content_filter"` rather than
-// `"max_output_tokens"` — content_filter is deterministic and
-// covered separately by the provider unit tests (see
-// `provider.test.ts` "throws NonRetryableLlmError on incomplete with
-// reason: content_filter"). Federalist 10 is a comparable-size
-// political-philosophy text with no content-policy risk, so it
-// exercises the original max_output_tokens cap path cleanly. The
-// Singer text stays in `examples/texts/` as a workspace asset and
-// is the test bed for any future content_filter-specific scenarios.
+// `"max_output_tokens"`. That case is deterministic and covered by the
+// provider unit tests (see `provider.test.ts` "throws
+// NonRetryableLlmError on incomplete with reason: content_filter").
+// Federalist 10 is a political-philosophy text with no content-policy
+// risk, so it exercises the max_output_tokens cap path cleanly.
 //
 // **Opt-in.** Gated on both `OPENAI_API_KEY` (env or
 // `.env.development`) AND `RUN_LIVE_LLM_TESTS=1` — vitest skips the
@@ -78,7 +68,7 @@ const describeIf = apiKey && liveTestsEnabled ? describe : describe.skip
 
 // Tiny stand-in pipeline that runs *only* segmentation against the
 // Federalist 10 text. Lets us pin the failure mode to the
-// segmentation stage in isolation — same stage instance the real v2
+// segmentation stage in isolation — same stage instance the real
 // factory wires up, just without the eleven downstream stages
 // weighing in.
 const INPUT_SCHEMA = Type.Object({ text: Type.String({ minLength: 1 }) })

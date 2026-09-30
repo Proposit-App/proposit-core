@@ -1,7 +1,7 @@
 // AN rule set — native implementations of AN-1..AN-4.
 //
-// Per spec §5.1 the auto-normalization rule set consists of four local
-// cleanup rules:
+// The auto-normalization rule set (docs/Proposit_Grammar.md §4.2)
+// consists of four local cleanup rules:
 //
 //   AN-1  Insert formula buffer when a non-`not` operator becomes a
 //         direct child of another operator. Preserves P-1.
@@ -12,17 +12,14 @@
 //   AN-4  Absorb same-operator adjacency through a formula. Preserves
 //         P-5.
 //
-// This module is the **native home** of the rule set for v1.0. The
-// rules live here, in the grammar module, rather than inside
-// `ExpressionManager.normalize()`, so the AN pass is not coupled to the
-// legacy `grammarConfig` machinery, and so the per-mutation AN inside
-// `ExpressionManager` mutation methods and the legacy P-1 throw sites
-// are no longer needed.
+// The rules live here, in the grammar module, rather than inside
+// `ExpressionManager`, so the individual mutation methods never
+// normalize and never throw on a Presentable (P-1) violation; the AN
+// pass runs as a separate step after a mutation.
 //
-// **All four rules are native.** `applyAN1`, `applyAN2`, `applyAN3`,
-// and `applyAN4` implement their rules directly against the public
-// `PremiseEngine` mutation API. AN-1 uses
-// `pe.wrapInFormula(childOpId, formulaId)` to atomically insert a
+// `applyAN1`, `applyAN2`, `applyAN3`, and `applyAN4` implement their
+// rules directly against the public `PremiseEngine` mutation API. AN-1
+// uses `pe.wrapInFormula(childOpId, formulaId)` to atomically insert a
 // formula buffer between an operator parent and a non-`not` operator
 // child (composing this from `addExpression` + `reparentExpression`
 // would trip S-9 transiently and violate parent child-limits under
@@ -35,10 +32,8 @@
 // `applyANToFixedPoint` uses a reduce-or accumulator (all four rules
 // per outer iteration, OR'd into the changed flag) rather than a `||`
 // short-circuit chain (which would fire at most one rule per outer
-// iteration). The PERMISSIVE config swap that once disarmed the legacy
-// inline P-1 enforcement throws is gone — those throw sites and the
-// surrounding `grammarConfig` machinery have been removed — so AN-2 and
-// AN-3 can run unconditionally without tripping a P-1 throw mid-pass.
+// iteration). No mutation method throws on a P-1 violation, so AN-2
+// and AN-3 run unconditionally within a pass.
 //
 // The per-rule tests (`test/grammar/an-rules.test.ts`) assert behavior
 // the native implementation must preserve.
@@ -275,8 +270,8 @@ function collapseOneAN3InPremise<
  * and has nothing to absorb). For each match:
  *
  *   1. Compute target positions for the N inner children under the
- *      outer operator using the legacy spacing algorithm from
- *      `ExpressionManager.absorbSameOperator` (em.ts:1240-1349):
+ *      outer operator by spacing them evenly between the formula's
+ *      neighbors:
  *      `leftPos + ((rightPos - leftPos) / (count + 1)) * (i + 1)`,
  *      truncated to integers. `leftPos` and `rightPos` are the
  *      formula's outer neighbors (or `positionConfig.min`/`max` at
@@ -363,12 +358,10 @@ function absorbOneSameOperatorInPremise<
 
 /**
  * Execute one AN-4 absorption: move every child of `innerId` to be a
- * direct child of `outerId` at spacing-algorithm positions between the
- * formula's outer neighbors; remove `innerId` and `formulaId`.
- *
- * Ports the position-spacing + redistribution-fallback algorithm from
- * `ExpressionManager.absorbSameOperator` (em.ts:1240-1349) to the
- * public PE-mutation surface.
+ * direct child of `outerId` at evenly spaced positions between the
+ * formula's outer neighbors, redistributing the outer operator's
+ * children first when the gap is too small; remove `innerId` and
+ * `formulaId`. Uses only the public `PremiseEngine` mutation methods.
  */
 function absorbSameOperatorMatch<
     TArg extends TCoreArgument,
@@ -426,7 +419,7 @@ function absorbSameOperatorMatch<
     }
 
     // Reparent each inner child into the outer at its computed
-    // position. Naive position formula (from the legacy AN-4):
+    // position. Naive position formula:
     //   `leftPos + ((rightPos - leftPos) / (count + 1)) * (i + 1)`,
     // truncated to integer.
     //
@@ -521,8 +514,7 @@ function absorbSameOperatorMatch<
 
     // Formula is now empty (inner was its only child). Removing with
     // deleteSubtree=false routes through removeAndPromote's
-    // 0-child leaf-removal branch — no promotion attempted, so the
-    // inline P-1 enforcement throw at em.ts:863-876 cannot fire.
+    // 0-child leaf-removal branch — no promotion is attempted.
     pe.removeExpression(formulaId, false)
 }
 
@@ -668,8 +660,8 @@ function redistributeChildrenEvenly<
  * each match, calls `pe.wrapInFormula(childOpId, formulaId)` which
  * atomically inserts a freshly-minted `formula` between parent and
  * child. The formula takes the child's original slot; the child
- * becomes the formula's sole child at position 0. Per spec §5.1 the
- * result preserves P-1.
+ * becomes the formula's sole child at position 0. The result
+ * preserves P-1.
  *
  * Why a dedicated `wrapInFormula` primitive rather than composing
  * `addExpression(formula)` + `reparentExpression(child)`:
@@ -682,7 +674,7 @@ function redistributeChildrenEvenly<
  *     after the wrap (the formula displaces the child).
  *
  * `pe.wrapInFormula` sidesteps both by performing the insertion +
- * reparent as one bundled-composite mutation per spec §8 (see the PE
+ * reparent as one bundled-composite mutation (see the PE
  * method's JSDoc for the atomicity contract).
  *
  * The new formula's id is minted via `engine.idGenerator` so id
@@ -759,8 +751,9 @@ function insertOneFormulaBufferInPremise<
  * MAX_AN_ITERATIONS for borderline inputs.
  *
  * Convergence cap: `MAX_AN_ITERATIONS = 10`. Typical convergence is ≤ 3
- * iterations (spec §5.1); the cap protects against pathological inputs
- * (e.g. malformed Structural state that would otherwise oscillate).
+ * iterations (docs/Proposit_Grammar.md §5.1); the cap protects against
+ * pathological inputs (e.g. malformed Structural state that would
+ * otherwise oscillate).
  *
  * @since 1.0.0
  */
@@ -771,12 +764,6 @@ export function applyANToFixedPoint<
     TVar extends TCorePropositionalVariable = TCorePropositionalVariable,
     TClaim extends TCoreClaim = TCoreClaim,
 >(engine: ArgumentEngine<TArg, TPremise, TExpr, TVar, TClaim>): void {
-    // The PERMISSIVE swap that disarmed the legacy inline P-1
-    // enforcement throws is gone — those P-1 throw sites and the
-    // surrounding `grammarConfig.enforceFormulaBetweenOperators`
-    // machinery have been removed. AN-2 and AN-3 can now run
-    // unconditionally without tripping a P-1 throw mid-pass.
-    //
     // Re-entrance guard: AN's own mutations
     // (`pe.removeExpression` / `pe.reparentExpression` /
     // `pe.wrapInFormula`) re-fire the engine's mutation follow-up,

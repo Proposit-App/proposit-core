@@ -33,7 +33,7 @@ describe("UnparsedURL removal", () => {
         expect(Value.Check(ReferenceTypeSchema, "UnparsedURL")).toBe(false)
     })
 
-    it("IEEEReferenceSchema no longer validates an UnparsedURL shape", () => {
+    it("IEEEReferenceSchema does not validate an UnparsedURL shape", () => {
         const unparsedUrlShape = {
             type: "UnparsedURL",
             url: "https://example.com",

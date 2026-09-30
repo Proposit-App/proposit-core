@@ -1,4 +1,4 @@
-// Unit tests for the 8 LLM stages of the v2 multi-stage ingestion
+// Unit tests for the 8 LLM stages of the multi-stage ingestion
 // pipeline. We use the in-repo mock LlmProvider to assert each stage:
 //   1. Declares the expected id + deps.
 //   2. Builds a prompt that interpolates upstream context (we run the
@@ -48,7 +48,7 @@ type TPipelineInput = { text: string }
 // Per-test, we inline a standalone pipeline shape: a `deterministicStage`
 // seeds each upstream output the stage under test reads, then the
 // pipeline's `finalize` returns the stage's output verbatim. This
-// mirrors how the real v2 pipeline will run each stage and exercises
+// mirrors how the real pipeline runs each stage and exercises
 // the executor's DAG validator on each `dependsOn` declaration.
 
 describe("segmentationStage", () => {

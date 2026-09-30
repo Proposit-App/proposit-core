@@ -46,9 +46,9 @@ import { readRoles, writeRoles } from "./storage/roles.js"
 import { readVariables, writeVariables } from "./storage/variables.js"
 
 export async function hydratePropositCore(): Promise<PropositCore> {
-    // Run the v0.10.0 one-time data migration before any library hydration.
-    // The migration is idempotent — a `.proposit-v0.10` marker short-circuits
-    // it on subsequent invocations.
+    // Run the one-time data migrations for older on-disk state before any
+    // library hydration. Each is idempotent — a `.proposit-v0.1x` marker
+    // file short-circuits it on subsequent invocations.
     await migrateV010()
     await migrateV011()
     await migrateV012()
@@ -109,9 +109,10 @@ export async function hydrateEngine(
 
     const resolvedCore = core ?? (await hydratePropositCore())
 
-    // Placeholder claim generation for backward compatibility.
-    // Arguments created before library persistence was implemented have
-    // variables referencing claims that don't exist in the library.
+    // Placeholder claim generation. A stored argument may have
+    // variables referencing claims that don't exist in the stored claim
+    // library; each missing claim gets a frozen placeholder so the
+    // argument still loads.
     let claimLibrary = resolvedCore.claims
     const missingClaims: { id: string; version: number }[] = []
     for (const variable of allVariables) {
@@ -141,10 +142,7 @@ export async function hydrateEngine(
 
     // The CLI does not thread a `grammarConfig` through hydration —
     // engine behavior is controlled exclusively by the engine's
-    // `behavior` setting (default `'assistive'`). The pre-v1.0
-    // `cliGrammarConfig` granular flags and `fromSnapshot`
-    // grammar-config parameter are gone, along with the rest of the
-    // legacy plumbing.
+    // `behavior` setting (default `'assistive'`).
 
     // Build premise snapshots from disk data
     const premiseSnapshots: TPremiseEngineSnapshot[] = []

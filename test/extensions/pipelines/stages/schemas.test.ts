@@ -34,7 +34,7 @@ describe("RelationExtractionOutputSchema (inference relations)", () => {
         expect(Value.Check(RelationExtractionOutputSchema, bad)).toBe(false)
     })
 
-    it("rejects a legacy support relation", () => {
+    it("rejects a support relation (not an accepted relation type)", () => {
         const bad = {
             relations: [
                 {

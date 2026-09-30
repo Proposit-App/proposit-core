@@ -73,8 +73,8 @@ export type TLlmRequest<T> = {
      * OpenAI provider in background-stream mode, from the first
      * `response.created` SSE event). Synchronous providers leave it
      * uncalled and surface the id only at completion via
-     * {@link TLlmResponse.rawResponseId}. Optional + backward-compatible:
-     * callers that don't set it are unaffected. Invoked at most once per
+     * {@link TLlmResponse.rawResponseId}. Optional: callers that don't
+     * set it are unaffected. Invoked at most once per
      * provider call (per attempt).
      */
     onResponseCreated?: (responseId: string) => void
@@ -85,7 +85,7 @@ export type TLlmRequest<T> = {
      * providers that support response chaining (e.g. the OpenAI
      * Responses API). Synchronous providers (e.g. chat-completions)
      * ignore this field — the caller folds the transcript into
-     * `userMessage` instead. Optional + backward-compatible.
+     * `userMessage` instead. Optional.
      */
     previousResponseId?: TResponseId
     /**

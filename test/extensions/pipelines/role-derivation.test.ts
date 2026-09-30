@@ -1,8 +1,7 @@
 // Unit tests for `deriveRoles`.
 //
-// v1's implementation trusts the LLM's per-claim `role` assignment.
-// A v2 pipeline would derive roles from premise relations; these tests
-// pin the v1 passthrough behavior + lay groundwork for the v2 cases.
+// `deriveRoles` copies the per-claim `role` already recorded on each
+// parsed claim; these tests pin that passthrough behavior.
 
 import { describe, expect, it } from "vitest"
 import { deriveRoles } from "../../../src/extensions/pipelines/base/index.js"
@@ -16,7 +15,7 @@ function buildClaim(
     return { miniId, role, type } as TParsedClaim
 }
 
-describe("deriveRoles — v1 (LLM-assigned passthrough)", () => {
+describe("deriveRoles — passthrough of the claim's recorded role", () => {
     it("returns the LLM-provided role for each claim", () => {
         const claims = [
             buildClaim("c1", "premise"),

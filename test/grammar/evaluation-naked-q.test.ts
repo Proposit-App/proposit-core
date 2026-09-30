@@ -1,16 +1,14 @@
 // Evaluation no-op on naked-Q derivation premises.
 //
-// Per CLAUDE.md "Key design rules" + spec §8: a derivation premise
+// A derivation premise
 // whose tree is a single variable at the root (naked-Q form)
 // contributes nothing to `evaluate()` and `checkValidity()` — the
 // evaluator skips it. Naked-Q premises neither assert their consequent
-// nor support its derivation. This replaces the pre-1.0
-// `DERIVATION_STRUCTURE_INVALID_AT_EVALUATION` throw on naked-Q.
+// nor support its derivation, and evaluation does not throw on them.
 //
-// The publish-time pruning step (server-side) deletes naked-Q
-// derivation premises before storage so post-publish arguments never
-// carry them; this engine-side skip is the v1.0 contract for pre-
-// publish state.
+// A consumer may delete naked-Q derivation premises before storing an
+// argument; this engine-side skip covers any state that still carries
+// them.
 
 import { describe, it, expect } from "vitest"
 import { ArgumentEngine } from "../../src/lib/core/argument-engine.js"

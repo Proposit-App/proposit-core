@@ -117,6 +117,6 @@ export function createRelationExtractionStage(
     })
 }
 
-/** Backward-compatible default-options stage. */
+/** The stage with default options, the same as `createRelationExtractionStage()` with no arguments. */
 export const relationExtractionStage: TStage<TRelationExtractionOutput> =
     createRelationExtractionStage()

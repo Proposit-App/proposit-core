@@ -7,7 +7,7 @@ import { UUID } from "../../lib/schemata/shared.js"
 import { getVersionDir } from "../config.js"
 import { errorExit } from "../output.js"
 
-// Local schema with optional checksum for backward-compatible disk reads.
+// Local schema with an optional checksum so files stored without one still load.
 const CliVariableSchema = Type.Object(
     {
         id: UUID,

@@ -9,10 +9,9 @@
 // docs/Proposit_Grammar.md §2 for the model and §3 for the per-rule
 // inventory.
 //
-// Codes 'E-2' and 'D-7' are intentionally absent — those rules were
-// promoted/restated in the spec (E-2 → S-13 per §4.2; D-7 → E-6 per
-// §4.3) and their codes are reserved (not reused) so historical
-// references remain unambiguous. Adding or renaming a rule code is a
+// Codes 'E-2' and 'D-7' are intentionally absent — those checks live
+// under S-13 and E-6 — and the codes are reserved (never reused) so
+// any older stored or quoted reference to either code stays unambiguous. Adding or renaming a rule code is a
 // single-repo coordinated change (TypeScript catches drift between
 // rule-identifier strings and validator implementations at build time).
 
@@ -79,7 +78,7 @@ export type TGrammarRuleCode = Static<typeof GrammarRuleCodeSchema>
 // because some rules apply argument-wide and have no per-entity locator.
 // `additionalProperties: true` reserves an extension slot for rule-specific
 // context fields the validator may attach (e.g., D-3 might attach
-// `mixedCitationCount`/`mixedAxiomCount` for UI rendering — see spec §7.1).
+// `mixedCitationCount`/`mixedAxiomCount` for UI rendering).
 export const ViolationSchema = Type.Object(
     {
         tier: GrammarTierSchema,

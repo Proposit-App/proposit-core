@@ -5,7 +5,8 @@ import type { TIEEEReference, TReferenceType } from "./references.js"
 import { buildSegments } from "./segment-builder.js"
 import * as templates from "./segment-templates.js"
 
-// Re-export shared helpers for backward compatibility (canonical home is segment-builder.ts)
+// Re-exported so they are public: segment-builder.ts defines them but is
+// not exported from the package, so this is the only public path to them.
 export {
     formatSingleAuthor,
     formatNamesInCitation,

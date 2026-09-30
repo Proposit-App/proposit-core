@@ -182,7 +182,7 @@ function oneViolationPerTier(): TValidatorContext {
     })
 }
 
-describe("grammar/validate dispatcher (spec §7.1)", () => {
+describe("grammar/validate dispatcher", () => {
     it("validate('structural') returns Structural violations only", () => {
         const ctx = oneViolationPerTier()
         const tiers = validate("structural", ctx).map((v) => v.tier)

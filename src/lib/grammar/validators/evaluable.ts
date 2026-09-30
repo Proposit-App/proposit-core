@@ -1,5 +1,5 @@
-// Evaluable-tier validators (E-1, E-3..E-7). Code 'E-2' is reserved — see
-// spec §4.2 (formula non-emptiness was promoted to Structural as S-13).
+// Evaluable-tier validators (E-1, E-3..E-7). Code 'E-2' is reserved and
+// never reused: formula non-emptiness is checked as Structural S-13.
 //
 // E-1  variadic operator arity floor (and/or/xor have ≥ 2 children)
 // E-3  variable binding resolves
@@ -197,13 +197,12 @@ export function validateE6(ctx: TValidatorContext): readonly TViolation[] {
  * `roleState.conclusionPremiseId`. A brand-new argument with zero
  * premises is exempt.
  *
- * As of 1.0.2 the engine itself guards the "non-empty argument always
- * has a conclusion" invariant at the mutation surface: the public
- * paths that previously let callers clear or remove the conclusion
- * out from under a non-empty argument (`clearConclusionPremise`,
- * `removePremise` on the current conclusion when others remain) now
- * no-op or auto-promote rather than break the invariant. E-7 stays
- * as the validate-time safety net for snapshot loads and direct
+ * The engine itself guards the "non-empty argument always has a
+ * conclusion" invariant at the mutation surface: the public paths that
+ * could clear or remove the conclusion out from under a non-empty
+ * argument (`clearConclusionPremise`, `removePremise` on the current
+ * conclusion when others remain) no-op or auto-promote rather than
+ * break the invariant. E-7 is the validate-time safety net for snapshot loads and direct
  * data-shape construction — paths the engine cannot guard at
  * mutation time.
  */

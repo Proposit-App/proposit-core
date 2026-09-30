@@ -863,17 +863,14 @@ describe("createOpenAiResponsesProvider — 429 quota vs rate-limit classificati
 })
 
 describe("createOpenAiResponsesProvider — incomplete-response detection", () => {
-    // **Regression for the v1.3.0 segmentation truncation.** When
+    // **Truncated output.** When
     // the Responses API hits the `max_output_tokens` cap (either an
     // explicit cap or the model's default), it returns 200 OK with
     // `status: "incomplete"` + `incomplete_details: { reason:
     // "max_output_tokens" }` and a *partial* `output_text` that's
-    // valid JSON only up to the cut-off point. Pre-fix the provider
-    // ran the partial string through `safeParseJson`, which surfaced
-    // a `SyntaxError: Unterminated string in JSON at position N`
-    // wrapped as a `SchemaValidationLlmError`. The framework retried
-    // (schema_validation reason is retried by default) and hit the
-    // same wall on attempt 2. Now the provider detects the
+    // valid JSON only up to the cut-off point. Parsing it would only
+    // give an unhelpful `Unterminated string in JSON at position N`
+    // error. The provider instead detects the
     // incomplete state and throws `TransientLlmError` with a tagged
     // message naming the cap reason — the message is the load-bearing
     // diagnostic for the dev reading server logs.
@@ -979,13 +976,10 @@ describe("createOpenAiResponsesProvider — incomplete-response detection", () =
     })
 
     it("throws NonRetryableLlmError on incomplete with reason: content_filter (no wasted retry)", async () => {
-        // **Regression for the v1.3.1 P2 fold (post-validation).**
         // OpenAI's content policy refusing the output is deterministic
-        // — the same prompt + the same input will refuse again. Pre-
-        // fold the provider returned `TransientLlmError` for any
-        // `status: "incomplete"` envelope, so the framework's default
-        // retry policy burned a second API call only to hit the same
-        // refusal. The classification split routes `content_filter`
+        // — the same prompt + the same input will refuse again, so a
+        // retry would only spend a second API call on the same
+        // refusal. The classification routes `content_filter`
         // to `NonRetryableLlmError` so the failure surfaces on the
         // first attempt with a clean message.
         const fetchMock: TFetchMock = vi.fn().mockResolvedValue(

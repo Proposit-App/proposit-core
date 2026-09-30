@@ -20,8 +20,8 @@ import type { TInvariantValidationResult } from "../types/validation.js"
  * (arguments, premises, expressions, variables, claims).
  * Fork records are immutable after creation and carry no checksums.
  *
- * As of v0.10.0 the legacy `sources` namespace has been folded into
- * `claims` — sources are now claims with `type: "citation"`.
+ * Sources are claims with `type: "citation"`, so their fork records live
+ * in the `claims` namespace; there is no separate `sources` namespace.
  */
 export class ForkLibrary<
     TArgFork extends TCoreArgumentForkRecord = TCoreArgumentForkRecord,

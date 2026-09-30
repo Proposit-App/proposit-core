@@ -479,8 +479,8 @@ export class ArgumentParser<
         // (assistive); we save and restore so the returned engine
         // surfaces the canonical assistive state.
         //
-        // D3 — unify with populate-from's pattern: `normalize()`
-        // runs only on the success path (inside `try` after the
+        // Same pattern as populate-from: `normalize()` runs only on
+        // the success path (inside `try` after the
         // build completes). Behavior restoration runs on both
         // success and failure paths via a `catch` that rethrows.
         // Running `normalize()` from a `finally` block would mean AN

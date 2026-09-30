@@ -18,9 +18,9 @@ import type { TRetryPolicy } from "../../../lib/pipelines/index.js"
 
 /**
  * Bundle of TypeBox schemas a caller hands to an ingestion pipeline
- * factory. Only `responseSchema` is consumed by v1; the per-entity
- * slots are forward-compat surface for a v2 pipeline's stage
- * decomposition.
+ * factory. The pipelines read `responseSchema` and `claimSchema`;
+ * `variableSchema`, `premiseSchema` and `argumentSchema` are accepted
+ * but not currently read by any stage.
  *
  * `responseSchema` is the full `TParsedArgumentResponse` shape with
  * any caller extensions merged in — typically built via
@@ -42,9 +42,8 @@ export type TIngestionExtension = {
 
 /**
  * Input shape every ingestion pipeline accepts: the raw natural-
- * language text to parse. Wrapped in an object so future v2 stages
- * can attach side-input (per-stage hints, prior corrections, …)
- * without breaking the wire-shape.
+ * language text to parse. Wrapped in an object so further input
+ * fields can be added without changing the shape of existing calls.
  */
 export type TIngestionInput = {
     text: string
@@ -59,17 +58,16 @@ export type TIngestionInput = {
  * stage default. A missing field at every layer means the stage
  * keeps its built-in behavior.
  *
- * Exposes the knobs that have proven load-bearing for the v2 pipeline:
+ * Exposes these knobs:
  * `maxOutputTokens` (the output-budget cap; not setting one means the
- * model's default applies, which is what caused the v1.3.0 segmentation
- * truncation against the Singer fixture), `reasoningEffort` (effort
+ * model's default applies, which can truncate a long stage output), `reasoningEffort` (effort
  * budget for reasoning models — OpenAI-specific; ignored by the
  * chat-completions provider), and `model` (the provider model
  * identifier).
  *
  * The `model` knob lets a caller retarget every LLM stage at a
  * different backend without forking the stages — e.g. pointing the
- * whole v2 pipeline at a local model
+ * whole pipeline at a local model
  * (`{ llm: { defaults: { model: "local-coder" } } }`) for cost-free
  * local development. Each stage keeps its own hard-coded model
  * default when no override is supplied, so production behavior is
@@ -78,8 +76,8 @@ export type TIngestionInput = {
  * `retry` overrides the stage's framework retry policy. It is a
  * `Partial<TRetryPolicy>` carried straight through to `llmStage`,
  * which shallow-merges it over `DEFAULT_RETRY_POLICY` (this surface
- * does NOT merge it — see `resolveLlmStageOptions`). Its primary
- * consumer is the server's "no-auto-retry" toggle, which drops
+ * does NOT merge it — see `resolveLlmStageOptions`). A typical
+ * use is a consumer's "no automatic retry" setting, which drops
  * `"transient"` from `retryOn`. Note that dropping `"transient"`
  * disables the retry for ALL transient causes — network
  * timeouts, 5xx, AND `incomplete/max_output_tokens` truncation — not
@@ -106,8 +104,7 @@ export type TLlmStageOptionsOverride = {
  * `overrides` sets.
  *
  * `overrides` is keyed by stage id (`STAGE_IDS.segmentation`,
- * `STAGE_IDS.claimMentionExtraction`, etc.). v1 has only one LLM
- * stage and uses the id `"parse-argument"`.
+ * `STAGE_IDS.claimMentionExtraction`, etc.).
  */
 export type TIngestionLlmOptions = {
     defaults?: TLlmStageOptionsOverride

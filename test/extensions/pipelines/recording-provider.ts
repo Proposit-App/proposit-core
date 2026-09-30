@@ -10,8 +10,7 @@
 //
 //   - unset → replay mode. Each `respond` call computes the request
 //     hash and looks up the matching recorded entry. On hash miss,
-//     throws `RecordedPromptStaleError`; the prompt-drift guard
-//     described in spec §11.3.
+//     throws `RecordedPromptStaleError` (the prompt-drift guard).
 //
 // The hash is computed from a stable JSON serialization of the
 // non-volatile request fields: `{ model, systemPrompt, userMessage,
@@ -91,9 +90,9 @@ export type TCreateRecordingLlmProviderOptions = {
     underlying?: TLlmProvider
     /**
      * File name (relative to `fixtureDir`) holding the recorded
-     * records. Defaults to `recorded-llm.json` (the v1 default).
-     * v2 callers pass `v2-recorded-llm.json` to keep v1 + v2 recordings
-     * side-by-side in the same fixture directory.
+     * records. Defaults to `recorded-llm.json`. The e2e drivers pass
+     * their own file names (for example `v2-recorded-llm.json`) so
+     * several recordings can sit side by side in one fixture directory.
      */
     fileName?: string
 }

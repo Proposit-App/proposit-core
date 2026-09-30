@@ -9,7 +9,7 @@ import { DERIVATION_STRUCTURE_INVALID } from "../types/validation.js"
 
 /**
  * Validate that a derivation premise's expression tree conforms to the
- * structural rules in the v0.11.0 spec:
+ * derivation-premise structural rules:
  *
  *   - Root must be either a single variable expression for a variable bound
  *     to the derived claim (naked form), or an `implies`/`iff` operator with

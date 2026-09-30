@@ -76,8 +76,8 @@ describe("grammar/presentable P-6 enthymeme marks a claim-bound variable", () =>
         expect(validateP6(ctx)).toHaveLength(0)
     })
 
-    it("ignores enthymeme: false, which the schema no longer admits", () => {
-        // The type and the schema both reject `false` now, so this can only
+    it("ignores enthymeme: false, which the schema does not admit", () => {
+        // The type and the schema both reject `false`, so this can only
         // arrive from hand-built JSON. The validator stays defensive about it
         // rather than treating any present key as an assertion.
         const marked = makeVariableExpression({
