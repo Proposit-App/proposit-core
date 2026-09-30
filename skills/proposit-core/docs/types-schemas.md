@@ -552,7 +552,7 @@ interface TCorePremiseRelationshipAnalysis {
 
 ## 10. Checksum Types
 
-**Source:** `src/lib/types/checksum.ts`, `src/lib/consts.ts`
+**Source:** `src/lib/types/checksum.ts`, `src/lib/checksum-config.ts`
 
 ### `TCoreChecksumConfig`
 

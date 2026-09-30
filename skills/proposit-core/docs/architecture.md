@@ -229,7 +229,7 @@ File: `src/lib/core/checksum.ts`
 
 ### Configuration
 
-File: `src/lib/consts.ts`
+File: `src/lib/checksum-config.ts`
 
 - `DEFAULT_CHECKSUM_CONFIG` -- defines which fields are hashed per entity type.
 - `createChecksumConfig(additional)` -- merges additional fields into defaults (union, not replace).
