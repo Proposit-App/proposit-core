@@ -21,3 +21,15 @@
 - A comment in the `validate` command pointed readers to "a separate command"
   for four-tier grammar validation. It now names
   `analysis validate-argument --tier`.
+- IEEE citation dates printed a day early or late outside UTC. `formatDate`
+  (`src/extensions/citations/ieee/segment-builder.ts`) read the date with the
+  local-time getters, while `EncodableDate` decodes "1787-11-22" as midnight
+  UTC, so in America/Los_Angeles the citation read "Nov. 21, 1787". It now uses
+  `getUTCMonth`, `getUTCDate` and `getUTCFullYear`, which covers every reference
+  type, since all of them format dates through it. A stored time of noon UTC
+  would not have been enough: in 1787, local mean time put Asia/Manila and
+  America/Sitka more than twelve hours from UTC. New
+  `test/extensions/citations/ieee-date-time-zones.test.ts` checks a historical
+  date, a modern date and a full NewspaperArticle citation in five zones. Three
+  SocialMedia fixtures in `test/extensions/ieee.test.ts` built dates with the
+  local-time `Date` constructor and now use `Date.UTC`.
