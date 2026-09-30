@@ -23,16 +23,7 @@ import { createScribePipeline } from "../../../src/extensions/pipelines/ingestio
 import { basicsExtension } from "../../../src/extensions/pipelines/base/index.js"
 import { createMockLlmProvider, type TMockCallRecord } from "../../mocks/llm.js"
 import type { TParsedArgumentResponse } from "../../../src/lib/parsing/index.js"
-
-// Deterministic id generator (counter-based) so minted variable/premise
-// ids are stable across runs — mirrors the e2e harness.
-function createDeterministicGenerateId(prefix = "gid"): () => string {
-    let counter = 0
-    return () => {
-        counter += 1
-        return `${prefix}-${String(counter)}`
-    }
-}
+import { createDeterministicGenerateId } from "./fixtures.js"
 
 /**
  * The source text every run in this file is given. Anchors are offsets

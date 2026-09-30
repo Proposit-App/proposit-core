@@ -96,7 +96,7 @@ For the full design detail, route by topic:
 
 ## Testing
 
-Tests live under `test/`: `core.test.ts` (the largest suite) plus per-area dirs — `test/grammar/` (per-tier suites), `test/extensions/<provider>/`, and `test/integration/`. All tests build their own fixtures inline — no shared `beforeEach` state.
+The `test/` tree follows `src/`: engine tests are split by topic under `test/core/`, and `test/cli/`, `test/parsing/`, `test/pipelines/`, `test/changeset/` and `test/extensions/<extension>/` match their source folders, while `test/grammar/` (one suite per tier), `test/evaluation/`, `test/origin/` and `test/integration/` are organized by topic. Shared builders live in a `fixtures.ts` beside the tests that use them (for example `test/core/fixtures.ts`), and each engine test builds its own state from them rather than from shared `beforeEach` setup.
 
 How a test earns trust here — proving a new pin fails before the fix, and reproducing a reported bug before anyone attempts one — is bound to the `implement` stage rather than written here, so it arrives when it applies: `tcw work stage prompt implement <slug>`.
 

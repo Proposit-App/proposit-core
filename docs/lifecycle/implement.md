@@ -18,5 +18,6 @@ that reproduces it first, then have subagents attempt the fix and prove it with
 that test passing. Starting from the fix is how a defect gets patched at the
 site that reported it rather than where every caller routes through.
 
-Add the test to the file or directory that matches its area, not by default to
-`core.test.ts`.
+Add the test to the file or directory that matches its area: `test/` follows
+the layout of `src/`, and the engine's tests are split by topic under
+`test/core/`. Start a new topic file rather than growing an unrelated one.

@@ -1,0 +1,218 @@
+import { describe, it, expect, vi, beforeEach } from "vitest"
+
+const printedLines: string[] = []
+let printedJson: unknown = undefined
+let _exitMessage: string | undefined = undefined
+
+vi.mock("../../src/cli/output.js", () => ({
+    printLine: (text: string) => {
+        printedLines.push(text)
+    },
+    printJson: (value: unknown) => {
+        printedJson = value
+    },
+    errorExit: (message: string) => {
+        _exitMessage = message
+        throw new Error(`errorExit: ${message}`)
+    },
+}))
+
+// Mock hydrateEngine and hydratePropositCore
+const mockHydrateEngine = vi.fn()
+const mockHydratePropositCore = vi.fn()
+vi.mock("../../src/cli/engine.js", () => ({
+    hydrateEngine: mockHydrateEngine,
+    hydratePropositCore: mockHydratePropositCore,
+}))
+
+// Mock resolveVersion to return the version number as-is
+const mockResolveVersion = vi.fn()
+vi.mock("../../src/cli/router.js", () => ({
+    resolveVersion: mockResolveVersion,
+}))
+
+// Mock diffArguments to return a controllable diff
+const mockDiffArguments = vi.fn()
+vi.mock("../../src/lib/core/diff.js", () => ({
+    diffArguments: mockDiffArguments,
+}))
+
+// Mock renderDiff
+const mockRenderDiff = vi.fn()
+vi.mock("../../src/cli/diff-renderer.js", () => ({
+    renderDiff: mockRenderDiff,
+}))
+
+const { registerDiffCommand } = await import("../../src/cli/commands/diff.js")
+
+import { Command } from "commander"
+
+const mockCore = {
+    arguments: { register: vi.fn() },
+    diffArguments: vi.fn(),
+}
+
+beforeEach(() => {
+    printedLines.length = 0
+    printedJson = undefined
+    _exitMessage = undefined
+    vi.clearAllMocks()
+    mockHydratePropositCore.mockResolvedValue(mockCore)
+})
+
+describe("registerDiffCommand", () => {
+    function makeProgram(): Command {
+        const program = new Command()
+        program.exitOverride()
+        registerDiffCommand(program)
+        return program
+    }
+
+    const emptyDiff = {
+        argument: { before: {}, after: {}, changes: [] },
+        variables: { added: [], removed: [], modified: [] },
+        premises: { added: [], removed: [], modified: [] },
+        roles: {
+            conclusion: { before: undefined, after: undefined },
+            supportingAdded: [],
+            supportingRemoved: [],
+        },
+    }
+
+    it("parses 3-arg shorthand (same argument, two versions)", async () => {
+        mockResolveVersion.mockResolvedValue(1)
+        mockHydrateEngine.mockResolvedValue({})
+        mockDiffArguments.mockReturnValue(emptyDiff)
+
+        const program = makeProgram()
+        await program.parseAsync([
+            "node",
+            "proposit-core",
+            "diff",
+            "myarg",
+            "0",
+            "1",
+        ])
+
+        expect(mockResolveVersion).toHaveBeenCalledWith("myarg", "0")
+        expect(mockResolveVersion).toHaveBeenCalledWith("myarg", "1")
+        expect(mockHydratePropositCore).toHaveBeenCalledTimes(1)
+        expect(mockHydrateEngine).toHaveBeenCalledTimes(2)
+        expect(mockHydrateEngine).toHaveBeenNthCalledWith(
+            1,
+            "myarg",
+            expect.any(Number),
+            mockCore
+        )
+        expect(mockHydrateEngine).toHaveBeenNthCalledWith(
+            2,
+            "myarg",
+            expect.any(Number),
+            mockCore
+        )
+        // Same-argument diff uses standalone diffArguments
+        expect(mockDiffArguments).toHaveBeenCalledTimes(1)
+    })
+
+    it("parses 4-arg full form (cross-argument)", async () => {
+        mockResolveVersion.mockResolvedValue(0)
+        const mockEngineA = { getArgument: () => ({ id: "argA" }) }
+        const mockEngineB = { getArgument: () => ({ id: "argB" }) }
+        mockHydrateEngine
+            .mockResolvedValueOnce(mockEngineA)
+            .mockResolvedValueOnce(mockEngineB)
+        mockCore.diffArguments.mockReturnValue(emptyDiff)
+
+        const program = makeProgram()
+        await program.parseAsync([
+            "node",
+            "proposit-core",
+            "diff",
+            "argA",
+            "0",
+            "argB",
+            "1",
+        ])
+
+        expect(mockResolveVersion).toHaveBeenCalledWith("argA", "0")
+        expect(mockResolveVersion).toHaveBeenCalledWith("argB", "1")
+        expect(mockHydrateEngine).toHaveBeenNthCalledWith(
+            1,
+            "argA",
+            expect.any(Number),
+            mockCore
+        )
+        expect(mockHydrateEngine).toHaveBeenNthCalledWith(
+            2,
+            "argB",
+            expect.any(Number),
+            mockCore
+        )
+        // Cross-argument diff uses core.diffArguments with fork-aware matching
+        expect(mockCore.arguments.register).toHaveBeenCalledTimes(2)
+        expect(mockCore.diffArguments).toHaveBeenCalledWith("argA", "argB")
+        // Standalone diffArguments should NOT be called for cross-argument
+        expect(mockDiffArguments).not.toHaveBeenCalled()
+    })
+
+    it("outputs JSON when --json is passed (same-argument)", async () => {
+        mockResolveVersion.mockResolvedValue(0)
+        mockHydrateEngine.mockResolvedValue({})
+        mockDiffArguments.mockReturnValue(emptyDiff)
+
+        const program = makeProgram()
+        await program.parseAsync([
+            "node",
+            "proposit-core",
+            "diff",
+            "myarg",
+            "0",
+            "1",
+            "--json",
+        ])
+
+        expect(printedJson).toEqual(emptyDiff)
+        expect(mockRenderDiff).not.toHaveBeenCalled()
+    })
+
+    it("calls renderDiff for human-readable output (same-argument)", async () => {
+        mockResolveVersion.mockResolvedValue(0)
+        mockHydrateEngine.mockResolvedValue({})
+        mockDiffArguments.mockReturnValue(emptyDiff)
+
+        const program = makeProgram()
+        await program.parseAsync([
+            "node",
+            "proposit-core",
+            "diff",
+            "myarg",
+            "0",
+            "1",
+        ])
+
+        expect(mockRenderDiff).toHaveBeenCalledWith(emptyDiff)
+    })
+
+    it("exits with error for fewer than 3 positional args", async () => {
+        const program = makeProgram()
+        await expect(
+            program.parseAsync(["node", "proposit-core", "diff", "myarg", "0"])
+        ).rejects.toThrow()
+    })
+
+    it("exits with error for more than 4 positional args", async () => {
+        const program = makeProgram()
+        await expect(
+            program.parseAsync([
+                "node",
+                "proposit-core",
+                "diff",
+                "a",
+                "0",
+                "b",
+                "1",
+                "extra",
+            ])
+        ).rejects.toThrow()
+    })
+})

@@ -130,6 +130,15 @@
 - The iff-rooted axiom derivation test runs instead of being skipped. It now
   uses `populateFromAxioms`, keeps the derivation premise as a supporting
   premise, and accepts the root step.
+- The test tree now follows the source tree. The 24,800-line engine suite
+  `test/core.test.ts` is split, block by block and unchanged, into 23 topic
+  files under `test/core/` (with its shared builders in
+  `test/core/fixtures.ts`), plus a few blocks that belong under `test/cli/`,
+  `test/parsing/` and `test/extensions/pipelines/`. CLI tests moved to
+  `test/cli/`, pipeline framework tests to `test/pipelines/`, the changeset
+  utility tests to `test/changeset/`, and the IEEE citation tests to
+  `test/extensions/citations/`. The pipeline tests share one deterministic id
+  generator instead of three copies. Every test keeps its name and result.
 
 ## Fixed
 

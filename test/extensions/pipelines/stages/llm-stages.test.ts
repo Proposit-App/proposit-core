@@ -6,7 +6,7 @@
 //   3. Returns the parsed output shape on a canned ok response.
 //
 // Schema-validation retry + transient retry are exercised by the
-// framework-level tests in `test/pipelines.test.ts`; we do not
+// framework-level tests in `test/pipelines/pipelines.test.ts`; we do not
 // re-prove that machinery here.
 
 import { describe, expect, it } from "vitest"
