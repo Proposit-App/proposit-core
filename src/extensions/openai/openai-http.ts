@@ -6,11 +6,12 @@
 // retrieval-shaped projection to the layer above.
 //
 // Layering: this module sits above `openai-parsing.ts` (it consumes
-// `readSseEnvelope` / `isAbortError`) and `errors.ts` (error classes +
+// `readSseEnvelope`) and `errors.ts` (error classes +
 // `classifyHttpError`); nothing here imports from `provider.ts` or
 // `openai-retrieval.ts`, keeping the dependency graph acyclic.
 
-import { isAbortError, readSseEnvelope } from "./openai-parsing.js"
+import { isAbortError } from "../llm-http/errors.js"
+import { readSseEnvelope } from "./openai-parsing.js"
 import {
     classifyHttpError,
     ResponseNotFoundError,

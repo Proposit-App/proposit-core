@@ -35,6 +35,8 @@
 //     `non_retryable` and surfaces it immediately. Used for 400/401/403
 //     and other unrecoverable 4xx.
 
+import { categorizeHttpError } from "../llm-http/errors.js"
+
 export class TransientLlmError extends Error {
     public readonly retryReason = "transient" as const
     public readonly status?: number
@@ -111,34 +113,21 @@ export function classifyHttpError(
     message: string,
     providerErrorCode?: string
 ): Error {
-    if (status >= 500) {
-        return new TransientLlmError({ message, status })
-    }
-    if (status === 429) {
-        // 429 splits on the body's structured error code: persistent
-        // budget exhaustion (`insufficient_quota`) is fail-fast, every
-        // other (and every unparseable) 429 stays the transient throttle.
-        // The safe default is always "transient + retryable" — never a
-        // false quota trip.
-        if (providerErrorCode === "insufficient_quota") {
+    // Which status goes to which category (and why) is decided in
+    // `categorizeHttpError`, shared with the OpenAI provider; this maps
+    // the category to this provider's own classes.
+    switch (categorizeHttpError(status, providerErrorCode)) {
+        case "transient":
+            return new TransientLlmError({ message, status })
+        case "rate_limit":
+            return new RateLimitLlmError({ message, status })
+        case "quota_exhausted":
             return new QuotaExhaustedLlmError({ message, status })
-        }
-        return new RateLimitLlmError({ message, status })
+        case "schema_validation":
+            return new SchemaValidationLlmError({ message, status })
+        case "non_retryable":
+            return new NonRetryableLlmError({ message, status })
     }
-    // 400 is a malformed request — a converter bug, an unsupported
-    // parameter, or a request shape the endpoint doesn't accept;
-    // retrying just burns the second attempt, so classify non-retryable.
-    if (status === 400) {
-        return new NonRetryableLlmError({ message, status })
-    }
-    // 422 signals the model's structured-output reply failed server-side
-    // schema validation; a re-roll can succeed, so route it through the
-    // schema-validation class (tagged transient).
-    if (status === 422) {
-        return new SchemaValidationLlmError({ message, status })
-    }
-    // 401/403 and every other 4xx are unrecoverable.
-    return new NonRetryableLlmError({ message, status })
 }
 
 /**
