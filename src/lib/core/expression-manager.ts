@@ -142,24 +142,48 @@ export class ExpressionManager<
      * `loadInitialExpressions` (direct bulk load) share.
      */
     private registerExpression(expression: TExpressionInput<TExpr>): void {
-        getOrCreate(
-            this.childPositionsByParentId,
+        this.storeExpression(
+            expression,
             expression.parentId,
-            () => new Set()
-        ).add(expression.position)
+            expression.position
+        )
+        this.markExpressionDirty(expression.id)
+    }
 
-        const withChecksum = this.attachChecksum(expression)
-        this.expressions.set(expression.id, withChecksum)
+    /**
+     * Stores a new expression under `parentId` at `position`: computes its
+     * checksum, adds it to `expressions`, reports it to the change
+     * collector, and records its id and position in the parent's child
+     * indexes. Marks nothing dirty; each caller does that itself, because
+     * when it happens differs between them.
+     *
+     * @returns The stored expression, checksum attached.
+     */
+    private storeExpression(
+        expression: TExpressionInput<TExpr>,
+        parentId: string | null,
+        position: number
+    ): TExpr {
+        const stored = this.attachChecksum({
+            ...expression,
+            parentId,
+            position,
+        } as TExpressionInput<TExpr>)
+        this.expressions.set(expression.id, stored)
         this.collector?.addedExpression({
-            ...withChecksum,
+            ...stored,
         } as unknown as TCorePropositionalExpression)
         getOrCreate(
             this.childExpressionIdsByParentId,
-            expression.parentId,
+            parentId,
             () => new Set()
         ).add(expression.id)
-
-        this.markExpressionDirty(expression.id)
+        getOrCreate(
+            this.childPositionsByParentId,
+            parentId,
+            () => new Set()
+        ).add(position)
+        return stored
     }
 
     /**
@@ -184,31 +208,20 @@ export class ExpressionManager<
         formulaId?: string
     ): string {
         formulaId ??= this.generateId()
-        const formulaExpr = this.attachChecksum({
-            id: formulaId,
-            type: "formula",
-            argumentId: sourceExpr.argumentId,
-            argumentVersion: sourceExpr.argumentVersion,
-            premiseId: (sourceExpr as unknown as { premiseId: string })
-                .premiseId,
+        this.storeExpression(
+            {
+                id: formulaId,
+                type: "formula",
+                argumentId: sourceExpr.argumentId,
+                argumentVersion: sourceExpr.argumentVersion,
+                premiseId: (sourceExpr as unknown as { premiseId: string })
+                    .premiseId,
+                parentId,
+                position,
+            } as TExpressionInput<TExpr>,
             parentId,
-            position,
-        } as TExpressionInput<TExpr>)
-
-        this.expressions.set(formulaId, formulaExpr)
-        this.collector?.addedExpression({
-            ...formulaExpr,
-        } as unknown as TCorePropositionalExpression)
-        getOrCreate(
-            this.childExpressionIdsByParentId,
-            parentId,
-            () => new Set()
-        ).add(formulaId)
-        getOrCreate(
-            this.childPositionsByParentId,
-            parentId,
-            () => new Set()
-        ).add(position)
+            position
+        )
 
         return formulaId
     }
@@ -1001,25 +1014,7 @@ export class ExpressionManager<
         }
 
         // Store the new expression in the anchor's slot.
-        const stored = this.attachChecksum({
-            ...expression,
-            parentId: anchorParentId,
-            position: anchorPosition,
-        } as TExpressionInput<TExpr>)
-        this.expressions.set(expression.id, stored)
-        this.collector?.addedExpression({
-            ...stored,
-        } as unknown as TCorePropositionalExpression)
-        getOrCreate(
-            this.childExpressionIdsByParentId,
-            anchorParentId,
-            () => new Set()
-        ).add(expression.id)
-        getOrCreate(
-            this.childPositionsByParentId,
-            anchorParentId,
-            () => new Set()
-        ).add(anchorPosition)
+        this.storeExpression(expression, anchorParentId, anchorPosition)
 
         // Mark the new expression and its ancestors dirty for hierarchical checksum recomputation.
         // Note: reparent() already marks children dirty, so this propagates from the new expression up.
@@ -1078,46 +1073,18 @@ export class ExpressionManager<
         this.reparent(existingNodeId, operator.id, existingPosition)
 
         // Store new sibling under operator.
-        const storedSibling = this.attachChecksum({
-            ...newSibling,
-            parentId: operator.id,
-            position: siblingPosition,
-        } as TExpressionInput<TExpr>)
-        this.expressions.set(newSibling.id, storedSibling)
-        this.collector?.addedExpression({
-            ...storedSibling,
-        } as unknown as TCorePropositionalExpression)
-        getOrCreate(
-            this.childExpressionIdsByParentId,
+        this.storeExpression(
+            newSibling as TExpressionInput<TExpr>,
             operator.id,
-            () => new Set()
-        ).add(newSibling.id)
-        getOrCreate(
-            this.childPositionsByParentId,
-            operator.id,
-            () => new Set()
-        ).add(siblingPosition)
+            siblingPosition
+        )
 
         // Store operator in the anchor slot.
-        const storedOperator = this.attachChecksum({
-            ...operator,
-            parentId: anchorParentId,
-            position: anchorPosition,
-        } as TExpressionInput<TExpr>)
-        this.expressions.set(operator.id, storedOperator)
-        this.collector?.addedExpression({
-            ...storedOperator,
-        } as unknown as TCorePropositionalExpression)
-        getOrCreate(
-            this.childExpressionIdsByParentId,
+        this.storeExpression(
+            operator as TExpressionInput<TExpr>,
             anchorParentId,
-            () => new Set()
-        ).add(operator.id)
-        getOrCreate(
-            this.childPositionsByParentId,
-            anchorParentId,
-            () => new Set()
-        ).add(anchorPosition)
+            anchorPosition
+        )
 
         // Mark the new operator (and ancestors), the new sibling, and the reparented existing node dirty.
         // reparent() already marks the existing node dirty; mark the operator and sibling as well.
