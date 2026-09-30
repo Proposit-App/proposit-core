@@ -87,6 +87,16 @@
   from `scheduler.ts` to `stage-runner.ts`; this removes the import cycles
   between the stage modules, and the clock function is no longer written
   twice. Every old module still exports the names it exported before.
+- Internal only, no change in behaviour: three very long methods are split into
+  private methods of the same class. `PremiseEngine.changeOperator` hands its
+  merge, in-place and split cases to one method each. `ArgumentParser.build`
+  runs one method per step (parse formulas, create claims, create variables,
+  filter formulas, build premises, set the conclusion, add derivation backing
+  edges), and its step comments are numbered 1 to 9 without a gap.
+  `PropositCore.forkArgument` moves the claim closure walk, claim cloning, the
+  citation and axiom edge copies (now one method), the claim-reference rebuild
+  and the fork-record creation into their own methods, and generates ids in
+  the same order, so a fork produces the same ids as before.
 
 ## Removed
 
