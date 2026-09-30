@@ -30,7 +30,7 @@
 // list (which would require widening `TStageContext`).
 
 import type { TParsedArgumentResponse } from "../../../lib/parsing/index.js"
-import { shortenToLength } from "../../../lib/parsing/clamp-max-lengths.js"
+import { shortenToLength } from "../../../lib/utils/strings.js"
 import type { TStageContext } from "../../../lib/pipelines/index.js"
 import {
     STAGE_IDS,
