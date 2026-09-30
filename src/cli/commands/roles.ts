@@ -1,21 +1,8 @@
 import { Command } from "commander"
 import { hydrateEngine } from "../engine.js"
-import { errorExit, printJson, printLine } from "../output.js"
-import { readVersionMeta } from "../storage/arguments.js"
-import { premiseExists } from "../storage/premises.js"
+import { printJson, printLine } from "../output.js"
+import { assertNotPublished, assertPremiseExists } from "../guards.js"
 import { readRoles, writeRoles } from "../storage/roles.js"
-
-async function assertNotPublished(
-    argumentId: string,
-    version: number
-): Promise<void> {
-    const meta = await readVersionMeta(argumentId, version)
-    if (meta.published) {
-        errorExit(
-            `Version ${version} of argument "${argumentId}" is published and cannot be modified.`
-        )
-    }
-}
 
 export function registerRoleCommands(
     versionedCmd: Command,
@@ -53,9 +40,12 @@ export function registerRoleCommands(
         .description("Set the designated conclusion premise")
         .action(async (premiseId: string) => {
             await assertNotPublished(argumentId, version)
-            if (!(await premiseExists(argumentId, version, premiseId))) {
-                errorExit(`Premise "${premiseId}" does not exist.`)
-            }
+            await assertPremiseExists(
+                argumentId,
+                version,
+                premiseId,
+                `Premise "${premiseId}" does not exist.`
+            )
             const state = await readRoles(argumentId, version)
             await writeRoles(argumentId, version, {
                 ...state,

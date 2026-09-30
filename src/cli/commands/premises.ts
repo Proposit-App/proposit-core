@@ -12,26 +12,18 @@ import {
 } from "../output.js"
 import { readArgumentMeta, readVersionMeta } from "../storage/arguments.js"
 import {
+    assertNotPublished,
+    assertPremiseExists,
+    errorMessage,
+} from "../guards.js"
+import {
     deletePremiseDir,
     listPremiseIds,
-    premiseExists,
     readPremiseData,
     readPremiseMeta,
 } from "../storage/premises.js"
 import { hydrateEngine, hydratePropositCore, persistEngine } from "../engine.js"
 import { readVariables } from "../storage/variables.js"
-
-async function assertNotPublished(
-    argumentId: string,
-    version: number
-): Promise<void> {
-    const meta = await readVersionMeta(argumentId, version)
-    if (meta.published) {
-        errorExit(
-            `Version ${version} of argument "${argumentId}" is published and cannot be modified.`
-        )
-    }
-}
 
 async function buildArgument(
     argumentId: string,
@@ -110,7 +102,7 @@ export function registerPremiseCommands(
                         engine.createPremiseWithId(id, extras, opts.symbol)
                     }
                 } catch (err) {
-                    errorExit(err instanceof Error ? err.message : String(err))
+                    errorExit(errorMessage(err))
                 }
 
                 await persistEngine(engine)
@@ -225,9 +217,7 @@ export function registerPremiseCommands(
         .option("--confirm", "Skip confirmation prompt")
         .action(async (premiseId: string, opts: { confirm?: boolean }) => {
             await assertNotPublished(argumentId, version)
-            if (!(await premiseExists(argumentId, version, premiseId))) {
-                errorExit(`Premise "${premiseId}" not found.`)
-            }
+            await assertPremiseExists(argumentId, version, premiseId)
             if (!opts.confirm) {
                 await requireConfirmation(`Delete premise "${premiseId}"?`)
             }
@@ -236,7 +226,7 @@ export function registerPremiseCommands(
             try {
                 engine.removePremise(premiseId)
             } catch (err) {
-                errorExit(err instanceof Error ? err.message : String(err))
+                errorExit(errorMessage(err))
             }
 
             await persistEngine(engine)
@@ -287,7 +277,7 @@ export function registerPremiseCommands(
                         )
                     }
                 } catch (err) {
-                    errorExit(err instanceof Error ? err.message : String(err))
+                    errorExit(errorMessage(err))
                 }
 
                 await persistEngine(engine)
@@ -300,9 +290,7 @@ export function registerPremiseCommands(
         .description("Show a single premise")
         .option("--json", "Output as JSON")
         .action(async (premiseId: string, opts: { json?: boolean }) => {
-            if (!(await premiseExists(argumentId, version, premiseId))) {
-                errorExit(`Premise "${premiseId}" not found.`)
-            }
+            await assertPremiseExists(argumentId, version, premiseId)
             const [meta, data] = await Promise.all([
                 readPremiseMeta(argumentId, version, premiseId),
                 readPremiseData(argumentId, version, premiseId),
@@ -337,9 +325,7 @@ export function registerPremiseCommands(
         .command("render <premise_id>")
         .description("Render the premise as a logical expression string")
         .action(async (premiseId: string) => {
-            if (!(await premiseExists(argumentId, version, premiseId))) {
-                errorExit(`Premise "${premiseId}" not found.`)
-            }
+            await assertPremiseExists(argumentId, version, premiseId)
             const argument = await buildArgument(argumentId, version)
             const allVariables = await readVariables(argumentId, version)
             const [meta, data] = await Promise.all([
@@ -449,7 +435,7 @@ export function registerPremiseCommands(
                     propositCore.citations
                 )
             } catch (err) {
-                errorExit(err instanceof Error ? err.message : String(err))
+                errorExit(errorMessage(err))
             }
             let axiomsResult: ReturnType<typeof engine.populateFromAxioms>
             try {
@@ -458,7 +444,7 @@ export function registerPremiseCommands(
                     propositCore.axioms
                 )
             } catch (err) {
-                errorExit(err instanceof Error ? err.message : String(err))
+                errorExit(errorMessage(err))
             }
 
             await persistEngine(engine)

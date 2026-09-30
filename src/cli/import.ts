@@ -12,6 +12,7 @@ import { ClaimLibrary } from "../lib/core/claim-library.js"
 import { ClaimCitationLibrary } from "../lib/core/claim-citation-library.js"
 import { POSITION_INITIAL } from "../lib/utils/position.js"
 import { CLI_AXIOM_REASON_CODES, type TCliAxiomReasonCode } from "./schemata.js"
+import { errorMessage } from "./guards.js"
 
 /**
  * Validates that `implies` and `iff` nodes appear only at the AST root.
@@ -289,7 +290,7 @@ export function importArgumentFromYaml(yamlString: string): {
             const label = premise.metadata?.title
                 ? `premise "${premise.metadata.title}" (index ${i})`
                 : `premise at index ${i}`
-            const msg = error instanceof Error ? error.message : String(error)
+            const msg = errorMessage(error)
             throw new Error(`Failed to parse formula for ${label}: ${msg}`)
         }
         validateRootOnly(ast, true, i, premise.metadata?.title)

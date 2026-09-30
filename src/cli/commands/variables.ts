@@ -12,24 +12,12 @@ import {
     printLine,
     requireConfirmation,
 } from "../output.js"
-import { readVersionMeta } from "../storage/arguments.js"
+import { assertNotPublished, errorMessage } from "../guards.js"
 import {
     isClaimBound,
     isPremiseBound,
     type TCorePropositionalVariable,
 } from "../../lib/schemata/index.js"
-
-async function assertNotPublished(
-    argumentId: string,
-    version: number
-): Promise<void> {
-    const meta = await readVersionMeta(argumentId, version)
-    if (meta.published) {
-        errorExit(
-            `Version ${version} of argument "${argumentId}" is published and cannot be modified.`
-        )
-    }
-}
 
 export function registerVariableCommands(
     versionedCmd: Command,
@@ -72,7 +60,7 @@ export function registerVariableCommands(
             try {
                 engine.addVariable(variable)
             } catch (err) {
-                errorExit(err instanceof Error ? err.message : String(err))
+                errorExit(errorMessage(err))
             }
 
             await persistCore(core)
@@ -110,7 +98,7 @@ export function registerVariableCommands(
                         boundArgumentVersion: version,
                     })
                 } catch (err) {
-                    errorExit(err instanceof Error ? err.message : String(err))
+                    errorExit(errorMessage(err))
                 }
 
                 await persistEngine(engine)
@@ -176,7 +164,7 @@ export function registerVariableCommands(
                         symbol: opts.symbol,
                     })
                 } catch (err) {
-                    errorExit(err instanceof Error ? err.message : String(err))
+                    errorExit(errorMessage(err))
                 }
             }
 

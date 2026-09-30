@@ -6,6 +6,7 @@ import {
     CLI_AXIOM_REASON_CODES,
     type TCliAxiomReasonCode,
 } from "../schemata.js"
+import { errorMessage } from "../guards.js"
 
 export function registerClaimCommands(program: Command): void {
     const claims = program
@@ -197,9 +198,7 @@ export function registerClaimCommands(program: Command): void {
                 frozen = result.frozen
                 newVersion = result.current
             } catch (error) {
-                errorExit(
-                    error instanceof Error ? error.message : String(error)
-                )
+                errorExit(errorMessage(error))
             }
             await persistCore(core)
             printLine(

@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto"
 import { Command } from "commander"
 import { hydratePropositCore, persistCore } from "../engine.js"
 import { errorExit, printJson, printLine } from "../output.js"
+import { errorMessage } from "../guards.js"
 
 export function registerCitationCommands(program: Command): void {
     const citations = program
@@ -87,9 +88,7 @@ export function registerCitationCommands(program: Command): void {
                         supportingClaimVersion: supportingClaim.version,
                     })
                 } catch (error) {
-                    errorExit(
-                        error instanceof Error ? error.message : String(error)
-                    )
+                    errorExit(errorMessage(error))
                 }
                 await persistCore(core)
                 printLine(citation.id)

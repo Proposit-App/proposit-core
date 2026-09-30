@@ -16,6 +16,7 @@ import {
 } from "../../extensions/pipelines/ingestion/index.js"
 import { basicsExtension } from "../../extensions/pipelines/base/index.js"
 import type { TParsedArgumentResponse } from "../../lib/parsing/index.js"
+import { errorMessage } from "../guards.js"
 
 class CliArgumentParser extends BasicsArgumentParser {
     private readonly cliTitle?: string
@@ -96,9 +97,7 @@ export function registerParseCommand(args: Command): void {
                 try {
                     apiKey = resolveApiKey(opts.llm, opts.apiKey)
                 } catch (error) {
-                    errorExit(
-                        error instanceof Error ? error.message : String(error)
-                    )
+                    errorExit(errorMessage(error))
                 }
 
                 // 3. Resolve input text
@@ -143,8 +142,7 @@ export function registerParseCommand(args: Command): void {
                         { llm: provider }
                     )
                 } catch (error) {
-                    const msg =
-                        error instanceof Error ? error.message : String(error)
+                    const msg = errorMessage(error)
                     await cliLog("parse:pipeline-error", { error: msg })
                     errorExit(msg)
                 }
@@ -200,8 +198,7 @@ export function registerParseCommand(args: Command): void {
                         response as unknown as Record<string, unknown>
                     )
                 } catch (error) {
-                    const msg =
-                        error instanceof Error ? error.message : String(error)
+                    const msg = errorMessage(error)
                     await cliLog("parse:validation-error", { error: msg })
                     errorExit(`Validation failed: ${msg}`)
                 }
@@ -222,8 +219,7 @@ export function registerParseCommand(args: Command): void {
                 try {
                     built = parser.build(validated, { strict: false })
                 } catch (error) {
-                    const msg =
-                        error instanceof Error ? error.message : String(error)
+                    const msg = errorMessage(error)
                     await cliLog("parse:build-error", { error: msg })
                     errorExit(`Build failed: ${msg}`)
                 }
