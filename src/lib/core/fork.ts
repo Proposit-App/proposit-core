@@ -11,7 +11,7 @@ import type { TClaimLookup } from "./interfaces/library.interfaces.js"
 import type { TForkArgumentOptions, TForkRemapTable } from "../types/fork.js"
 import type { TOptionalChecksum } from "../schemata/shared.js"
 import { ArgumentEngine } from "./argument-engine.js"
-import { serializeChecksumConfig } from "../consts.js"
+import { serializeChecksumConfig } from "../checksum-config.js"
 import { isPremiseBound } from "../schemata/propositional.js"
 
 /**

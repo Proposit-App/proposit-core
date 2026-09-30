@@ -10,7 +10,7 @@ import {
     createChecksumConfig,
     normalizeChecksumConfig,
     serializeChecksumConfig,
-} from "../../src/lib/consts.js"
+} from "../../src/lib/checksum-config.js"
 
 const minimalDocument = {
     id: "doc-1",

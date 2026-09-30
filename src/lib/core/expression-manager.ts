@@ -15,7 +15,7 @@ import {
     DEFAULT_CHECKSUM_CONFIG,
     normalizeChecksumConfig,
     serializeChecksumConfig,
-} from "../consts.js"
+} from "../checksum-config.js"
 import { entityChecksum } from "./checksum.js"
 import {
     markExpressionDirty,

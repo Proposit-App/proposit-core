@@ -33,7 +33,7 @@ import {
     DEFAULT_CHECKSUM_CONFIG,
     normalizeChecksumConfig,
     serializeChecksumConfig,
-} from "../consts.js"
+} from "../checksum-config.js"
 import { ChangeCollector } from "./change-collector.js"
 import { computeHash, entityChecksum } from "./checksum.js"
 import { InvariantViolationError } from "./invariant-violation-error.js"

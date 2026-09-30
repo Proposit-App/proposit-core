@@ -1,7 +1,7 @@
 import type { TCorePropositionalExpression } from "../schemata/index.js"
 import type { ChangeCollector } from "./change-collector.js"
 import type { TLogicEngineOptions } from "./argument-engine.js"
-import { DEFAULT_CHECKSUM_CONFIG } from "../consts.js"
+import { DEFAULT_CHECKSUM_CONFIG } from "../checksum-config.js"
 import { entityChecksum, computeHash, canonicalSerialize } from "./checksum.js"
 
 /**

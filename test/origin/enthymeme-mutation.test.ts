@@ -8,7 +8,7 @@ import type {
     TCorePropositionalVariable,
 } from "../../src/lib/schemata/index.js"
 import type { TExpressionInput } from "../../src/lib/core/expression-manager.js"
-import { createChecksumConfig } from "../../src/lib/consts.js"
+import { createChecksumConfig } from "../../src/lib/checksum-config.js"
 
 // Marking content unspoken needs no new mutation API: an expression takes the
 // field through the existing `patchExpressionAppFields`. The premise extras

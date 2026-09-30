@@ -35,7 +35,7 @@ import {
     DEFAULT_CHECKSUM_CONFIG,
     normalizeChecksumConfig,
     serializeChecksumConfig,
-} from "../consts.js"
+} from "../checksum-config.js"
 import type { TCoreMutationResult, TCoreChangeset } from "../types/mutation.js"
 import { composeChangesets, withCurrentEntries } from "../utils/changeset.js"
 import type {

@@ -89,7 +89,7 @@ export {
     createChecksumConfig,
     normalizeChecksumConfig,
     serializeChecksumConfig,
-} from "./consts.js"
+} from "./checksum-config.js"
 export { parseFormula } from "./core/parser/formula.js"
 export type { TFormulaAST } from "./core/parser/formula.js"
 // The barrel exports the expression-manager *data* types (snapshot +

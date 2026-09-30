@@ -58,7 +58,7 @@ import type {
 import {
     DEFAULT_CHECKSUM_CONFIG,
     createChecksumConfig,
-} from "../src/lib/consts"
+} from "../src/lib/checksum-config"
 import type { TOptionalChecksum } from "../src/lib/schemata/shared"
 import type { TCoreChecksumConfig } from "../src/lib/types/checksum"
 import {
