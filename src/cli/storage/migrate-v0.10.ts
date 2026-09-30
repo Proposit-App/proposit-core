@@ -8,7 +8,7 @@ import {
     writeCitationLibrary,
 } from "./libraries.js"
 import { entityChecksum } from "../../lib/core/checksum.js"
-import { DEFAULT_CHECKSUM_CONFIG } from "../../lib/consts.js"
+import { DEFAULT_CHECKSUM_CONFIG } from "../../lib/checksum-config.js"
 
 const MARKER = ".proposit-v0.10"
 

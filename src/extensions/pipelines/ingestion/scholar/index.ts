@@ -1,3 +1,4 @@
 // Barrel for the scholar (thorough, multi-stage) ingestion pipeline.
-export { createScholarPipeline, INGESTION_INPUT_SCHEMA } from "./scholar.js"
+export { createScholarPipeline } from "./scholar.js"
+export { INGESTION_INPUT_SCHEMA } from "../input-schema.js"
 export type { TCreateScholarPipelineOptions } from "./scholar.js"

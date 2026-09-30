@@ -30,7 +30,7 @@ import type {
     TResponseStatus,
     TToolSpec,
 } from "../llm/types.js"
-import { shortenToLength } from "../parsing/clamp-max-lengths.js"
+import { shortenToLength } from "../utils/strings.js"
 import { debugMaxLengthTruncation } from "./debug-log.js"
 import {
     LLM_NON_RETRYABLE_ERROR,

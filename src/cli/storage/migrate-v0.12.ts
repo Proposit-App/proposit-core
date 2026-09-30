@@ -2,7 +2,7 @@ import fs from "node:fs/promises"
 import path from "node:path"
 import { getStateDir } from "../config.js"
 import { entityChecksum } from "../../lib/core/checksum.js"
-import { DEFAULT_CHECKSUM_CONFIG } from "../../lib/consts.js"
+import { DEFAULT_CHECKSUM_CONFIG } from "../../lib/checksum-config.js"
 
 const MARKER = ".proposit-v0.12"
 

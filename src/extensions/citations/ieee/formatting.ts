@@ -4,6 +4,7 @@
 import type { TIEEEReference, TReferenceType } from "./references.js"
 import { buildSegments } from "./segment-builder.js"
 import * as templates from "./segment-templates.js"
+import type { TCitationFormatResult } from "./segment-types.js"
 
 // Re-exported so they are public: segment-builder.ts defines them but is
 // not exported from the package, so this is the only public path to them.
@@ -18,45 +19,10 @@ export {
 // Public types
 // ---------------------------------------------------------------------------
 
-export interface TCitationSegment {
-    text: string
-    role:
-        | "authors"
-        | "title"
-        | "bookTitle"
-        | "publisher"
-        | "location"
-        | "year"
-        | "date"
-        | "edition"
-        | "pages"
-        | "volume"
-        | "issue"
-        | "doi"
-        | "url"
-        | "isbn"
-        | "accessedDate"
-        | "institution"
-        | "degree"
-        | "organization"
-        | "standardNumber"
-        | "reportNumber"
-        | "patentNumber"
-        | "country"
-        | "platform"
-        | "username"
-        | "body"
-        | "separator"
-        | "prefix"
-        | "suffix"
-        | "misc"
-    style?: "italic" | "quoted" | "link" | "plain"
-}
-
-export interface TCitationFormatResult {
-    type: TReferenceType
-    segments: TCitationSegment[]
-}
+export type {
+    TCitationSegment,
+    TCitationFormatResult,
+} from "./segment-types.js"
 
 // ---------------------------------------------------------------------------
 // Config-driven dispatch

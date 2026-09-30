@@ -1,6 +1,9 @@
 import type { TCorePropositionalVariable } from "../schemata/index.js"
 import { CorePropositionalVariableSchema } from "../schemata/index.js"
-import { DEFAULT_CHECKSUM_CONFIG, serializeChecksumConfig } from "../consts.js"
+import {
+    DEFAULT_CHECKSUM_CONFIG,
+    serializeChecksumConfig,
+} from "../checksum-config.js"
 import type { TLogicEngineOptions } from "./argument-engine.js"
 import { entityChecksum } from "./checksum.js"
 import { Value } from "typebox/value"

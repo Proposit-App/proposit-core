@@ -33,7 +33,7 @@ import {
     DEFAULT_CHECKSUM_CONFIG,
     normalizeChecksumConfig,
     serializeChecksumConfig,
-} from "../consts.js"
+} from "../checksum-config.js"
 import { ChangeCollector } from "./change-collector.js"
 import { computeHash, entityChecksum } from "./checksum.js"
 import { InvariantViolationError } from "./invariant-violation-error.js"
@@ -44,7 +44,7 @@ import type {
     TExpressionUpdate,
 } from "./expression-manager.js"
 import { ExpressionManager } from "./expression-manager.js"
-import { isVariadicOperator } from "./expression-manager-checks.js"
+import { isVariadicOperator } from "./expression-manager/checks.js"
 import { VariableManager } from "./variable-manager.js"
 import {
     collectDecidableOperators,

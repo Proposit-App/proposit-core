@@ -11,7 +11,7 @@ import {
     CoreOriginAnchorSchema,
 } from "../schemata/origin.js"
 import type { TCoreChecksumConfig } from "../types/checksum.js"
-import { DEFAULT_CHECKSUM_CONFIG } from "../consts.js"
+import { DEFAULT_CHECKSUM_CONFIG } from "../checksum-config.js"
 import { entityChecksum } from "./checksum.js"
 import { sha256Hex } from "../utils/sha256.js"
 import type { TCodePointIndex } from "../utils/origin-text.js"

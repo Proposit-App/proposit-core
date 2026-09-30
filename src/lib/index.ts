@@ -1,8 +1,20 @@
 /**
- * Library barrel export. Re-exports core classes, evaluation types, diff
- * types, schemata, and the diff function.
+ * Library barrel export. Re-exports the schemata, the engines and libraries,
+ * evaluation, diffing, changesets, checksums, grammar, parsing, the pipeline
+ * framework, the LLM provider contract, and the conversation primitive.
+ * Each area's types are exported beside the functions that use them.
  */
+
+// ---------------------------------------------------------------------------
+// Schemata
+// ---------------------------------------------------------------------------
+
 export * from "./schemata/index.js"
+
+// ---------------------------------------------------------------------------
+// Engines and libraries
+// ---------------------------------------------------------------------------
+
 export { ArgumentEngine, defaultGenerateId } from "./core/argument-engine.js"
 export type {
     TLogicEngineOptions,
@@ -10,9 +22,19 @@ export type {
 } from "./core/argument-engine.js"
 export { PremiseEngine } from "./core/premise-engine.js"
 export type { TPremiseEngineSnapshot } from "./core/premise-engine.js"
-export { validateDerivationStructure } from "./utils/derivation-validation.js"
 export type * from "./core/interfaces/index.js"
+// The barrel exports the expression-manager *data* types (snapshot +
+// inputs), not the `ExpressionManager` class itself — it is internal
+// engine machinery referenced only by `PremiseEngine`'s protected
+// `expressions` member. typedoc's `intentionallyNotExported` suppresses
+// the "referenced but not documented" warning rather than leaking the
+// class (and its `ChangeCollector` dependency) into the public docs.
 export type { TExpressionManagerSnapshot } from "./core/expression-manager.js"
+export type {
+    TExpressionInput,
+    TExpressionWithoutPosition,
+    TExpressionUpdate,
+} from "./core/expression-manager.js"
 export { VariableManager } from "./core/variable-manager.js"
 export type { TVariableManagerSnapshot } from "./core/variable-manager.js"
 export { ClaimLibrary } from "./core/claim-library.js"
@@ -28,42 +50,22 @@ export { ForkNamespace } from "./core/fork-namespace.js"
 export { ForkLibrary } from "./core/fork-library.js"
 export { PropositCore } from "./core/proposit-core.js"
 export type { TPropositCoreOptions } from "./core/proposit-core.js"
-export * from "./types/evaluation.js"
-export {
-    evaluateArgument,
-    checkArgumentValidity,
-    propagateOperatorConstraints,
-    closeUnderAcceptedOperators,
-} from "./core/evaluation/argument-evaluation.js"
-export {
-    isPremiseSetSatisfiable,
-    SATISFIABILITY_VARIABLE_CEILING,
-} from "./core/evaluation/satisfiability.js"
-export type { TPremiseSetSatisfiabilityInput } from "./core/evaluation/satisfiability.js"
-export type {
-    TArgumentEvaluationContext,
-    TEvaluablePremise,
-} from "./core/evaluation/argument-evaluation.js"
-export * from "./types/diff.js"
-export * from "./types/mutation.js"
-export {
-    composeChangesets,
-    mergeChangesets,
-    orderChangeset,
-} from "./utils/changeset.js"
-export type { TOrderedOperation } from "./utils/changeset.js"
+export * from "./types/fork.js"
+export { forkArgumentEngine } from "./core/fork.js"
+export * from "./types/reactive.js"
 export {
     createLookup,
     EMPTY_CLAIM_LOOKUP,
     emptyClaimConnectionLookup,
 } from "./utils/lookup.js"
-export * from "./types/checksum.js"
 export {
-    computeHash,
-    canonicalSerialize,
-    entityChecksum,
-} from "./core/checksum.js"
-export { sha256Hex } from "./utils/sha256.js"
+    POSITION_MIN,
+    POSITION_MAX,
+    POSITION_INITIAL,
+    DEFAULT_POSITION_CONFIG,
+    midpoint,
+} from "./utils/position.js"
+export type { TCorePositionConfig } from "./utils/position.js"
 export {
     normalizeOriginText,
     codePointLength,
@@ -72,6 +74,53 @@ export {
     sliceByCodePointsIndexed,
 } from "./utils/origin-text.js"
 export type { TCodePointIndex } from "./utils/origin-text.js"
+
+// ---------------------------------------------------------------------------
+// Evaluation and reader review
+// ---------------------------------------------------------------------------
+
+export * from "./types/evaluation.js"
+export {
+    evaluateArgument,
+    checkArgumentValidity,
+    propagateOperatorConstraints,
+    closeUnderAcceptedOperators,
+} from "./core/evaluation/argument-evaluation.js"
+export type {
+    TArgumentEvaluationContext,
+    TEvaluablePremise,
+} from "./core/evaluation/argument-evaluation.js"
+export {
+    isPremiseSetSatisfiable,
+    SATISFIABILITY_VARIABLE_CEILING,
+} from "./core/evaluation/satisfiability.js"
+export type { TPremiseSetSatisfiabilityInput } from "./core/evaluation/satisfiability.js"
+export { collectArgumentReferencedClaims } from "./core/review-helpers.js"
+export type { TCollectArgumentReferencedClaimsResult } from "./core/review-helpers.js"
+export { canonicalizeOperatorAssignments } from "./core/review-helpers.js"
+export type { TCanonicalizeOperatorAssignmentsInput } from "./core/review-helpers.js"
+
+// ---------------------------------------------------------------------------
+// Validation
+// ---------------------------------------------------------------------------
+
+export * from "./types/validation.js"
+export {
+    validateArgument,
+    validateArgumentAfterPremiseMutation,
+    validateArgumentEvaluability,
+    collectArgumentReferencedVariables,
+} from "./core/argument-validation.js"
+export type {
+    TArgumentValidationContext,
+    TValidatablePremise,
+} from "./core/argument-validation.js"
+
+// ---------------------------------------------------------------------------
+// Diff and premise relationships
+// ---------------------------------------------------------------------------
+
+export * from "./types/diff.js"
 export {
     diffArguments,
     defaultCompareArgument,
@@ -84,34 +133,41 @@ export {
     analyzePremiseRelationships,
     buildPremiseProfile,
 } from "./core/relationships.js"
+
+// ---------------------------------------------------------------------------
+// Changesets
+// ---------------------------------------------------------------------------
+
+export * from "./types/mutation.js"
+export {
+    composeChangesets,
+    mergeChangesets,
+    orderChangeset,
+} from "./utils/changeset.js"
+export type { TOrderedOperation } from "./utils/changeset.js"
+
+// ---------------------------------------------------------------------------
+// Checksums
+// ---------------------------------------------------------------------------
+
+export * from "./types/checksum.js"
+export {
+    computeHash,
+    canonicalSerialize,
+    entityChecksum,
+} from "./core/checksum.js"
+export { sha256Hex } from "./utils/sha256.js"
 export {
     DEFAULT_CHECKSUM_CONFIG,
     createChecksumConfig,
     normalizeChecksumConfig,
     serializeChecksumConfig,
-} from "./consts.js"
-export { parseFormula } from "./core/parser/formula.js"
-export type { TFormulaAST } from "./core/parser/formula.js"
-// The barrel exports the expression-manager *data* types (snapshot +
-// inputs), not the `ExpressionManager` class itself — it is internal
-// engine machinery referenced only by `PremiseEngine`'s protected
-// `expressions` member. typedoc's `intentionallyNotExported` suppresses
-// the "referenced but not documented" warning rather than leaking the
-// class (and its `ChangeCollector` dependency) into the public docs.
-export type {
-    TExpressionInput,
-    TExpressionWithoutPosition,
-    TExpressionUpdate,
-} from "./core/expression-manager.js"
-export {
-    POSITION_MIN,
-    POSITION_MAX,
-    POSITION_INITIAL,
-    DEFAULT_POSITION_CONFIG,
-    midpoint,
-} from "./utils/position.js"
-export type { TCorePositionConfig } from "./utils/position.js"
-export * from "./types/reactive.js"
+} from "./checksum-config.js"
+
+// ---------------------------------------------------------------------------
+// Grammar
+// ---------------------------------------------------------------------------
+
 export {
     GrammarTierSchema,
     GrammarRuleCodeSchema,
@@ -124,23 +180,22 @@ export type {
 } from "./grammar/types.js"
 export { validate as validateGrammar } from "./grammar/validate.js"
 export { isNakedQTree, isNakedQDerivationPremise } from "./grammar/naked-q.js"
+export { validateDerivationStructure } from "./grammar/derivation-validation.js"
 export type { TValidatorContext } from "./grammar/validators/context.js"
 export type { TPopulateResult } from "./grammar/populate-from.js"
-export * from "./types/fork.js"
-export { forkArgumentEngine } from "./core/fork.js"
+
+// ---------------------------------------------------------------------------
+// Parsing
+// ---------------------------------------------------------------------------
+
+export { parseFormula } from "./core/parser/formula.js"
+export type { TFormulaAST } from "./core/parser/formula.js"
 export * from "./parsing/index.js"
-export * from "./types/validation.js"
-export {
-    validateArgument,
-    validateArgumentAfterPremiseMutation,
-    validateArgumentEvaluability,
-    collectArgumentReferencedVariables,
-} from "./core/argument-validation.js"
-export type {
-    TArgumentValidationContext,
-    TValidatablePremise,
-} from "./core/argument-validation.js"
-export { InvariantViolationError } from "./core/invariant-violation-error.js"
+
+// ---------------------------------------------------------------------------
+// Pipelines
+// ---------------------------------------------------------------------------
+
 export {
     executePipeline,
     executeStage,
@@ -186,6 +241,11 @@ export type {
     TLaunchStageResult,
     TLlmOutputCheckFailure,
 } from "./pipelines/index.js"
+
+// ---------------------------------------------------------------------------
+// LLM provider contract
+// ---------------------------------------------------------------------------
+
 export { LlmTokenUsageSchema } from "./llm/index.js"
 export type {
     TLlmProvider,
@@ -207,17 +267,24 @@ export type {
 // `@proposit/proposit-core/pipelines/ingestion` (the `createScholarPipeline`
 // / `createScribePipeline` factories); the Argument Builder turn factories at
 // `@proposit/proposit-core/builder`.
+
+// ---------------------------------------------------------------------------
+// Conversation
+// ---------------------------------------------------------------------------
+
+// Multi-turn LLM exchange support. Everything the
+// `@proposit/proposit-core/conversation` subpath exports is re-exported here,
+// which is how that subpath reaches the API docs.
+export * from "./conversation/index.js"
+
+// ---------------------------------------------------------------------------
+// Errors
+// ---------------------------------------------------------------------------
+
+export { InvariantViolationError } from "./core/invariant-violation-error.js"
 export {
     InvalidArgumentStructureError,
     UnknownExpressionError,
     NotOperatorNotDecidableError,
 } from "./core/review-errors.js"
 export type { TNotOperatorNotDecidableReason } from "./core/review-errors.js"
-export { collectArgumentReferencedClaims } from "./core/review-helpers.js"
-export type { TCollectArgumentReferencedClaimsResult } from "./core/review-helpers.js"
-export { canonicalizeOperatorAssignments } from "./core/review-helpers.js"
-export type { TCanonicalizeOperatorAssignmentsInput } from "./core/review-helpers.js"
-// Conversation primitive — multi-turn LLM exchange support. Everything the
-// `@proposit/proposit-core/conversation` subpath exports is re-exported here,
-// which is how that subpath reaches the API docs.
-export * from "./conversation/index.js"

@@ -58,7 +58,7 @@ import type {
 import {
     DEFAULT_CHECKSUM_CONFIG,
     createChecksumConfig,
-} from "../src/lib/consts"
+} from "../src/lib/checksum-config"
 import type { TOptionalChecksum } from "../src/lib/schemata/shared"
 import type { TCoreChecksumConfig } from "../src/lib/types/checksum"
 import {
@@ -155,8 +155,8 @@ import { BasicsParsingSchema } from "../src/extensions/basics/schemata"
 import { CLAIM_CANONICALIZATION_SYSTEM_PROMPT } from "../src/extensions/pipelines/base/stages/claim-canonicalization"
 import { ArgumentParser } from "../src/lib/parsing/argument-parser"
 import Type from "typebox"
-import { resolveApiKey, createLlmProvider } from "../src/cli/llm/index"
-import { validateDerivationStructure } from "../src/lib/utils/derivation-validation.js"
+import { resolveApiKey, createLlmProvider } from "../src/cli/llm"
+import { validateDerivationStructure } from "../src/lib/grammar/derivation-validation.js"
 import { emptyClaimConnectionLookup } from "../src/lib/utils/lookup"
 import { InvariantViolationError } from "../src/lib/index"
 import { ClaimAxiomLibrary } from "../src/lib/core/claim-axiom-library"

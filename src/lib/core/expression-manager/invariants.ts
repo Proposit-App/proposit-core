@@ -1,12 +1,12 @@
-import type { TCorePropositionalExpression } from "../schemata/index.js"
-import { CorePropositionalExpressionSchema } from "../schemata/index.js"
-import type { ChangeCollector } from "./change-collector.js"
-import type { TLogicEngineOptions } from "./argument-engine.js"
+import type { TCorePropositionalExpression } from "../../schemata/index.js"
+import { CorePropositionalExpressionSchema } from "../../schemata/index.js"
+import type { ChangeCollector } from "../change-collector.js"
+import type { TLogicEngineOptions } from "../argument-engine.js"
 import { Value } from "typebox/value"
 import type {
     TInvariantViolation,
     TInvariantValidationResult,
-} from "../types/validation.js"
+} from "../../types/validation.js"
 import {
     EXPR_SCHEMA_INVALID,
     EXPR_DUPLICATE_ID,
@@ -17,8 +17,8 @@ import {
     EXPR_CHILD_LIMIT_EXCEEDED,
     EXPR_POSITION_DUPLICATE,
     EXPR_CHECKSUM_MISMATCH,
-} from "../types/validation.js"
-import { flushExpressionChecksums } from "./expression-manager-dirty-set.js"
+} from "../../types/validation.js"
+import { flushExpressionChecksums } from "./dirty-set.js"
 
 /**
  * Performs a comprehensive validation sweep on all managed expressions.

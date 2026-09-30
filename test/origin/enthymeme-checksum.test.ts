@@ -3,7 +3,7 @@ import { entityChecksum } from "../../src/lib/core/checksum.js"
 import {
     DEFAULT_CHECKSUM_CONFIG,
     createChecksumConfig,
-} from "../../src/lib/consts.js"
+} from "../../src/lib/checksum-config.js"
 import { CHECKSUM_FIXTURES } from "./checksum-fixtures.js"
 
 // The most dangerous change in this area is not a bug in new code — it is a

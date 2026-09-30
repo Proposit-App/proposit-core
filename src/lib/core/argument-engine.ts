@@ -29,13 +29,13 @@ import {
     CREATE_DERIVATION_CLAIM_NOT_FOUND,
     CREATE_DERIVATION_REQUIRES_DERIVED_CLAIM_ID,
 } from "../types/validation.js"
-import { validateDerivationStructure } from "../utils/derivation-validation.js"
+import { validateDerivationStructure } from "../grammar/derivation-validation.js"
 import { withoutUndefinedValues } from "../utils/collections.js"
 import {
     DEFAULT_CHECKSUM_CONFIG,
     normalizeChecksumConfig,
     serializeChecksumConfig,
-} from "../consts.js"
+} from "../checksum-config.js"
 import type { TCoreMutationResult, TCoreChangeset } from "../types/mutation.js"
 import { composeChangesets, withCurrentEntries } from "../utils/changeset.js"
 import type {

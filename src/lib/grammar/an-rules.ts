@@ -48,7 +48,7 @@ import type {
     TCoreClaim,
 } from "../schemata/index.js"
 import { hasBinaryOperatorInBoundedSubtree } from "./bounded-subtree.js"
-import { isVariadicOperator } from "../core/expression-manager-checks.js"
+import { isVariadicOperator } from "../core/expression-manager/checks.js"
 
 /**
  * Convergence safety cap — typically AN converges in ≤ 3 iterations

@@ -11,8 +11,8 @@
 import {
     createOpenAiResponsesProvider,
     type TCreateOpenAiResponsesProviderOptions,
-} from "../../extensions/openai/index.js"
-import type { TLlmProvider } from "../../lib/llm/index.js"
+} from "../extensions/openai/index.js"
+import type { TLlmProvider } from "../lib/llm/index.js"
 
 export const OPENAI_API_KEY_ENV = "OPENAI_API_KEY"
 

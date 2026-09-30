@@ -3,8 +3,8 @@ import type {
     TCoreEntitySetDiff,
     TCoreFieldChange,
     TCorePremiseDiff,
-} from "../../lib/types/diff.js"
-import { printLine } from "../output.js"
+} from "../lib/types/diff.js"
+import { printLine } from "./output.js"
 
 export function isDiffEmpty(diff: TCoreArgumentDiff): boolean {
     return (

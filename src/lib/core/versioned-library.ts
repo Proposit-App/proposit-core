@@ -1,7 +1,7 @@
 import { Value } from "typebox/value"
 import type { TSchema } from "typebox"
 import type { TCoreChecksumConfig } from "../types/checksum.js"
-import { DEFAULT_CHECKSUM_CONFIG } from "../consts.js"
+import { DEFAULT_CHECKSUM_CONFIG } from "../checksum-config.js"
 import { entityChecksum } from "./checksum.js"
 import type {
     TInvariantValidationResult,

@@ -7,6 +7,8 @@
 // guarded against drift by a test that asserts each equals
 // `pipeline.stages.map((s) => s.id)`.
 
+import { SCHOLAR_PIPELINE_ID, SCRIBE_PIPELINE_ID } from "./pipeline-ids.js"
+
 /** Ordered stage ids of the scholar ingestion pipeline. */
 export const INGESTION_SCHOLAR_STAGE_IDS: readonly string[] = [
     "segmentation",
@@ -47,9 +49,7 @@ export const INGESTION_SCRIBE_STAGE_IDS: readonly string[] = [
 export function getCanonicalStageIds(
     pipelineId: string | undefined
 ): readonly string[] {
-    if (pipelineId === "argument-ingestion-scholar")
-        return INGESTION_SCHOLAR_STAGE_IDS
-    if (pipelineId === "argument-ingestion-scribe")
-        return INGESTION_SCRIBE_STAGE_IDS
+    if (pipelineId === SCHOLAR_PIPELINE_ID) return INGESTION_SCHOLAR_STAGE_IDS
+    if (pipelineId === SCRIBE_PIPELINE_ID) return INGESTION_SCRIBE_STAGE_IDS
     return []
 }
