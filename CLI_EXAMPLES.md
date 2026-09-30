@@ -645,7 +645,7 @@ proposit-core <argument-id> latest graph | dot -Tsvg -o argument.svg
 Overlay evaluation results from an analysis file:
 
 ```bash
-proposit-core <argument-id> latest graph --analysis analysis.json
+proposit-core <argument-id> latest graph --analysis analysis-1.json
 ```
 
 Expression nodes are colored by truth value (green/red/gray), operator-assigned expressions get double borders, and the graph subtitle shows the evaluation summary.
@@ -677,7 +677,7 @@ proposit-core <argument-id> latest analysis validate-argument --tier presentable
 
 ### Create an analysis file
 
-Creates `analysis.json` with all variables defaulting to `unset`:
+Creates `analysis-1.json` (then `analysis-2.json`, and so on) with all variables defaulting to `unset`:
 
 ```bash
 proposit-core <argument-id> latest analysis create
@@ -903,5 +903,5 @@ proposit-core $ARG latest analysis evaluate --json
 proposit-core $ARG latest analysis check-validity
 
 # ── Graph with evaluation overlay ────────────────────────────────────────────────────────────────────
-proposit-core $ARG latest graph --analysis analysis.json
+proposit-core $ARG latest graph --analysis analysis-1.json
 ```

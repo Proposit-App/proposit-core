@@ -2,6 +2,29 @@
 
 ## Changed
 
+- The agent skill published in the package (`skills/proposit-core/`) is
+  rewritten for the current API. `SKILL.md` and six reference files
+  (`building-arguments.md`, `evaluation.md`, `grammar.md`, `persistence.md`,
+  `forking-and-diffs.md`, `pipelines.md`) plus a rewritten `cli.md` replace
+  `api-usage.md`, `architecture.md` and `types-schemas.md`. It now covers
+  claims and the claim, citation and axiom libraries, `PropositCore`,
+  four-valued evaluation, the four grammar tiers, changesets and checksums,
+  forking, pipelines and the CLI; the old files described three-valued
+  evaluation and had no claims. `testing.md`, which described this
+  repository's own test suite, is removed.
+- `README.md`, `docs/api-reference.md` and `CLI_EXAMPLES.md` corrected where
+  they disagreed with the code: the `ArgumentEngine` constructor is
+  `(argument, claimLookup, options?)`; `validate(tier)` returns grammar
+  violations and `validateInvariants()` is the invariant sweep;
+  `getPremiseType()` returns `"freeform"` or `"derivation"`;
+  `populateFromCitations` and `populateFromAxioms` take the derived claim's
+  id; `removeExpression` takes `deleteSubtree` and collapses parents only
+  through assistive tidying; placing an operator directly under another does
+  not throw; the default claim and argument types reject extra keys unless
+  widened through the type parameters. Tree-building examples now use
+  permissive behavior, since assistive tidying removes a new operator that has
+  no children yet. The README usage examples now compile and run. The CLI
+  docs use `analysis set-operator` and the `analysis-N.json` file names.
 - Dropped the optional `openai` peer dependency. Neither LLM provider imports
   the SDK; both call their endpoints with plain `fetch`.
 - Comments across `src/` and `test/` now describe behaviour rather than
