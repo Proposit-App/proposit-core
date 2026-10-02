@@ -853,3 +853,134 @@ describe("a carried statement means exactly what its link says", () => {
         }
     )
 })
+
+// ---------------------------------------------------------------------------
+// carryAnswers into another response
+// ---------------------------------------------------------------------------
+
+/**
+ * X concludes C; Y answers X with the contradict link `L = NOT(x)` on C, the
+ * reinforce link `R = s` on X's step, and two premises that are not links;
+ * Z answers Y.
+ */
+function chain(
+    zPremises: TPremiseSpec[],
+    answers: Record<string, TLinkAnswer>
+) {
+    const lib = newLib()
+    const t = build({
+        id: "x",
+        version: 3,
+        lib,
+        conclusion: at("c", v("C")),
+        premises: [at("step", implies(v("P"), v("C")))],
+    })
+    const y = build({
+        id: "y",
+        version: 0,
+        lib,
+        respondsTo: t,
+        premises: [
+            labelled("L", at("Lroot", not(at("Lx", x("c"))))),
+            labelled("R", at("Rs", s("step"))),
+            labelled("reason", at("reasonOp", implies(v("M"), v("N")))),
+            labelled("mixed", at("mixedOp", implies(v("M"), not(x("c"))))),
+        ],
+    })
+    const z = build({
+        id: "z",
+        version: 0,
+        lib,
+        respondsTo: y,
+        premises: zPremises,
+    })
+    const zAnswers: Record<string, TLinkAnswer> = {}
+    for (const [label, answer] of Object.entries(answers))
+        zAnswers[z.premise(label)] = answer
+    const result = z.engine.carryAnswers(y.engine.snapshot(), zAnswers, lib)
+    const carried = () => {
+        expect(result.status).toBe("carried")
+        if (result.status !== "carried" || !result.intoResponse)
+            throw new Error("expected link answers carried into a response")
+        return result
+    }
+    const notCarried = (label: string) =>
+        carried().notCarried.find(
+            (entry) => entry.premiseId === z.premise(label)
+        )
+    return { lib, t, y, z, result, carried, notCarried }
+}
+
+describe("carrying into a response", () => {
+    it("affirming a contradict link at its root agrees with it", () => {
+        const { y, carried } = chain([labelled("A", x("Lroot"))], agree("A"))
+        expect(carried().linkAnswers).toEqual({ [y.premise("L")]: "agree" })
+    })
+
+    it("contradicting a contradict link at its root disagrees with it", () => {
+        const { y, carried } = chain(
+            [labelled("A", not(x("Lroot")))],
+            agree("A")
+        )
+        expect(carried().linkAnswers).toEqual({ [y.premise("L")]: "disagree" })
+    })
+
+    it("affirming the statement inside a contradict link disagrees with it", () => {
+        const { y, carried } = chain([labelled("A", x("Lx"))], agree("A"))
+        expect(carried().linkAnswers).toEqual({ [y.premise("L")]: "disagree" })
+    })
+
+    it("affirming a reinforce link agrees with it", () => {
+        const { y, carried } = chain([labelled("A", x("Rs"))], agree("A"))
+        expect(carried().linkAnswers).toEqual({ [y.premise("R")]: "agree" })
+    })
+
+    it("fixing a statement both ways through two links carries neither", () => {
+        const { y, carried, notCarried } = chain(
+            [labelled("A", x("Lx")), labelled("B", x("Lroot"))],
+            agree("A", "B")
+        )
+        expect(carried().linkAnswers).toEqual({})
+        expect(notCarried("A")?.reason).toBe("conflict")
+        expect(notCarried("B")?.reason).toBe("conflict")
+        expect(carried().linkAnswers[y.premise("L")]).toBeUndefined()
+    })
+
+    it("a statement link on a premise that is not a link, fixing no statement a link is about, reaches no link", () => {
+        const { notCarried } = chain(
+            [labelled("A", not(x("reasonOp")))],
+            agree("A")
+        )
+        expect(notCarried("A")?.reason).toBe("noLinkReached")
+    })
+
+    it("an inference link on a premise that is not a link reaches no link", () => {
+        const { notCarried } = chain([labelled("A", s("reasonOp"))], agree("A"))
+        expect(notCarried("A")?.reason).toBe("noLinkReached")
+    })
+
+    it("an inference link on a link's NOT disputes no step", () => {
+        const { notCarried } = chain(
+            [labelled("A", not(s("Lroot")))],
+            agree("A")
+        )
+        expect(notCarried("A")?.reason).toBe("linkStep")
+    })
+
+    it("a link fixing a link's statement and claims as well carries only the link answer", () => {
+        const { y, carried } = chain(
+            [labelled("A", not(x("mixedOp")))],
+            agree("A")
+        )
+        expect(carried().linkAnswers).toEqual({ [y.premise("L")]: "disagree" })
+        expect(carried().sources.map((source) => source.kind)).toEqual([
+            "linkAnswer",
+        ])
+    })
+
+    it("returns no variables or operator decisions", () => {
+        const { carried } = chain([labelled("A", x("Lroot"))], agree("A"))
+        expect(carried()).not.toHaveProperty("variables")
+        expect(carried()).not.toHaveProperty("operatorAssignments")
+    })
+})

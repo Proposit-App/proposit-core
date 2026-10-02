@@ -1,5 +1,6 @@
 import {
     isClaimBound,
+    isExpressionBound,
     isPremiseBound,
     type TCoreArgumentReference,
     type TCorePropositionalExpression,
@@ -24,6 +25,7 @@ import {
     type TTargetExpander,
 } from "./combined-premise-set.js"
 import { isPremiseRootExpression } from "./fingerprint.js"
+import { readLink } from "./links.js"
 
 /**
  * What "this expression has this value" says about its columns.
@@ -251,6 +253,63 @@ function carryInference(
     return { values: [{ kind: "operator", id: expr.id, value: "rejected" }] }
 }
 
+/**
+ * What an agreed link carries into a response it answers: answers on that
+ * response's links. Each link of the response is `x` or `NOT(x)` for one of
+ * its expression-bound variables, and expanding the response keeps `x` as a
+ * column, so a fixed value of that column answers every link on it.
+ */
+function carryIntoResponse(
+    link: TResponseLink,
+    expander: TTargetExpander,
+    index: TTargetIndex,
+    targetLinks: readonly TResponseLink[],
+    targetVariables: ReadonlyMap<string, TCorePropositionalVariable>
+): TLinkOutcome {
+    if (link.boundAspect === "inference") {
+        // The only operator of a link is its NOT, which has no step; an
+        // operator of any other premise of an argument never evaluated
+        // reaches nothing.
+        const premise = index.premiseOfExpression.get(link.boundExpressionId)
+        const onLink = targetLinks.some(
+            (targetLink) => targetLink.premiseId === premise?.id
+        )
+        return { reason: onLink ? "linkStep" : "noLinkReached" }
+    }
+    const decomposition = decomposeStatement(
+        expander,
+        link.boundExpressionId,
+        link.move === "affirm"
+    )
+    if (decomposition.kind !== "cube") return { reason: decomposition.kind }
+    const values: TProposal[] = []
+    for (const [key, value] of decomposition.fixed) {
+        const column = expander.columns.get(key)
+        // Values of claims and premises are dropped: the response answered is
+        // never evaluated, so only its links' answers mean anything.
+        if (column?.kind !== "expression") continue
+        for (const targetLink of targetLinks) {
+            const variable = targetVariables.get(targetLink.variableId)
+            if (variable === undefined || !isExpressionBound(variable)) continue
+            if (
+                variable.boundArgumentId !== column.argumentId ||
+                variable.boundExpressionId !== column.expressionId ||
+                variable.boundAspect !== column.aspect
+            )
+                continue
+            const saysTrue =
+                targetLink.move === "affirm" || targetLink.move === "reinforce"
+            values.push({
+                kind: "linkAnswer",
+                id: targetLink.premiseId,
+                value: value === saysTrue ? "agree" : "disagree",
+            })
+        }
+    }
+    if (values.length === 0) return { reason: "noLinkReached" }
+    return { values }
+}
+
 function proposalKey(proposal: TProposal): string {
     return `${proposal.kind}:${proposal.id}`
 }
@@ -268,6 +327,19 @@ export function carryAnswers(input: TCarryInput): TCarryResult {
     const expander = createTargetExpander(target)
     const index = indexTarget(target)
     const linkOf = new Map(input.links.map((link) => [link.premiseId, link]))
+    const targetVariables = new Map(
+        target.variables.variables.map((variable) => [variable.id, variable])
+    )
+    const targetLinks = intoResponse
+        ? target.premises.flatMap((ps) => {
+              const targetLink = readLink(
+                  ps.premise.id,
+                  ps.expressions.expressions,
+                  (id) => targetVariables.get(id)
+              )
+              return targetLink === undefined ? [] : [targetLink]
+          })
+        : []
     const order = new Map(input.responsePremiseIds.map((id, at) => [id, at]))
     const byOrder = (a: string, b: string): number =>
         (order.get(a) ?? Infinity) - (order.get(b) ?? Infinity) ||
@@ -285,7 +357,13 @@ export function carryAnswers(input: TCarryInput): TCarryResult {
             continue
         }
         const outcome: TLinkOutcome = intoResponse
-            ? { reason: "noLinkReached" }
+            ? carryIntoResponse(
+                  link,
+                  expander,
+                  index,
+                  targetLinks,
+                  targetVariables
+              )
             : link.boundAspect === "statement"
               ? carryStatement(link, expander, index, input.targetClaims)
               : carryInference(link, target, index)
