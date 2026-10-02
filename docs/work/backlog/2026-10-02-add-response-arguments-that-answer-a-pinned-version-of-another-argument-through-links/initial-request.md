@@ -42,3 +42,13 @@ The full request as it arrived — including a detailed proposed design, accepta
 - The idea was worked out with the maintainer in conversation before the request arrived. Points settled there that the request relies on: forks keep meaning "copied from"; the three kinds of attack (rebutting, undermining, undercutting) map onto denying the conclusion, denying a relied-on statement, and denying a step; a rejection of a step is never a truth value.
 - An earlier answer from core, already reflected in the intake: honouring a rejection of the conclusion premise's root step by marking it, not striking it, changes no existing result field and is by itself a minor change; argument kinds with no conclusion are what could justify a major version, since `ARGUMENT_NO_CONCLUSION` is stable wire format.
 - Size: very large. Kept as one item because the pieces are meant to be validated and released together; `spec` should say whether any part can ship on its own.
+
+## Added 2026-10-02
+
+After the first adversarial spec review (verdict: NOT DONE), the maintainer delegated the scoping decision. The decision:
+
+- **Split.** Carrying a reader's agreement into the answered argument moves to its own item: `2026-10-02-carry-a-reader-s-agreement-with-a-response-argument-into-the-argument-it-answers`. That covers held statements, the carried layer, evaluating a response under a reader's input, and `carryAnswers`. All five of the review's unresolved evaluation questions sit there.
+- **This item keeps** argument kinds, expression-bound links, checking a response, bringing a response up to a newer target version, link references, and the conclusion-step flag.
+- **Shipping.** Both items ship in 6.0.0.
+- **The fork defect** found while specifying this item ships separately, as a 5.4.3 patch: `2026-10-02-forking-breaks-bindings-into-another-argument`.
+- **6.0.0 is not limited to this work.** The maintainer confirmed it will carry many other changes as well.
