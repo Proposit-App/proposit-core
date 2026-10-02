@@ -146,7 +146,8 @@ Both connection libraries have the same methods: `add`, `remove`, `get`, `getAll
 - `bindVariableToPremise({ ..., boundPremiseId, boundArgumentId, boundArgumentVersion })` adds a premise-bound variable whose value is the bound premise's value. A binding that would make premises depend on each other in a circle throws.
 - `bindVariableToExternalPremise(...)` points at a premise in another argument. `bindVariableToArgument(variable, conclusionPremiseId)` does the same for another argument's conclusion. The engine never evaluates the other argument, so the reader supplies these values like claim values.
 - `ensureClaimBoundVariable(claimId)` returns a variable for the claim, creating one if none exists.
-- `updateVariable(id, changes)` can change the symbol or the binding, but it cannot switch a variable between claim-bound and premise-bound. `removeVariable(id)` also deletes every expression that uses the variable.
+- `bindVariableToExpression(...)` adds an expression-bound variable. Only a response may hold one; see [Responses and links](#responses-and-links).
+- `updateVariable(id, changes)` can change the symbol or the binding, but it cannot switch a variable between claim-bound, premise-bound and expression-bound, and it refuses every binding field of an expression-bound variable. `removeVariable(id)` also deletes every expression that uses the variable.
 - Lookups: `getVariables()`, `getVariable(id)`, `getVariableBySymbol(symbol)`, `getVariableIdsForClaim(claimId)` (all of them) and `getClaimIdForVariable(id)`.
 
 `createPremise` also adds a premise-bound variable for the new premise, with a symbol such as `P0`, so other premises can refer to it. Pass `{ symbol }` to choose the symbol.
@@ -181,6 +182,7 @@ engine.bindVariableToPremise({
 - `setConclusionPremise(id)` and `clearConclusionPremise()` set the conclusion. `getConclusionPremise()` returns it.
 - Supporting premises are never assigned by hand. `listSupportingPremises()` returns every non-conclusion premise whose root is `implies` or `iff`.
 - That list includes derivation premises, because they are shaped `A → Q` too. To find only what the author wrote, filter on `getPremiseType() !== "derivation"`.
+- A response has no conclusion. In a response, `listSupportingPremises()` returns every premise that is not a link.
 
 ## Expressions
 
@@ -267,3 +269,177 @@ console.log(derivation.getPremiseType()) // "derivation"
 ```
 
 To express "this claim should not be supported by this axiom", negate the axiom's variable in the antecedent with `toggleNegation`. Do not assign it `false`.
+
+## Responses and links
+
+A **response** is an argument that answers one other argument, the **target**, at one pinned version. It is an ordinary `ArgumentEngine` created with one extra field:
+
+```typescript
+const y = core.arguments.create({
+    id: "arg-y",
+    version: 1,
+    respondsTo: { argumentId: "arg-x", argumentVersion: 3 },
+})
+console.log(y.isResponse()) // true
+console.log(y.getRespondsTo()) // { argumentId: "arg-x", argumentVersion: 3 }
+```
+
+What is different about a response:
+
+- **It has no conclusion.** Creating or removing a premise never makes one the conclusion, and `setConclusionPremise` throws. A response stored with a conclusion still loads, and rule E-8 reports it.
+- **`respondsTo` belongs to the engine.** It is set when the engine is built and changed only by `rebaseResponse` (see [forking-and-diffs.md](forking-and-diffs.md#moving-a-response-to-a-newer-version)). `getExtras()` leaves it out, `setExtras` keeps it, and passing it to `setExtras` throws. A response cannot name itself.
+- **`evaluate` and `checkValidity` refuse it** with `ARGUMENT_IS_RESPONSE`. A response is checked with `checkLink` and `checkResponseCoherent` instead (see [evaluation.md](evaluation.md#checking-a-response)).
+
+### Expression-bound variables
+
+`bindVariableToExpression(variable)` adds a variable that stands for one expression of the target. Its `boundAspect` says what it stands for:
+
+- `"statement"`: whether the expression is true;
+- `"inference"`: whether the step the expression makes holds. The expression must be an operator; any operator counts, including one inside a derivation premise.
+
+The method throws when the argument is not a response, when `boundArgumentId` and `boundArgumentVersion` are not the ones in `respondsTo`, or when `canBind(argumentId, version)` refuses. If a variable with the same expression and aspect already exists, it returns that one instead of adding a second. Only a response may hold an expression-bound variable, and `updateVariable` refuses to change any of its binding fields.
+
+### Links and the four moves
+
+A premise is a **link** when its whole content is one expression-bound variable `x`, or `NOT(x)`. Nothing else is stored: the move is read from the aspect and from whether `NOT` is there.
+
+| Content  | Aspect      | Move         | Says                             |
+| -------- | ----------- | ------------ | -------------------------------- |
+| `NOT(x)` | `statement` | `contradict` | The target's expression is false |
+| `x`      | `statement` | `affirm`     | The target's expression is true  |
+| `NOT(s)` | `inference` | `undercut`   | The target's step does not hold  |
+| `s`      | `inference` | `reinforce`  | The target's step holds          |
+
+Every other premise of a response is ordinary content: the reasons it gives. Those may use the link variables (for example `R → NOT(s)`), claim-bound variables and derivation premises.
+
+- `listLinks(response)` returns each link as `{ premiseId, variableId, boundExpressionId, boundAspect, move }`.
+- `validateLinks(response, targetSnapshot)` checks the bindings against a snapshot of the target. It throws unless the snapshot is the argument and version in `respondsTo`, and returns `{ ok, violations }` with these codes:
+    - `LINK_EXPRESSION_MISSING`: the bound expression is not in the snapshot;
+    - `LINK_INFERENCE_ON_NON_OPERATOR`: an inference binding on something that is not an operator;
+    - `LINK_CLAIM_USED_BY_TARGET`: the response has its own claim-bound variable for a claim the target uses. Affirm such a claim through a link instead. A claim used only further back, by an argument the target itself answers, may be claim-bound;
+    - `LINK_VERSION_MISMATCH`: a binding names another version of the target (rule E-10);
+    - `LINK_SAME_CLAIM`, with severity `"info"`, which never makes `ok` false: two links bind different occurrences of one claim in the same aspect. The checks treat the two as one thing, and so must any code that counts a response's links by claim.
+- `elementsWithinPremise(targetSnapshot, premiseId)` lists every expression id and claim id in one premise of the target.
+- `linkTargetsElement(reference, response, targetSnapshot, element)` says whether a link, named from outside the response by a `TLinkReference` (`{ argumentId, argumentVersion, premiseId }`), is about a claim of the target (`{ kind: "claim", claimId }`, at any version of the claim) or an expression (`{ kind: "expression", expressionId }`: that expression, or the root of the premise that holds it).
+
+The library never fetches the target. Every function that needs it takes a snapshot the caller supplies, usually `targetEngine.snapshot()`.
+
+Rules D-4 and D-5, which keep citation- and axiom-bound variables inside a derivation premise's antecedent, do not apply to expression-bound variables. So a response may contradict or undercut anything in its target, including what rests on a source or an axiom. Links reach only the immediate target, though, so a response cannot deny a source cited two arguments back. An affirm link cannot be backed by a derivation premise for the same claim; back it through a separate claim `D` and a premise `D → x`.
+
+### Example
+
+X, at version 3, argues "P → Q; P; therefore Q". Y answers it: it contradicts X's conclusion, undercuts X's step, and gives a reason for the undercut.
+
+```typescript
+import { PropositCore, listLinks, validateLinks } from "@proposit/proposit-core"
+import type { PremiseEngine } from "@proposit/proposit-core"
+
+const core = new PropositCore()
+const p = core.claims.create({ type: "normal" })
+const q = core.claims.create({ type: "normal" })
+const r = core.claims.create({ type: "normal" })
+
+// A small helper: append one expression to a premise.
+function add(
+    premise: PremiseEngine,
+    parentId: string | null,
+    id: string,
+    node:
+        | { type: "variable"; variableId: string }
+        | { type: "operator"; operator: "not" | "implies" }
+) {
+    const { argumentId, argumentVersion } = premise.toPremiseData()
+    premise.appendExpression(parentId, {
+        id,
+        argumentId,
+        argumentVersion,
+        premiseId: premise.getId(),
+        parentId,
+        ...node,
+    })
+}
+
+// The target: X at version 3.
+const x = core.arguments.create({ id: "arg-x", version: 3 })
+x.setBehavior("permissive")
+const xp = x.ensureClaimBoundVariable(p.id).id
+const xq = x.ensureClaimBoundVariable(q.id).id
+const { result: conclusion } = x.createPremise()
+add(conclusion, null, "x-q", { type: "variable", variableId: xq })
+const { result: step } = x.createPremise()
+add(step, null, "x-step", { type: "operator", operator: "implies" })
+add(step, "x-step", "x-p1", { type: "variable", variableId: xp })
+add(step, "x-step", "x-q1", { type: "variable", variableId: xq })
+const { result: fact } = x.createPremise()
+add(fact, null, "x-p2", { type: "variable", variableId: xp })
+x.setBehavior("assistive")
+x.normalize()
+
+// The response: Y at version 1, answering X at version 3.
+const y = core.arguments.create({
+    id: "arg-y",
+    version: 1,
+    respondsTo: { argumentId: "arg-x", argumentVersion: 3 },
+})
+y.setBehavior("permissive")
+const binding = {
+    argumentId: "arg-y",
+    argumentVersion: 1,
+    boundArgumentId: "arg-x",
+    boundArgumentVersion: 3,
+}
+// The truth of X's conclusion, and whether X's step "P → Q" holds.
+y.bindVariableToExpression({
+    ...binding,
+    id: "y-conclusion",
+    symbol: "Xq",
+    boundExpressionId: "x-q",
+    boundAspect: "statement",
+})
+y.bindVariableToExpression({
+    ...binding,
+    id: "y-step",
+    symbol: "Xstep",
+    boundExpressionId: "x-step",
+    boundAspect: "inference",
+})
+const yr = y.ensureClaimBoundVariable(r.id).id
+
+// Contradict: NOT(Xq), "X's conclusion is false".
+const { result: contradict } = y.createPremiseWithId("y-contradict")
+add(contradict, null, "y-not-q", { type: "operator", operator: "not" })
+add(contradict, "y-not-q", "y-q", {
+    type: "variable",
+    variableId: "y-conclusion",
+})
+
+// Undercut: NOT(Xstep), "P does not lead to Q".
+const { result: undercut } = y.createPremiseWithId("y-undercut")
+add(undercut, null, "y-not-step", { type: "operator", operator: "not" })
+add(undercut, "y-not-step", "y-step-1", {
+    type: "variable",
+    variableId: "y-step",
+})
+
+// The reason for the undercut: R, and R → NOT(Xstep).
+const { result: reason } = y.createPremiseWithId("y-reason")
+add(reason, null, "y-r", { type: "variable", variableId: yr })
+const { result: rule } = y.createPremiseWithId("y-rule")
+add(rule, null, "y-implies", { type: "operator", operator: "implies" })
+add(rule, "y-implies", "y-r1", { type: "variable", variableId: yr })
+add(rule, "y-implies", "y-not-step-2", { type: "operator", operator: "not" })
+add(rule, "y-not-step-2", "y-step-2", {
+    type: "variable",
+    variableId: "y-step",
+})
+
+y.setBehavior("assistive")
+y.normalize()
+
+console.log(y.getConclusionPremise()) // undefined: a response has none
+console.log(listLinks(y).map((link) => link.move)) // ["contradict", "undercut"]
+console.log(y.validate("presentable").length) // 0
+console.log(validateLinks(y, x.snapshot()).ok) // true
+```
+
+[evaluation.md](evaluation.md#checking-a-response) continues this example with the checks, and [forking-and-diffs.md](forking-and-diffs.md#moving-a-response-to-a-newer-version) with moving Y to a newer version of X.

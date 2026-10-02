@@ -84,6 +84,7 @@ for (const op of orderChangeset(combined)) {
 - **`orderChangeset(changeset)`** returns `{ type: "insert" | "update" | "delete", entity, data }` operations in an order that works with a store that checks foreign keys (references between tables) immediately and deletes nothing automatically. Two requirements come with it:
     - Apply **only the fields an update carries**. To free removed expressions from their parents first, the order includes "detach" updates that carry only `id`, `parentId: null` and `position: 0`.
     - A detach can briefly give a premise several roots. So check a "one root per premise" rule at the end of the transaction, not after each statement.
+- **References into another argument.** `orderChangeset` orders rows within one argument only. Two kinds of variable point outside it: an externally premise-bound variable names a premise of another argument (`boundArgumentId`, `boundArgumentVersion`, `boundPremiseId`), and an expression-bound variable in a response names an expression of the argument it answers (`boundArgumentId`, `boundArgumentVersion`, `boundExpressionId`). A store that adds a foreign key for either must have the other argument's rows saved first. The target of a response exists before the response does, so saving in that order is natural. Such a key also stops the pinned version's rows from being deleted while a response still points at them, which matters because a response keeps answering that version after the target gains newer ones.
 
 ## Checksums
 
@@ -96,6 +97,8 @@ Checksums let an application detect what changed without comparing whole objects
 - Variables and claims carry one `checksum`. The role state is folded into the argument's `checksum`.
 - Checksums are computed on demand. `flushChecksums()` brings them up to date, and `getCollectionChecksum("premises" | "variables")` gives one value per collection.
 - Which fields count is set by `checksumConfig`. `createChecksumConfig({ expressionFields: new Set(["myField"]) })` adds fields to the defaults (`DEFAULT_CHECKSUM_CONFIG`). Snapshots store the config as arrays, and `normalizeChecksumConfig` / `serializeChecksumConfig` convert between the array and `Set` forms.
+
+**Response fields are always hashed.** A response's `respondsTo`, and an expression-bound variable's `boundExpressionId` and `boundAspect`, count under every configuration, including one stored in an older snapshot that does not list them. Each is hashed only when present, and no entity that predates responses carries them, so no existing checksum changes. Leaving them out would let a rebase go undetected. (`boundArgumentId` and `boundArgumentVersion` were already in the default variable fields.)
 
 **A field counts whenever its key is present, even with value `null`, `false` or `undefined`.** So an unset optional field must be absent, never `null`. Otherwise every checksum changes. This matters most for `enthymeme` and for any field your own storage layer maps from `undefined` to `null`. The library removes a key whose value is `undefined` in `setExtras`, `updateExtras` and `patchExpressionAppFields`, so passing `undefined` there clears a field cleanly.
 

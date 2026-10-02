@@ -1003,7 +1003,7 @@ See [docs/api-reference.md](docs/api-reference.md) for the full API reference co
 
 ## CLI
 
-The package ships a command-line interface for managing arguments stored on disk.
+The package ships a command-line interface for managing arguments stored on disk. Response arguments are a library feature that the CLI does not store: no command creates one, and its storage keeps no `respondsTo` or expression-bound variables.
 
 ### Running the CLI
 
