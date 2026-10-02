@@ -892,9 +892,9 @@ In v1.0 the engine no longer throws on non-`not` operators placed as direct chil
 
 ### Variables — detected by validation
 
-| Invalid construction                               | Error code                 | Severity |
-| -------------------------------------------------- | -------------------------- | -------- |
-| Premise-bound variable references an empty premise | `EXPR_BOUND_PREMISE_EMPTY` | Warning  |
+| Invalid construction                                                    | Error code                 | Severity |
+| ----------------------------------------------------------------------- | -------------------------- | -------- |
+| Premise-bound variable references an empty premise of the same argument | `EXPR_BOUND_PREMISE_EMPTY` | Warning  |
 
 ### Premises — Structural (thrown on mutation)
 
