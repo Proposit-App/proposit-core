@@ -6,6 +6,7 @@ import {
 } from "../../src/lib/core/response/combined-premise-set"
 import {
     decomposeStatement,
+    mergeCarriedInput,
     type TStatementDecomposition,
 } from "../../src/lib/core/response/carry"
 import type { TLinkAnswer } from "../../src/lib/types/response"
@@ -284,10 +285,10 @@ function carryOne(input: TCarrySetUp) {
             (entry) => entry.premiseId === y.premise(label)
         )
     const evaluateWith = (own: TCoreVariableAssignment = {}) => {
-        const { variables, operatorAssignments } = carried()
+        const merged = mergeCarriedInput({ variables: own }, carried())
         return t.engine.evaluate({
-            variables: { ...variables, ...own },
-            operatorAssignments,
+            variables: merged.variables,
+            operatorAssignments: merged.operatorAssignments,
         })
     }
     return {
@@ -982,5 +983,164 @@ describe("carrying into a response", () => {
         const { carried } = chain([labelled("A", x("Lroot"))], agree("A"))
         expect(carried()).not.toHaveProperty("variables")
         expect(carried()).not.toHaveProperty("operatorAssignments")
+    })
+})
+
+// ---------------------------------------------------------------------------
+// Merging carried values with the reader's own input
+// ---------------------------------------------------------------------------
+
+describe("merging carried values with the reader's own input", () => {
+    const contradictC = () =>
+        carryOne({
+            conclusion: at("c", v("C")),
+            premises: [at("mc", implies(v("M"), v("C"))), v("M")],
+            response: [labelled("L", not(x("c")))],
+            answers: agree("L"),
+        })
+
+    it("keeps the reader's value on a collision and reports the carried one", () => {
+        const { t, y, carried } = contradictC()
+        const merged = mergeCarriedInput(
+            { variables: { [t.variable("C")]: true } },
+            carried()
+        )
+        expect(merged.variables[t.variable("C")]).toBe(true)
+        expect(merged.collisions).toEqual([
+            {
+                kind: "variable",
+                id: t.variable("C"),
+                own: true,
+                carried: false,
+                linkPremiseIds: [y.premise("L")],
+            },
+        ])
+    })
+
+    it("lets a carried value replace the reader's explicit null, without a collision", () => {
+        const { t, carried } = contradictC()
+        const merged = mergeCarriedInput(
+            { variables: { [t.variable("C")]: null } },
+            carried()
+        )
+        expect(merged.variables[t.variable("C")]).toBe(false)
+        expect(merged.collisions).toEqual([])
+    })
+
+    it("a carried value the argument's accepted steps contradict comes out contested", () => {
+        const { t, carried } = contradictC()
+        const merged = mergeCarriedInput(
+            {
+                variables: { [t.variable("M")]: true },
+                operatorAssignments: { [t.expr("mc")]: "accepted" },
+            },
+            carried()
+        )
+        const result = t.engine.evaluate({
+            variables: merged.variables,
+            operatorAssignments: merged.operatorAssignments,
+        })
+        expect(result.contestedVariableIds).toContain(t.variable("C"))
+    })
+
+    it("keeps the reader's operator decision on a collision", () => {
+        const { t, y, carried } = carryOne({
+            conclusion: v("C"),
+            premises: [at("op", implies(v("M"), v("Q")))],
+            response: [labelled("L", not(s("op")))],
+            answers: agree("L"),
+        })
+        const merged = mergeCarriedInput(
+            { operatorAssignments: { [t.expr("op")]: "accepted" } },
+            carried()
+        )
+        expect(merged.operatorAssignments[t.expr("op")]).toBe("accepted")
+        expect(merged.collisions).toEqual([
+            {
+                kind: "operator",
+                id: t.expr("op"),
+                own: "accepted",
+                carried: "rejected",
+                linkPremiseIds: [y.premise("L")],
+            },
+        ])
+    })
+
+    it("a carried false on a cited claim survives the default true of evaluateWithDefaults", () => {
+        const { t, carried } = carryOne({
+            conclusion: v("C"),
+            premises: [implies(at("s", v("S")), v("C"))],
+            response: [labelled("L", not(x("s")))],
+            answers: agree("L"),
+            claimTypes: { S: "citation" },
+        })
+        const merged = mergeCarriedInput({}, carried())
+        const result = t.engine.evaluateWithDefaults(merged.variables)
+        expect(result.assignment?.variables[t.variable("S")]).toBe(false)
+    })
+
+    it("carries Z's answer through Y into X, and the reader's own answer on Y wins", () => {
+        const { lib, t, y, carried } = chain(
+            [labelled("A", x("Lroot"))],
+            agree("A")
+        )
+        // The reader agrees with Z, and says nothing of their own about Y.
+        const intoY = mergeCarriedInput({}, carried())
+        const intoX = y.engine.carryAnswers(
+            t.engine.snapshot(),
+            intoY.linkAnswers,
+            lib
+        )
+        expect(intoX).toMatchObject({
+            status: "carried",
+            variables: { [t.variable("C")]: false },
+            sources: [
+                {
+                    kind: "variable",
+                    id: t.variable("C"),
+                    value: false,
+                    linkPremiseIds: [y.premise("L")],
+                },
+            ],
+        })
+
+        // The reader's own disagreement with L outranks what Z carried.
+        const ownDisagree = mergeCarriedInput(
+            { linkAnswers: { [y.premise("L")]: "disagree" } },
+            carried()
+        )
+        expect(ownDisagree.linkAnswers[y.premise("L")]).toBe("disagree")
+        expect(ownDisagree.collisions).toMatchObject([
+            {
+                kind: "linkAnswer",
+                id: y.premise("L"),
+                own: "disagree",
+                carried: "agree",
+            },
+        ])
+    })
+})
+
+describe("evaluateWithDefaults with operator decisions", () => {
+    it("applies the decisions it is given", () => {
+        const t = build({
+            id: "x",
+            version: 3,
+            lib: newLib(),
+            conclusion: at("c", v("C")),
+            premises: [at("mc", implies(v("M"), v("C")))],
+        })
+        const without = t.engine.evaluateWithDefaults({
+            [t.variable("M")]: true,
+        })
+        expect(
+            without.assignment?.variables[t.variable("C")] ?? null
+        ).toBeNull()
+        const withStep = t.engine.evaluateWithDefaults(
+            { [t.variable("M")]: true },
+            undefined,
+            { [t.expr("mc")]: "accepted" }
+        )
+        expect(withStep.assignment?.variables[t.variable("C")]).toBe(true)
     })
 })

@@ -40,6 +40,7 @@ import type {
     TCoreValidationResult,
     TCoreValidityCheckOptions,
     TCoreValidityCheckResult,
+    TCoreOperatorAssignment,
     TCoreVariableAssignment,
 } from "../types/evaluation.js"
 import type {
@@ -3251,11 +3252,17 @@ export class ArgumentEngine<
      * supplied by this map. That also makes citation defaults reviewer-
      * overridable, whereas axioms stay locked.
      *
+     * `operatorAssignments` is passed to `evaluate` unchanged; without it no
+     * operator decision is made. Values carried from a response go in
+     * `overrides` and `operatorAssignments` through `mergeCarriedInput`, so
+     * the order is defaults, then carried values, then the reader's own.
+     *
      * @since 3.1.0
      */
     public evaluateWithDefaults(
         overrides?: TCoreVariableAssignment,
-        options?: TCoreArgumentEvaluationOptions
+        options?: TCoreArgumentEvaluationOptions,
+        operatorAssignments?: Record<string, TCoreOperatorAssignment>
     ): TCoreArgumentEvaluationResult {
         const defaults = this.deriveDefaultAssignment()
         const axiomaticIds = getAxiomaticBoundVariableIds(
@@ -3272,7 +3279,10 @@ export class ArgumentEngine<
             }
         }
         return this.evaluate(
-            { variables: merged, operatorAssignments: {} },
+            {
+                variables: merged,
+                operatorAssignments: { ...operatorAssignments },
+            },
             options
         )
     }

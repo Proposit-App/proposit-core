@@ -17,6 +17,7 @@ import type {
     TCoreValidationResult,
     TCoreValidityCheckOptions,
     TCoreValidityCheckResult,
+    TCoreOperatorAssignment,
     TCoreVariableAssignment,
 } from "../../types/evaluation.js"
 import type { TCoreMutationResult } from "../../types/mutation.js"
@@ -832,13 +833,19 @@ export interface TArgumentEvaluation {
      *
      * @param overrides - Variable assignments to layer over the defaults.
      * @param options - Optional evaluation options, forwarded to `evaluate`.
+     * @param operatorAssignments - Operator decisions, forwarded to
+     *   `evaluate` unchanged; none are made without it. To evaluate with values
+     *   carried from a response, pass the `variables` and
+     *   `operatorAssignments` of `mergeCarriedInput`'s result, so defaults
+     *   sit under carried values and carried values under the reader's own.
      * @returns The evaluation result under the merged assignment.
      *
      * @since 3.1.0
      */
     evaluateWithDefaults(
         overrides?: TCoreVariableAssignment,
-        options?: TCoreArgumentEvaluationOptions
+        options?: TCoreArgumentEvaluationOptions,
+        operatorAssignments?: Record<string, TCoreOperatorAssignment>
     ): TCoreArgumentEvaluationResult
     /**
      * Returns the IDs of every claim-bound variable bound to `claimId`, in

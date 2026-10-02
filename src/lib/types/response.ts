@@ -344,3 +344,29 @@ export type TCarryResult =
                 linkAnswers: Record<string, TLinkAnswer>
             }
       ))
+
+/** A carried value the reader's own input already gives another value. */
+export type TCarryCollision = {
+    /** The links the carried value came from. */
+    linkPremiseIds: string[]
+} & (
+    | { kind: "variable"; id: string; own: boolean; carried: boolean }
+    | {
+          kind: "operator"
+          id: string
+          own: "accepted" | "rejected"
+          carried: "accepted" | "rejected"
+      }
+    | { kind: "linkAnswer"; id: string; own: TLinkAnswer; carried: TLinkAnswer }
+)
+
+/**
+ * The reader's own input with carried values added where the reader gave
+ * none. The reader's value wins every collision, and each is listed.
+ */
+export interface TMergedCarriedInput {
+    variables: Record<string, boolean | null>
+    operatorAssignments: Record<string, "accepted" | "rejected">
+    linkAnswers: Record<string, TLinkAnswer>
+    collisions: TCarryCollision[]
+}

@@ -11,6 +11,7 @@ import type {
     TCarryResult,
     TLinkAnswer,
     TLinkViolation,
+    TMergedCarriedInput,
     TNotCarried,
     TNotCarriedReason,
     TResponseLink,
@@ -455,4 +456,75 @@ export function carryAnswers(input: TCarryInput): TCarryResult {
         sources,
         notCarried,
     }
+}
+
+/**
+ * Adds what `carryAnswers` carried to the reader's own explicit input for the
+ * argument it was carried into. The reader's value wins every collision, and
+ * each collision is reported with the links the carried value came from. An
+ * explicit `null` ("not sure") is not a value: a carried value replaces it
+ * without a collision.
+ *
+ * `own` is the reader's explicit input only, never a default assignment: a
+ * default is not the reader's assertion, and passing one here would let a
+ * default `true` on a citation outrank a carried "the citation is false".
+ * Apply defaults underneath, for example
+ * `evaluateWithDefaults(merged.variables, options, merged.operatorAssignments)`.
+ *
+ * It does not check that `own` is for the argument `carried.into` names;
+ * the caller pairs them.
+ */
+export function mergeCarriedInput(
+    own: {
+        variables?: Readonly<Record<string, boolean | null>>
+        operatorAssignments?: Readonly<Record<string, "accepted" | "rejected">>
+        linkAnswers?: Readonly<Record<string, TLinkAnswer>>
+    },
+    carried: Extract<TCarryResult, { status: "carried" }>
+): TMergedCarriedInput {
+    const merged: TMergedCarriedInput = {
+        variables: { ...own.variables },
+        operatorAssignments: { ...own.operatorAssignments },
+        linkAnswers: { ...own.linkAnswers },
+        collisions: [],
+    }
+    for (const source of carried.sources) {
+        const { linkPremiseIds } = source
+        if (source.kind === "variable") {
+            const mine = merged.variables[source.id] ?? null
+            if (mine === null) merged.variables[source.id] = source.value
+            else if (mine !== source.value)
+                merged.collisions.push({
+                    kind: "variable",
+                    id: source.id,
+                    own: mine,
+                    carried: source.value,
+                    linkPremiseIds: [...linkPremiseIds],
+                })
+        } else if (source.kind === "operator") {
+            const mine = merged.operatorAssignments[source.id]
+            if (mine === undefined)
+                merged.operatorAssignments[source.id] = source.value
+            else if (mine !== source.value)
+                merged.collisions.push({
+                    kind: "operator",
+                    id: source.id,
+                    own: mine,
+                    carried: source.value,
+                    linkPremiseIds: [...linkPremiseIds],
+                })
+        } else {
+            const mine = merged.linkAnswers[source.id]
+            if (mine === undefined) merged.linkAnswers[source.id] = source.value
+            else if (mine !== source.value)
+                merged.collisions.push({
+                    kind: "linkAnswer",
+                    id: source.id,
+                    own: mine,
+                    carried: source.value,
+                    linkPremiseIds: [...linkPremiseIds],
+                })
+        }
+    }
+    return merged
 }
