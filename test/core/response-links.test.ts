@@ -295,6 +295,80 @@ describe("round trips", () => {
         )
         expect(restored.snapshot()).toEqual(eng.snapshot())
     })
+
+    describe("a response with every move, a claim-bound premise and a derivation premise", () => {
+        const setUp = () => {
+            const lib = newLib()
+            const t = build({
+                id: "x",
+                version: 3,
+                lib,
+                conclusion: at("c", v("C")),
+                premises: [
+                    at("step", implies(at("p", v("P")), v("C"))),
+                    at("both", and(v("Q"), v("R"))),
+                ],
+            })
+            const response = build({
+                id: "y",
+                version: 0,
+                lib,
+                respondsTo: t,
+                premises: [
+                    x("p"),
+                    not(x("c")),
+                    s("step"),
+                    not(s("both")),
+                    implies(v("M"), v("N")),
+                    labelled("derived", implies(v("S"), v("D")), "D"),
+                ],
+                claimTypes: { S: "citation" },
+            })
+            return { lib, eng: response.engine }
+        }
+        const asJson = (value: unknown): unknown =>
+            JSON.parse(JSON.stringify(value))
+
+        it("holds one link of each move", () => {
+            const { eng } = setUp()
+            expect(
+                listLinks(eng)
+                    .map((link) => link.move)
+                    .sort()
+            ).toEqual(["affirm", "contradict", "reinforce", "undercut"])
+            expect(
+                eng.listPremises().map((pm) => pm.getPremiseType())
+            ).toContain("derivation")
+        })
+
+        it("survives snapshot and fromSnapshot with checksums unchanged", () => {
+            const { lib, eng } = setUp()
+            const restored = ArgumentEngine.fromSnapshot(
+                JSON.parse(JSON.stringify(eng.snapshot())) as ReturnType<
+                    typeof eng.snapshot
+                >,
+                lib,
+                "strict"
+            )
+            expect(asJson(restored.snapshot())).toEqual(asJson(eng.snapshot()))
+        })
+
+        it("survives fromData with checksums unchanged", () => {
+            const { lib, eng } = setUp()
+            const snap = eng.snapshot()
+            const restored = ArgumentEngine.fromData(
+                eng.getArgument(),
+                lib,
+                eng.getVariables(),
+                snap.premises.map((ps) => ps.premise),
+                snap.premises.flatMap((ps) => ps.expressions.expressions),
+                eng.getRoleState(),
+                undefined,
+                "strict"
+            )
+            expect(asJson(restored.snapshot())).toEqual(asJson(eng.snapshot()))
+        })
+    })
 })
 
 describe("expression-bound variables in diffs and forks", () => {
