@@ -21,6 +21,16 @@ import {
     type TResponseCheckInput,
 } from "./response/check.js"
 import { readLink, validateLinks } from "./response/links.js"
+import {
+    assertRebased,
+    linkFaultKeys,
+    resolveRebase,
+    type TClassifyBindingsOptions,
+} from "./response/rebase.js"
+import type {
+    TBindingClassificationResult,
+    TRebaseDecisions,
+} from "../types/response.js"
 import type {
     TCoreArgumentEvaluationOptions,
     TCoreArgumentEvaluationResult,
@@ -1450,6 +1460,240 @@ export class ArgumentEngine<
                 base.boundAspect === boundAspect
             )
         })
+    }
+
+    /**
+     * Moves a response to a newer version of the argument it answers.
+     *
+     * The classification is computed again here, as `classifyBindings`
+     * computes it, from `targetFrom`, `targetTo` and `options`. Then:
+     * - `respondsTo` becomes `targetTo`;
+     * - every `unchanged` binding is re-pointed to `targetTo`;
+     * - every `changed` or `removed` binding takes its decision from
+     *   `decisions.bindings`: `keep` re-points it to the same expression,
+     *   `retarget` to another expression of `targetTo` in the same aspect,
+     *   and `drop` removes it with every premise its entry lists;
+     * - every claim-binding conflict takes its decision from
+     *   `decisions.claimBindingConflicts`: `convertToLink` replaces the
+     *   claim-bound variable with a statement binding to the chosen
+     *   occurrence of the claim, adding an affirm link when the response has
+     *   none for it, and `drop` removes it with every premise its entry lists.
+     *
+     * Before returning, it checks that every expression-bound variable is
+     * bound to `targetTo` and names an expression present there, and that
+     * `validateLinks` against `targetTo` reports no fault, by code, variable
+     * and expression, that it did not report before. Any failure undoes the
+     * whole rebase. The changeset holds the argument with its new
+     * `respondsTo` and every variable re-pointed, added or removed.
+     *
+     * @returns The classification the rebase acted on.
+     * @throws When `canBind` refuses `targetTo`; when a binding or conflict
+     * needing a decision has none, or a decision names one needing none; when
+     * a removed binding is kept; when a keep or retarget would bind an
+     * expression another variable already binds in the same aspect; when a
+     * conversion names an expression that is not an occurrence of the claim,
+     * or the claim is a citation or is derived by a derivation premise of
+     * the response; or when the check above fails.
+     */
+    public rebaseResponse(
+        targetFrom: TArgumentEngineSnapshot,
+        targetTo: TArgumentEngineSnapshot,
+        decisions: TRebaseDecisions,
+        options: TClassifyBindingsOptions = {}
+    ): TCoreMutationResult<
+        TBindingClassificationResult,
+        TExpr,
+        TVar,
+        TPremise,
+        TArg
+    > {
+        return this.withValidation(() => {
+            const self = this as unknown as ArgumentEngine
+            const toId = targetTo.argument.id
+            const toVersion = targetTo.argument.version
+            if (!this.canBind(toId, toVersion)) {
+                throw new Error(
+                    `Binding to argument "${toId}" version ${toVersion} is not allowed.`
+                )
+            }
+            const resolved = resolveRebase(
+                self,
+                targetFrom,
+                targetTo,
+                decisions,
+                options
+            )
+            const answered = this.getRespondsTo()!
+            const faultsBefore = linkFaultKeys(
+                self,
+                answered.argumentVersion === targetFrom.argument.version
+                    ? targetFrom
+                    : targetTo
+            )
+
+            let changes: TCoreChangeset<TExpr, TVar, TPremise, TArg> = {}
+            for (const premiseId of resolved.dropPremiseIds) {
+                if (!this.premises.has(premiseId)) continue
+                changes = composeChangesets(
+                    changes,
+                    this.removePremise(premiseId).changes
+                )
+            }
+            for (const variableId of resolved.dropVariableIds) {
+                changes = composeChangesets(
+                    changes,
+                    this.removeVariableCore(variableId).changes
+                )
+            }
+
+            this.argument = {
+                ...this.argument,
+                respondsTo: { argumentId: toId, argumentVersion: toVersion },
+            } as TOptionalChecksum<TArg>
+            this.markDirty()
+
+            const collector = new ChangeCollector<TExpr, TVar, TPremise, TArg>()
+            for (const [variableId, expressionId] of resolved.repoint) {
+                collector.modifiedVariable(
+                    this.repointExpressionBinding(
+                        variableId,
+                        expressionId,
+                        toVersion
+                    )
+                )
+            }
+            this.markAllPremisesDirty()
+            for (const conversion of resolved.conversions) {
+                changes = composeChangesets(
+                    changes,
+                    this.convertClaimToLink(
+                        conversion.claimVariableId,
+                        conversion.expressionId,
+                        toId,
+                        toVersion,
+                        collector
+                    )
+                )
+            }
+            collector.setArgument(this.getArgument())
+            changes = composeChangesets(
+                changes,
+                this.finalizeChanges(collector)
+            )
+
+            assertRebased(self, targetTo, faultsBefore)
+            return { result: resolved.classification, changes }
+        })
+    }
+
+    /**
+     * Binds an expression-bound variable to another expression and version
+     * of the argument the response answers. The only path that changes these
+     * fields: `updateVariable` refuses them.
+     */
+    private repointExpressionBinding(
+        variableId: string,
+        boundExpressionId: string,
+        boundArgumentVersion: number
+    ): TVar {
+        const updated = this.variables.updateVariable(variableId, {
+            boundExpressionId,
+            boundArgumentVersion,
+        } as unknown as Partial<TVar>)
+        if (updated === undefined) {
+            throw new Error(`Variable "${variableId}" does not exist.`)
+        }
+        const withChecksum = this.attachVariableChecksum({ ...updated })
+        this.variables.removeVariable(variableId)
+        this.variables.addVariable(withChecksum)
+        return withChecksum
+    }
+
+    /**
+     * Replaces a claim-bound variable, wherever it is used, with the
+     * statement binding to `expressionId`, reusing a variable that already
+     * binds it, and adds an affirm link for that variable when the response
+     * has none. Variables it adds are recorded on `collector`; everything
+     * else it changed is returned.
+     */
+    private convertClaimToLink(
+        claimVariableId: string,
+        expressionId: string,
+        toId: string,
+        toVersion: number,
+        collector: ChangeCollector<TExpr, TVar, TPremise, TArg>
+    ): TCoreChangeset<TExpr, TVar, TPremise, TArg> {
+        let changes: TCoreChangeset<TExpr, TVar, TPremise, TArg> = {}
+        let linkVariable = this.findExpressionBinding(
+            toId,
+            expressionId,
+            "statement"
+        )
+        if (linkVariable === undefined) {
+            linkVariable = this.storeNewVariable({
+                id: this.generateId(),
+                argumentId: this.argument.id,
+                argumentVersion: this.argument.version,
+                symbol: this.generateUniqueSymbol(),
+                boundExpressionId: expressionId,
+                boundArgumentId: toId,
+                boundArgumentVersion: toVersion,
+                boundAspect: "statement",
+            } as unknown as TOptionalChecksum<TVar>)
+            collector.addedVariable(linkVariable)
+            this.markAllPremisesDirty()
+        }
+        const linkVariableId = linkVariable.id
+
+        const occurrences = this.listPremises().flatMap((pm) =>
+            pm
+                .getExpressions()
+                .filter(
+                    (expr) =>
+                        expr.type === "variable" &&
+                        expr.variableId === claimVariableId
+                )
+                .map((expr) => ({ pm, id: expr.id }))
+        )
+        for (const { pm, id } of occurrences) {
+            changes = composeChangesets(
+                changes,
+                pm.updateExpression(id, { variableId: linkVariableId }).changes
+            )
+        }
+        changes = composeChangesets(
+            changes,
+            this.removeVariableCore(claimVariableId).changes
+        )
+
+        const hasAffirm = this.listPremises().some((pm) => {
+            const link = readLink(
+                pm.getId(),
+                pm.getExpressions(),
+                (id) =>
+                    this.variables.getVariable(id) as unknown as
+                        | TCorePropositionalVariable
+                        | undefined
+            )
+            return link?.variableId === linkVariableId && link.move === "affirm"
+        })
+        if (!hasAffirm) {
+            const { result: pm, changes: created } = this.createPremise()
+            changes = composeChangesets(changes, created)
+            changes = composeChangesets(
+                changes,
+                pm.appendExpression(null, {
+                    id: this.generateId(),
+                    type: "variable" as const,
+                    variableId: linkVariableId,
+                    premiseId: pm.getId(),
+                    argumentId: this.argument.id,
+                    argumentVersion: this.argument.version,
+                } as unknown as import("./expression-manager.js").TExpressionWithoutPosition<TExpr>)
+                    .changes
+            )
+        }
+        return changes
     }
 
     /** Adds a premise-bound variable that references another argument's conclusion premise. */

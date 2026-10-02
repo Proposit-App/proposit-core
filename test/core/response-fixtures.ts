@@ -15,7 +15,11 @@ import { isPremiseBound } from "../../src/lib/schemata/index.js"
 
 type TOperator = "not" | "and" | "or" | "xor" | "implies" | "iff"
 
-export type TNode = { label?: string } & (
+export type TNode = {
+    label?: string
+    /** A fixed expression id, used in place of the generated one. */
+    id?: string
+} & (
     | { kind: "var"; name: string }
     | { kind: "op"; operator: TOperator; kids: TNode[] }
     /** A response's expression-bound variable on a labelled target expression. */
@@ -47,6 +51,12 @@ export const implies = (left: TNode, right: TNode): TNode =>
 export const iff = (left: TNode, right: TNode): TNode => op("iff")(left, right)
 /** Gives a node a label, so a test can find its expression id. */
 export const at = (label: string, node: TNode): TNode => ({ ...node, label })
+/**
+ * Gives a node a fixed expression id, so that one expression can sit at
+ * different places in two versions of an argument and keep its id. The
+ * generated ids of the other nodes are unaffected.
+ */
+export const withId = (id: string, node: TNode): TNode => ({ ...node, id })
 /** The statement of a labelled target expression. */
 export const x = (target: string): TNode => ({
     kind: "bound",
@@ -206,7 +216,8 @@ export function build(input: TBuildInput): TBuilt {
         parentId: string | null,
         position: number
     ): string => {
-        const exprId = `${id}.e${exprSeq++}`
+        const generated = `${id}.e${exprSeq++}`
+        const exprId = node.id ?? generated
         if (node.label !== undefined) exprIds.set(node.label, exprId)
         const common = {
             id: exprId,
