@@ -19,9 +19,14 @@ const SSE_TERMINAL_EVENTS = new Set([
 // streaming consumer learns the id while the call is still in flight.
 const SSE_CREATED_EVENT = "response.created"
 
+// One chunk of assistant output text, carried in a top-level `delta` string.
+// By far the most frequent event, so it is matched last.
+const SSE_TEXT_DELTA_EVENT = "response.output_text.delta"
+
 type TParsedSseEvent =
     | { kind: "terminal"; envelope: TOpenAiResponsesEnvelope }
     | { kind: "created"; responseId: string }
+    | { kind: "delta"; text: string }
     | undefined
 
 /**
@@ -33,6 +38,8 @@ type TParsedSseEvent =
  *   * `{ kind: "created", responseId }` for the lifecycle
  *     `response.created` event, surfacing the response id the moment
  *     it is known (before any output);
+ *   * `{ kind: "delta", text }` for a `response.output_text.delta`
+ *     event, carrying one chunk of assistant output text;
  *   * `undefined` for every intermediate / unrecognized event.
  *
  * The events carry a `type` field inside the data JSON, so we key off
@@ -50,12 +57,13 @@ function parseSseEvent(raw: string): TParsedSseEvent {
         }
     }
     if (dataLines.length === 0) return undefined
-    let parsed: { type?: string; response?: TOpenAiResponsesEnvelope }
+    let parsed: {
+        type?: string
+        response?: TOpenAiResponsesEnvelope
+        delta?: unknown
+    }
     try {
-        parsed = JSON.parse(dataLines.join("\n")) as {
-            type?: string
-            response?: TOpenAiResponsesEnvelope
-        }
+        parsed = JSON.parse(dataLines.join("\n")) as typeof parsed
     } catch {
         return undefined
     }
@@ -70,6 +78,9 @@ function parseSseEvent(raw: string): TParsedSseEvent {
     }
     if (type === SSE_CREATED_EVENT && parsed.response?.id) {
         return { kind: "created", responseId: parsed.response.id }
+    }
+    if (type === SSE_TEXT_DELTA_EVENT && typeof parsed.delta === "string") {
+        return { kind: "delta", text: parsed.delta }
     }
     return undefined
 }
@@ -88,13 +99,18 @@ function parseSseEvent(raw: string): TParsedSseEvent {
  * mid-flight so an in-flight call interrupted before completion can be
  * recovered from the upstream's stored copy. Invoked at most once.
  *
+ * `onTextDelta`, when supplied, fires once per chunk of assistant output
+ * text, in stream order, as each arrives. Chunks are passed as received and
+ * never accumulated.
+ *
  * Note: the event-separator scan assumes LF (`\n\n`) framing, which the
  * OpenAI Responses API emits. Reuse against a strict CRLF-only SSE
  * server would need the separator scan adjusted to `\r\n\r\n`.
  */
 export async function readSseEnvelope(
     response: Response,
-    onResponseId?: (responseId: string) => void
+    onResponseId?: (responseId: string) => void,
+    onTextDelta?: (text: string) => void
 ): Promise<TOpenAiResponsesEnvelope> {
     const body = response.body
     if (!body) {
@@ -112,6 +128,10 @@ export async function readSseEnvelope(
         if (!parsedEvent) return
         if (parsedEvent.kind === "terminal") {
             terminal = parsedEvent.envelope
+            return
+        }
+        if (parsedEvent.kind === "delta") {
+            onTextDelta?.(parsedEvent.text)
             return
         }
         // kind === "created": surface the id once, the moment it's known.

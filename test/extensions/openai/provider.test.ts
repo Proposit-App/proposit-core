@@ -1543,7 +1543,7 @@ describe("OpenAI provider — streaming (Level 1b)", () => {
                     sseResponse([
                         {
                             type: "response.output_text.delta",
-                            response: { delta: "partial" },
+                            delta: "partial",
                         },
                     ])
                 ),
@@ -1798,7 +1798,7 @@ describe("OpenAI provider — backgroundStreamMode (background + live SSE)", () 
                     sseResponse([
                         {
                             type: "response.output_text.delta",
-                            response: { delta: "partial" },
+                            delta: "partial",
                         },
                     ])
                 ),
@@ -2598,7 +2598,7 @@ describe("reconnectStream", () => {
                         sseResponse([
                             {
                                 type: "response.output_text.delta",
-                                response: { delta: "partial" },
+                                delta: "partial",
                             },
                         ])
                     ),
