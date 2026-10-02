@@ -1117,7 +1117,15 @@ describe("createOpenAiResponsesProvider — abort propagation", () => {
 
 // -- SSE streaming helpers ------------------------------------------
 
-function sseResponse(events: { type: string; response: unknown }[]): Response {
+type TSseFrame = { type: string } & Record<string, unknown>
+
+function sseFrames(events: TSseFrame[]): string {
+    return events
+        .map((e) => `event: ${e.type}\ndata: ${JSON.stringify(e)}\n\n`)
+        .join("")
+}
+
+function sseResponse(events: TSseFrame[]): Response {
     const body = events
         .map((e) => `event: ${e.type}\ndata: ${JSON.stringify(e)}\n\n`)
         .join("")
@@ -1133,10 +1141,7 @@ function sseResponse(events: { type: string; response: unknown }[]): Response {
     })
 }
 
-function sseResponseChunked(
-    events: { type: string; response: unknown }[],
-    splitAt: number
-): Response {
+function sseResponseChunked(events: TSseFrame[], splitAt: number): Response {
     const full = events
         .map((e) => `event: ${e.type}\ndata: ${JSON.stringify(e)}\n\n`)
         .join("")
@@ -1152,6 +1157,39 @@ function sseResponseChunked(
         status: 200,
         headers: { "Content-Type": "text/event-stream" },
     })
+}
+
+// A stream that delivers `early` at once and holds `late` back until the
+// test calls `release()`, so a test can observe what a callback saw while
+// `respond()` is still pending.
+function gatedSseResponse(
+    early: TSseFrame[],
+    late: TSseFrame[]
+): { response: Response; release: () => void } {
+    let release: () => void = () => undefined
+    const gate = new Promise<void>((resolve) => {
+        release = resolve
+    })
+    const encoder = new TextEncoder()
+    const stream = new ReadableStream<Uint8Array>({
+        async start(controller) {
+            controller.enqueue(encoder.encode(sseFrames(early)))
+            await gate
+            controller.enqueue(encoder.encode(sseFrames(late)))
+            controller.close()
+        },
+    })
+    return {
+        response: new Response(stream, {
+            status: 200,
+            headers: { "Content-Type": "text/event-stream" },
+        }),
+        release,
+    }
+}
+
+function letStreamRun(): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, 10))
 }
 
 // -- background-mode helpers ----------------------------------------
@@ -1505,7 +1543,7 @@ describe("OpenAI provider — streaming (Level 1b)", () => {
                     sseResponse([
                         {
                             type: "response.output_text.delta",
-                            response: { delta: "partial" },
+                            delta: "partial",
                         },
                     ])
                 ),
@@ -1632,6 +1670,155 @@ describe("OpenAI provider — streaming (Level 1b)", () => {
 
 // -- C-1: backgroundStreamMode tests ------------------------------------
 
+describe("OpenAI provider — foreground streaming callbacks", () => {
+    const completed = (id: string): TSseFrame => ({
+        type: "response.completed",
+        response: {
+            id,
+            status: "completed",
+            output: [
+                {
+                    type: "message",
+                    content: [
+                        {
+                            type: "output_text",
+                            text: JSON.stringify({ answer: "streamed" }),
+                        },
+                    ],
+                },
+            ],
+            usage: { input_tokens: 1, output_tokens: 1 },
+        },
+    })
+
+    it("fires onResponseCreated mid-flight on the default foreground stream", async () => {
+        const { response, release } = gatedSseResponse(
+            [
+                {
+                    type: "response.created",
+                    response: { id: "resp_fg", status: "in_progress" },
+                },
+            ],
+            [completed("resp_fg")]
+        )
+        const provider = createOpenAiResponsesProvider({
+            apiKey: "k",
+            fetch: () => Promise.resolve(response),
+        })
+        const observedIds: string[] = []
+        let resolved = false
+        const pending = provider
+            .respond({
+                model: "gpt-5.4",
+                systemPrompt: "s",
+                userMessage: "u",
+                outputSchema: simpleSchema,
+                onResponseCreated: (id) => observedIds.push(id),
+            })
+            .then((r) => {
+                resolved = true
+                return r
+            })
+
+        await letStreamRun()
+        expect(resolved).toBe(false)
+        expect(observedIds).toEqual(["resp_fg"])
+
+        release()
+        await pending
+        expect(observedIds).toEqual(["resp_fg"])
+    })
+    const delta = (text: string, sequenceNumber: number): TSseFrame => ({
+        type: "response.output_text.delta",
+        item_id: "msg_1",
+        output_index: 0,
+        content_index: 0,
+        delta: text,
+        sequence_number: sequenceNumber,
+        logprobs: [],
+    })
+
+    it("passes each text delta to onTextDelta, in order, before respond() resolves", async () => {
+        const { response, release } = gatedSseResponse(
+            [delta('{"answer":', 1), delta('"streamed"}', 2)],
+            [completed("resp_d")]
+        )
+        const provider = createOpenAiResponsesProvider({
+            apiKey: "k",
+            fetch: () => Promise.resolve(response),
+        })
+        const deltas: string[] = []
+        let resolved = false
+        const pending = provider
+            .respond({
+                model: "gpt-5.4",
+                systemPrompt: "s",
+                userMessage: "u",
+                outputSchema: simpleSchema,
+                onTextDelta: (text) => deltas.push(text),
+            })
+            .then((r) => {
+                resolved = true
+                return r
+            })
+
+        await letStreamRun()
+        expect(resolved).toBe(false)
+        expect(deltas).toEqual(['{"answer":', '"streamed"}'])
+
+        release()
+        expect((await pending).output).toEqual({ answer: "streamed" })
+        expect(deltas).toHaveLength(2)
+    })
+
+    it("returns the same response without onTextDelta as for a stream with no deltas", async () => {
+        const respond = (frames: TSseFrame[]) =>
+            createOpenAiResponsesProvider({
+                apiKey: "k",
+                fetch: () => Promise.resolve(sseResponse(frames)),
+            }).respond({
+                model: "gpt-5.4",
+                systemPrompt: "s",
+                userMessage: "u",
+                outputSchema: simpleSchema,
+            })
+        const withDeltas = await respond([
+            delta('{"answer":', 1),
+            delta('"streamed"}', 2),
+            completed("resp_same"),
+        ])
+        const withoutDeltas = await respond([completed("resp_same")])
+        expect(withDeltas).toEqual(withoutDeltas)
+    })
+
+    it("passes deltas to onTextDelta in background-stream mode too", async () => {
+        const provider = createOpenAiResponsesProvider({
+            apiKey: "k",
+            backgroundStreamMode: true,
+            fetch: () =>
+                Promise.resolve(
+                    sseResponse([
+                        {
+                            type: "response.created",
+                            response: { id: "resp_bg", status: "in_progress" },
+                        },
+                        delta('{"answer":"streamed"}', 1),
+                        completed("resp_bg"),
+                    ])
+                ),
+        })
+        const deltas: string[] = []
+        await provider.respond({
+            model: "gpt-5.4",
+            systemPrompt: "s",
+            userMessage: "u",
+            outputSchema: simpleSchema,
+            onTextDelta: (text) => deltas.push(text),
+        })
+        expect(deltas).toEqual(['{"answer":"streamed"}'])
+    })
+})
+
 describe("OpenAI provider — backgroundStreamMode (background + live SSE)", () => {
     const completedSsePayload = {
         id: "resp_bs1",
@@ -1700,7 +1887,7 @@ describe("OpenAI provider — backgroundStreamMode (background + live SSE)", () 
                     sseResponse([
                         {
                             type: "response.output_text.delta",
-                            response: { delta: "partial" },
+                            delta: "partial",
                         },
                     ])
                 ),
@@ -2040,6 +2227,93 @@ describe("llmStage — stage:llm-response-created event and rawResponseId propag
             throw new Error("expected stage:llm-call event")
         }
         expect(llmCallEvent.rawResponseId).toBe("resp_test_event")
+    })
+
+    it("reports the final round's id for a tool-using stage on the default stream", async () => {
+        // With function tools one respond() makes a request per round, each
+        // with its own response id. The id the stage reports must be the one
+        // it returns, never an earlier round's.
+        const { executePipeline, llmStage } =
+            await import("../../../src/lib/pipelines/index.js")
+        const outputSchema = Type.Object({ value: Type.Number() })
+        const round = (id: string, output: unknown[]): Response =>
+            sseResponse([
+                {
+                    type: "response.created",
+                    response: { id, status: "in_progress" },
+                },
+                {
+                    type: "response.completed",
+                    response: {
+                        id,
+                        status: "completed",
+                        output,
+                        usage: { input_tokens: 1, output_tokens: 1 },
+                    },
+                },
+            ])
+        const rounds = [
+            round("resp_round1", [
+                {
+                    type: "function_call",
+                    call_id: "c1",
+                    name: "lookup",
+                    arguments: "{}",
+                },
+            ]),
+            round("resp_round2", [
+                {
+                    type: "message",
+                    content: [{ type: "output_text", text: '{"value":1}' }],
+                },
+            ]),
+        ]
+        const llm = createOpenAiResponsesProvider({
+            apiKey: "k",
+            fetch: () => Promise.resolve(rounds.shift()!),
+        })
+        const stage = llmStage<{ value: number }>({
+            id: "tools",
+            dependsOn: [],
+            outputSchema,
+            model: "gpt-5.4",
+            buildPrompt: () => ({ system: "sys", user: "usr" }),
+            tools: [
+                {
+                    kind: "function",
+                    name: "lookup",
+                    description: "Looks something up.",
+                    parameters: Type.Object({}),
+                    handler: () => Promise.resolve("found"),
+                },
+            ],
+        })
+        const events: import("../../../src/lib/pipelines/types.js").TPipelineEvent[] =
+            []
+        await executePipeline(
+            {
+                id: "tools-pipeline",
+                version: "1.0.0",
+                inputSchema: Type.Object({}),
+                outputSchema,
+                stages: [stage],
+                finalize: {
+                    dependsOn: ["tools"],
+                    run: (ctx) =>
+                        ctx.get<{ value: number }>("tools") ?? { value: -1 },
+                },
+            },
+            {},
+            { llm, onEvent: (e) => events.push(e) }
+        )
+        const ids = events.flatMap((e) =>
+            e.kind === "stage:llm-response-created"
+                ? [e.responseId]
+                : e.kind === "stage:llm-call"
+                  ? [e.rawResponseId]
+                  : []
+        )
+        expect(ids).toEqual(["resp_round2", "resp_round2"])
     })
 
     it("does not emit stage:llm-response-created when provider returns no rawResponseId", async () => {
@@ -2500,7 +2774,7 @@ describe("reconnectStream", () => {
                         sseResponse([
                             {
                                 type: "response.output_text.delta",
-                                response: { delta: "partial" },
+                                delta: "partial",
                             },
                         ])
                     ),

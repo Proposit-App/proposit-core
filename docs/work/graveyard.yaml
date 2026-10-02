@@ -94,6 +94,9 @@
 2026-08-18-cut-proposit-core-v4-1-0:
   resolution: done
   resolved: '2026-09-02'
+2026-08-18-expose-an-ontextdelta-token-streaming-callback-through-executeturn:
+  resolution: done
+  resolved: '2026-10-02'
 2026-08-18-link-the-patchexpressionappfields-item-to-its-epic-and-ship-the-public-engine-api:
   resolution: superseded
   resolved: '2026-09-02'

@@ -5389,6 +5389,7 @@ Property lib.TLlmRequest._typeMarker
 Property lib.TLlmRequest.maxOutputTokens
 Property lib.TLlmRequest.model
 Property lib.TLlmRequest.onResponseCreated
+Property lib.TLlmRequest.onTextDelta
 Property lib.TLlmRequest.outputSchema
 Property lib.TLlmRequest.previousResponseId
 Property lib.TLlmRequest.reasoningEffort
@@ -5484,10 +5485,14 @@ Property lib.TPipelineEvent.at
 Property lib.TPipelineEvent.at
 Property lib.TPipelineEvent.at
 Property lib.TPipelineEvent.at
+Property lib.TPipelineEvent.at
 Property lib.TPipelineEvent.attempt
 Property lib.TPipelineEvent.attempt
 Property lib.TPipelineEvent.attempt
 Property lib.TPipelineEvent.attempt
+Property lib.TPipelineEvent.attempt
+Property lib.TPipelineEvent.delta
+Property lib.TPipelineEvent.kind
 Property lib.TPipelineEvent.kind
 Property lib.TPipelineEvent.kind
 Property lib.TPipelineEvent.kind
@@ -5509,6 +5514,7 @@ Property lib.TPipelineEvent.prompts.user
 Property lib.TPipelineEvent.rawResponseId
 Property lib.TPipelineEvent.reason
 Property lib.TPipelineEvent.responseId
+Property lib.TPipelineEvent.stageId
 Property lib.TPipelineEvent.stageId
 Property lib.TPipelineEvent.stageId
 Property lib.TPipelineEvent.stageId
@@ -6738,6 +6744,7 @@ TypeLiteral lib.TExecuteTurnDeps.onEvent (1)
 TypeLiteral lib.TForkArgumentOptions.generateId (1)
 TypeLiteral lib.TJsonValue [index 1]
 TypeLiteral lib.TLlmRequest.onResponseCreated (1)
+TypeLiteral lib.TLlmRequest.onTextDelta (1)
 TypeLiteral lib.TLogicEngineOptions.generateId (1)
 TypeLiteral lib.TParserBuildOptions.generateId (1)
 TypeLiteral lib.TPipelineFinalize.run (1)

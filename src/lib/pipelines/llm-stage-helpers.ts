@@ -223,8 +223,9 @@ function resolveErrorCap(policy: TRetryPolicy): number {
  * `userMessage` overrides the prompt's user message (the loop / launch
  * pass the retry-suffixed message on attempt 2+); it defaults to
  * `buildPrompt(ctx).user`. The returned `req` carries NO `onResponseCreated`
- * — the in-process loop attaches its own emitter; the launch path uses the
- * submit return value instead. Package-internal.
+ * or `onTextDelta` — the in-process loop attaches its own per-attempt
+ * emitters; the launch path uses the submit return value instead and never
+ * holds the stream. Package-internal.
  */
 export function buildLlmRequest<TOutput>(
     cfg: TLlmStageConfig<TOutput>,
@@ -499,14 +500,15 @@ async function runLlmStageAttempt<TOutput>(
     }
 
     // Emit the `stage:llm-response-created` event the moment the provider
-    // surfaces a response id. In background-stream mode this fires
-    // MID-FLIGHT — before `respond()` resolves — from the provider's
-    // `onResponseCreated` callback (the first `response.created` SSE
-    // event). That early emit is load-bearing: a consumer persists the id
-    // before a possible crash, so a call interrupted mid-generation can be
-    // recovered from the upstream's stored copy rather than blindly
-    // re-run. In synchronous mode the callback never fires; the id is
-    // surfaced only at completion (below). The `responseIdEmitted` flag
+    // surfaces a response id. On a streaming call that makes a single
+    // request this fires MID-FLIGHT — before `respond()` resolves — from
+    // the provider's `onResponseCreated` callback (the first
+    // `response.created` SSE event). In background-stream mode that early
+    // emit is load-bearing: a consumer persists the id before a possible
+    // crash, so a call interrupted mid-generation can be recovered from
+    // the upstream's stored copy rather than blindly re-run. Where the
+    // callback does not fire (synchronous, poll-only, a function-tool
+    // loop), the id is surfaced at completion (below). The `responseIdEmitted` flag
     // dedupes so the event fires at most once per attempt.
     let responseIdEmitted = false
     const emitResponseCreated = (responseId: string): void => {
@@ -526,6 +528,20 @@ async function runLlmStageAttempt<TOutput>(
     // the launch path uses the submit return value instead).
     const { req } = buildLlmRequest(cfg, ctx, userMessage)
     req.onResponseCreated = emitResponseCreated
+    // Each chunk of streamed text becomes an event labelled with this
+    // attempt, so a consumer accumulating text knows to start over on a
+    // retry. A chunk a provider delivers after the caller aborted is
+    // dropped: the stage is being skipped and nothing should follow.
+    req.onTextDelta = (delta: string): void => {
+        if (ctx.signal.aborted) return
+        ctx.emit({
+            kind: "stage:llm-text-delta",
+            stageId: cfg.id,
+            attempt,
+            delta,
+            at: now(),
+        })
+    }
 
     // Emit the pre-call stage-input event. Fires inside the retry loop
     // after `attempt` is incremented and after the request is built,

@@ -134,6 +134,8 @@ function prefixSubPipelineEvent(
             return { ...event, stageId: prefix + event.stageId }
         case "stage:llm-response-created":
             return { ...event, stageId: prefix + event.stageId }
+        case "stage:llm-text-delta":
+            return { ...event, stageId: prefix + event.stageId }
         case "stage:llm-call":
             return { ...event, stageId: prefix + event.stageId }
         default: {
