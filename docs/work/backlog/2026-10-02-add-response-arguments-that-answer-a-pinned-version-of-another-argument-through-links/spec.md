@@ -205,6 +205,10 @@ Since the expansion is copied into the combined set, every premise there reads o
 
 ### C4. Bringing a response up to a newer target version
 
+**Notation and flow.** `X.3` means argument X at version 3. Every reference from a response to another argument is an `(argumentId, argumentVersion)` pair: `respondsTo`, each expression-bound variable's binding, and `TLinkReference`.
+
+Example: Y.1 answers X.3, and Z.0 answers Y.1. Publishing X.4 changes nothing in Y.1, which keeps answering X.3. Telling Y's author that a newer version exists, and offering to answer it, is the consumer's job, since core does not know which versions exist. If the author accepts, the consumer copies Y.1 into a new draft version, Y.2, keeping entity ids as it does for any version. It then calls `classifyBindings` and `rebaseResponse` on the Y.2 engine, with `targetFrom` = X.3 and `targetTo` = X.4. Y.1 is never modified. The same applies one level down: Z.0 keeps answering Y.1 until Z's author chooses to make Z.1 answer Y.2.
+
 **Unit of work: the expression-bound variable, not the link premise.** A binding lives on a variable. One variable can serve several premises, link or not — `{R, R→¬x, ¬x}` uses `x` in two. So classification and decisions are per variable, and each variable's entry lists the premises that use it.
 
 - **`structuralFingerprint(snapshot, expressionId)`** is a hash over a subtree's shape that ignores the argument's ids and versions.
@@ -214,7 +218,7 @@ Since the expansion is copied into the combined set, every premise there reads o
     - internally premise-bound: the bound premise's root fingerprint, recursively;
     - externally premise-bound: `(boundArgumentId, boundPremiseId)`;
     - expression-bound: `(boundArgumentId, boundExpressionId, boundAspect)`.
-  - Other arguments' versions are left out of the hash, so a rebase of Y does not change the hash of Z's bindings into Y. They are not ignored, though: `outsideReferenceRepinned` below reports them. So when Y rebases, each of Z's bindings on a Y expression that contains a reference into X (typically Y's own link expressions) is reported `changed` for that reason, and needs a decision. That is noisy but safe: Z sees only Y's snapshots and cannot tell whether Y kept the old meaning.
+  - Other arguments' versions are left out of the hash, so a rebase of Y does not change the hash of Z's bindings into Y. They are not ignored, though: `outsideReferenceRepinned` below reports them. So when Z.1 is brought from Y.1 to Y.2, and Y.2 was itself moved from X.3 to X.4, each of Z's bindings on a Y expression containing a reference into X (typically Y's own link expressions) is reported `changed` for that reason, and needs a decision. That is noisy but safe: Z sees only Y.1 and Y.2, and cannot tell whether Y kept the old meaning.
 - **`classifyBindings(response, targetFrom, targetTo)`.** `targetTo` must have the same argument id as `targetFrom`. Each expression-bound variable is classified against the snapshot of its own `boundArgumentVersion`. A variable already bound to `targetTo`'s version is reported `alreadyRebased`, which is how a partly saved rebase gets finished. Every other variable must be bound to `targetFrom`'s version. Each entry gives the variable id, the premise ids that use it (marking which are links), and one label:
   - `unchanged`: the same expression id is present in `targetTo`, with the same fingerprint, the same **position class**, and the same set of `(argumentId, argumentVersion)` pairs referenced from inside the subtree.
   - `changed`: the id is present, but something differs. The entry's `reasons` say what, from `content`, `position` and `outsideReferenceRepinned`.
