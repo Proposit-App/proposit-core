@@ -248,8 +248,11 @@ export function orderChangeset<
     // premise first. One bound to a premise this changeset inserts runs
     // after that insert instead, and the premise deletes wait for it: the
     // stored row may still name one of them.
+    // Only a binding into this argument can name one of its inserted premises.
     const boundToNewPremise = (v: TVar) =>
-        isPremiseBound(v) && addedPremiseIds.has(v.boundPremiseId)
+        isPremiseBound(v) &&
+        v.boundArgumentId === v.argumentId &&
+        addedPremiseIds.has(v.boundPremiseId)
     // A variable that is also removed gets its delete alone: an update
     // after the delete would find no row.
     const removedVarIds = new Set(
