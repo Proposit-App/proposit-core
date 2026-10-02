@@ -90,6 +90,10 @@ and returns an assignment under which every premise holds, when there is one.
 - **Keep ids stable across versions.** Rebasing a response matches the
   answered argument's expressions by id between its versions. If you copy an
   argument into a new version, keep the ids of everything that persists.
+- **A renamed refusal code.** With `strictUnknownAssignmentKeys: true`, an
+  assignment naming a variable that no evaluated premise uses is now refused
+  with `ASSIGNMENT_UNKNOWN_VARIABLE` instead of `ASSIGNMENT_MISSING_VARIABLE`.
+  If you match that code, match the new one.
 - **A cross-argument reference.** An expression-bound variable names an
   expression in another argument, as an externally premise-bound variable
   already names a premise there. If your store enforces foreign keys, account

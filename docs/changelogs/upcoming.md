@@ -21,9 +21,12 @@
   `respondsTo`; `getExtras` leaves it out.
 - `respondsTo` (argument fields) and `boundExpressionId` and `boundAspect`
   (variable fields) are hashed under every checksum configuration, including a
-  configuration stored in an older snapshot, through the new
-  `resolveChecksumFields`. They are hashed only when present, so no existing
-  checksum changes.
+  configuration stored in an older snapshot. They are hashed only when
+  present, so no existing checksum changes.
+- With `strictUnknownAssignmentKeys: true`, an assignment key that no evaluated
+  premise names is refused with the code `ASSIGNMENT_UNKNOWN_VARIABLE`; it was
+  `ASSIGNMENT_MISSING_VARIABLE`. Code matching the old code must match the new
+  one. The repair behind it is under Fixed.
 
 ## Added
 
