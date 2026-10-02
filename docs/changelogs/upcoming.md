@@ -36,10 +36,12 @@
   referent.
 - Links: a response premise whose whole content is `x` or `NOT(x)` for an
   expression-bound `x`, read as contradict, affirm, undercut or reinforce.
-  `listLinks`, `validateLinks` (codes `LINK_TARGET_MISMATCH`,
-  `LINK_EXPRESSION_MISSING`, `LINK_INFERENCE_ON_NON_OPERATOR`,
-  `LINK_CLAIM_USED_BY_TARGET`, `LINK_VERSION_MISMATCH`, and the informational
-  `LINK_SAME_CLAIM`) and `elementsWithinPremise`.
+  `listLinks`, `validateLinks` (codes `LINK_EXPRESSION_MISSING`,
+  `LINK_INFERENCE_ON_NON_OPERATOR`, `LINK_CLAIM_USED_BY_TARGET`,
+  `LINK_VERSION_MISMATCH`, and the informational `LINK_SAME_CLAIM`; it throws
+  for a snapshot of another argument or version) and `elementsWithinPremise`.
+  The checks below report a wrong snapshot as `invalid` with
+  `LINK_TARGET_MISMATCH`.
 - `ArgumentEngine.checkLink` and `checkResponseCoherent`, which search a
   premise set built from the response with each statement link expanded into
   the expression it names and claims merged into one column per claim.
