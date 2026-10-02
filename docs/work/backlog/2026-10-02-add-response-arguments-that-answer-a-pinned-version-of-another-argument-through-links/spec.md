@@ -84,7 +84,7 @@ An argument here is one set of premises, asserted together, with one conclusion 
 - **Checksums.**
   - `respondsTo` joins the default `argumentFields` (`src/lib/checksum-config.ts:45`, `src/lib/types/checksum.ts:9-12`). It is hashed only when present, so every existing argument checksum is unchanged.
   - A consumer that builds its configuration with `createChecksumConfig` gets the new default automatically, because that function adds the defaults to the consumer's sets every time it runs (`checksum-config.ts:130-140`).
-  - A configuration persisted inside an older snapshot (`argument-engine.ts:1859`) is an explicit set, and `normalizeChecksumConfig` (`checksum-config.ts:90-106`) does not merge in the defaults. So `normalizeChecksumConfig` always adds the three new fields: `respondsTo` to the argument fields, and `boundExpressionId` and `boundAspect` to the variable fields. They are absent on all existing data, so no existing checksum changes. A stored configuration then still detects a rebase.
+  - A configuration persisted inside an older snapshot (`argument-engine.ts:1859`) is an explicit set, and `normalizeChecksumConfig` (`checksum-config.ts:90-106`) does not merge in the defaults. So the three new fields (`respondsTo` among argument fields; `boundExpressionId` and `boundAspect` among variable fields) are always added to **the field set actually in force**: the configured set when one is given, and the default when the key is missing. This happens wherever a field set is resolved for hashing, so creation, rollback, restore and strict verification all agree. Adding them inside `normalizeChecksumConfig` alone would be wrong. A configuration that omits `argumentFields` would become `{respondsTo}` and lose `version`, moving every checksum, and the constructor does not normalize at all (`argument-engine.ts:241`), while restore and rollback do (`:2126`). The fields are absent on all existing data, so no existing checksum changes, and a stored configuration still detects a rebase.
 - **Structural invariants, checked on every mutation and on load.** Grammar validators run only through `engine.validate(tier)` (`src/lib/grammar/validate.ts:24`), so these are added to `validateArgument` (`src/lib/core/argument-validation.ts:209ff`), which `fromSnapshot` and `fromData` already run (`argument-engine.ts:1958-1959`, `2101`). Each is also reported by the grammar as **S-15**:
   - `respondsTo.argumentId` differs from the argument's own id;
   - an expression-bound variable exists only in a response (C2).
@@ -137,6 +137,7 @@ An argument here is one set of premises, asserted together, with one conclusion 
   - a bound expression missing from the snapshot;
   - an inference-aspect binding whose expression is not an operator. Any operator is allowed: `and`, `or`, `not`, `implies`, `iff`, and operators inside derivation premises.
   - a claim-bound variable in the response for a claim the target uses. The response affirms such a claim through a link instead. A claim used only further back along the path may be claim-bound, as the response's own assertion.
+  - an expression-bound variable whose `boundArgumentVersion` differs from `respondsTo` (E-10), so that it is never looked up in the wrong snapshot;
   - two links on different occurrences of one claim with the same aspect. This is reported as information, not as a violation.
 - **Sources and axioms.** D-4 and D-5 (`docs/Proposit_Grammar.md:526-543`) keep citation- and axiom-bound variables inside derivation antecedents. They do not apply to expression-bound variables, so a response may contradict or undercut anything in its target that rests on a source or an axiom.
   - **Accepted limitation:** a response cannot deny a source cited two steps back along the path. Links reach only the immediate target, and D-4 and D-5 forbid placing the response's own citation variable under `NOT`.
@@ -146,7 +147,7 @@ An argument here is one set of premises, asserted together, with one conclusion 
 
 ### C3. Checking a response
 
-**What "the response" is.** Every check below is a function that takes the response's `ArgumentEngine`, because deciding which variables are grounded needs its claim library (`isGroundedVariable`, `src/lib/core/claim-variables.ts:141-152`), and a snapshot carries none. Each check also takes the target snapshot.
+**What "the response" is.** Every check below is a function that takes the response's `ArgumentEngine`, because deciding which variables are grounded needs its claim library (`isGroundedVariable`, `src/lib/core/argument/claim-variables.ts:141-152`), and a snapshot carries none. Each check also takes the target snapshot.
 
 **Preconditions.** Each check returns `status: "invalid"`, with the problems, without searching, when either of these holds:
 - the target snapshot's id and version differ from `respondsTo`;
@@ -178,8 +179,8 @@ Since the expansion is copied into the combined set, every premise there reads o
 - **Departure:** the intake excludes derivation premises. In core a source supports a claim only through a derivation premise (`IMPLIES(source, Q)`). Excluding them would make every source-backed objection read as an unsupported assertion.
 - **"Other premises"** leaves out the link itself, and every link with the **same merged referent and the same polarity**. The same assertion written twice must not support itself. A link with the same referent and the opposite polarity is a contradiction, which the next step catches.
 - **Order of decision:**
-  1. Can the other premises all hold?
-     - `false` → `incoherent`. Anything would follow from them, so the check refuses to say the link does.
+  1. Can the whole combined set, the link included, hold?
+     - `false` → `incoherent`. The response contradicts itself, so the check refuses to say the link follows or stands as an assertion. This agrees with `checkResponseCoherent` for every link of an incoherent response.
      - Undetermined → `undetermined`.
   2. Can the other premises hold together with not-F?
      - `false` → `follows`.
@@ -213,7 +214,7 @@ Since the expansion is copied into the combined set, every premise there reads o
     - internally premise-bound: the bound premise's root fingerprint, recursively;
     - externally premise-bound: `(boundArgumentId, boundPremiseId)`;
     - expression-bound: `(boundArgumentId, boundExpressionId, boundAspect)`.
-  - Other arguments' versions are left out of the hash, so that rebasing Y does not mark every one of Z's links into Y as changed. They are not ignored, though; see `outsideReferenceRepinned` below.
+  - Other arguments' versions are left out of the hash, so a rebase of Y does not change the hash of Z's bindings into Y. They are not ignored, though: `outsideReferenceRepinned` below reports them. So when Y rebases, each of Z's bindings on a Y expression that contains a reference into X (typically Y's own link expressions) is reported `changed` for that reason, and needs a decision. That is noisy but safe: Z sees only Y's snapshots and cannot tell whether Y kept the old meaning.
 - **`classifyBindings(response, targetFrom, targetTo)`.** `targetTo` must have the same argument id as `targetFrom`. Each expression-bound variable is classified against the snapshot of its own `boundArgumentVersion`. A variable already bound to `targetTo`'s version is reported `alreadyRebased`, which is how a partly saved rebase gets finished. Every other variable must be bound to `targetFrom`'s version. Each entry gives the variable id, the premise ids that use it (marking which are links), and one label:
   - `unchanged`: the same expression id is present in `targetTo`, with the same fingerprint, the same **position class**, and the same set of `(argumentId, argumentVersion)` pairs referenced from inside the subtree.
   - `changed`: the id is present, but something differs. The entry's `reasons` say what, from `content`, `position` and `outsideReferenceRepinned`.
@@ -268,7 +269,6 @@ Since the expansion is copied into the combined set, every premise there reads o
   - responses and `ARGUMENT_IS_RESPONSE`;
   - S-3's widened meaning;
   - `setExtras` refusing `respondsTo`;
-  - rebuilding a checksum configuration rather than reusing a stored one.
 - Before release, build the validation tarball (`pnpm run build && pnpm run pack:branch`), report its path to the requester, and release only after the requester reports the verdict.
 
 ## Acceptance criteria
@@ -292,7 +292,7 @@ Each names the test file that pins it. All are new unless stated.
      - claim-bound, internally and externally premise-bound variables;
      - an enthymeme mark;
      - a derivation premise.
-   - Every argument, premise, expression, variable and combined checksum recomputed by the new build equals the captured value. This holds under the default configuration, under one built with `createChecksumConfig` adding consumer fields, after `forkArgumentEngine`, after a snapshot round trip, after `fromData`, and after `setExtras` on a standard argument.
+   - Every argument, premise, expression, variable and combined checksum recomputed by the new build equals the captured value. This holds under the default configuration, under one built with `createChecksumConfig` adding consumer fields, after `forkArgumentEngine`, after a snapshot round trip, after `fromData`, and after `setExtras` on a standard argument. It also holds under a partial configuration that omits `argumentFields` and `variableFields`, after a rolled-back mutation, and after reloading with `checksumVerification: "strict"`.
 6. **Shapes** (`test/core/response-links.test.ts`):
    - an expression-bound variable passes S-3;
    - a variable carrying both `claimId` and `boundExpressionId` fails to load;
@@ -335,7 +335,8 @@ Each names the test file that pins it. All are new unless stated.
     - Claim Q's version bumped under an undercut of `P→Q` is `changed`.
     - A deleted operator is `removed`.
     - An unchanged operator moved from a premise root to a nested position is `changed`.
-    - Rebasing Y does not mark Z's unchanged variables bound into Y as `changed`.
+    - Rebasing Y does not mark as `changed` any of Z's variables bound to a Y expression containing no reference into another argument.
+    - A Z variable bound to one of Y's link expressions is `changed` with reason `outsideReferenceRepinned` after Y rebases.
     - A claim newly used by `targetTo` and claim-bound in the response appears in `claimBindingConflicts`.
     - `rebaseResponse` with a missing decision throws and leaves the snapshot unchanged.
     - After a successful rebase, `diffArguments` between the before and after snapshots reports the `respondsTo` change and each re-pointed variable.
@@ -410,7 +411,7 @@ How the first review's findings were handled. Findings about carrying moved to t
   - Restore sets a stored conclusion directly, so E-8, E-9 and E-10 are reachable and round trips preserve role checksums.
 - **Significant 2 (duplicate links reading as circular):** accepted. Same-referent, same-polarity links are left out of each other's support, and count as one link in grounding.
 - **Significant 3 (fingerprint missing outside re-pins):** accepted, as the `outsideReferenceRepinned` reason.
-- **Significant 4 (stored checksum configurations):** accepted. `normalizeChecksumConfig` always adds the three new fields.
+- **Significant 4 (stored checksum configurations):** accepted. The three new fields are always added to the field set in force; the third review corrected the mechanism.
 - **Significant 5 (fixtures):** accepted. A deterministic id generator, and the external-binding fork case captured from 5.4.3.
 - **Significant 6 (release status):** corrected. Merging the fork fix is a prerequisite.
 - **Missing items:**
@@ -430,3 +431,28 @@ How the first review's findings were handled. Findings about carrying moved to t
   - The S-3 description is corrected.
   - The code `TOO_MANY_VARIABLES` is dropped.
   - `ARGUMENT_IS_RESPONSE` stays live, because the sibling adds its own method.
+
+### Third review (DONE), and how each finding was handled
+
+The second review's findings are all resolved. The rewrite introduced eight defects, none blocking. Fixed in this text:
+
+- **B2 (`checkLink` disagreeing with coherence):** step 1 asks whether the whole set, the link included, can hold.
+- **B3 (the checksum mechanism would have moved checksums):** the fields are added to the field set in force, wherever one is resolved. Criterion 5 gains a partial configuration, a rollback and a strict reload.
+- **B8 (version mismatch):** `validateLinks` reports E-10.
+- **B1 (re-pins cascading down a chain):** the noisy but safe behaviour is kept, and criterion 11 is narrowed to match.
+  - The cost: after Y rebases, each of Z's bindings on one of Y's link expressions needs a manual `keep`.
+  - **For the maintainer to confirm at plan approval.**
+- The `isGroundedVariable` path is corrected.
+
+**For the plan to state:**
+
+- **B4.** `drop` reaches further through `removePremise`'s cascade over variables bound to the removed premise. The classification lists the full chain, and `drop` removes it or refuses.
+- **B5.** An `alreadyRebased` variable whose expression is missing from `targetTo` is reported `removed`, so it can still be decided.
+- **B6.** Three rebase details:
+  - `retarget` or `keep` onto an expression another variable already binds either merges the two variables or refuses, so it cannot create an E-9 duplicate;
+  - `convertToLink` is refused for a claim used as a derivation consequent, and for a citation-bound claim;
+  - "reports nothing new" compares violations by code, variable id and expression id.
+- **B7.** A link's merged referent is its expanded formula after claim columns are merged, so two links affirming identical structures are duplicates.
+- **`fromData` and conclusions.** `fromData` creates premises through `createPremiseWithId`, so the no-automatic-conclusion rule covers that path. A stored conclusion is assigned directly only when present.
+- **Recursion guard.** The recursive expansion of a caller-supplied target snapshot guards against binding cycles.
+- **Documentation.** The reference documentation says that an affirm link cannot be backed by a derivation premise for that same claim; it is backed through a separate claim D and `D → x`.
