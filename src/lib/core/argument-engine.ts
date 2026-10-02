@@ -20,7 +20,8 @@ import {
     checkResponseCoherent as checkResponseCoherentStandalone,
     type TResponseCheckInput,
 } from "./response/check.js"
-import { readLink, validateLinks } from "./response/links.js"
+import { listLinks, readLink, validateLinks } from "./response/links.js"
+import { carryAnswers as carryAnswersStandalone } from "./response/carry.js"
 import {
     assertRebased,
     linkFaultKeys,
@@ -43,6 +44,8 @@ import type {
 } from "../types/evaluation.js"
 import type {
     TLinkCheckResult,
+    TCarryResult,
+    TLinkAnswer,
     TLinkViolation,
     TResponseCoherenceResult,
 } from "../types/response.js"
@@ -2994,18 +2997,65 @@ export class ArgumentEngine<
         )
     }
 
-    private asResponseCheckInput(
-        targetSnapshot: TArgumentEngineSnapshot
-    ): TResponseCheckInput {
+    /**
+     * Reads what a reader's answers on this response's links carry into the
+     * argument it answers, one step along a chain of answers. See
+     * `TCarryResult` and `TNotCarriedReason`.
+     *
+     * Answers `invalid`, without carrying anything, when this argument is not
+     * a response, the snapshot is not the argument and version it answers, or
+     * `validateLinks` reports an error. It never throws on an answer it cannot
+     * carry.
+     *
+     * @param targetSnapshot - The argument answered, at the version answered.
+     * @param linkAnswers - The reader's answers, keyed by link premise id.
+     * @param targetClaims - Resolves the answered argument's claims at the
+     *   versions it binds, to tell which are axioms.
+     */
+    public carryAnswers(
+        targetSnapshot: TArgumentEngineSnapshot,
+        linkAnswers: Record<string, TLinkAnswer>,
+        targetClaims: TClaimLookup
+    ): TCarryResult {
         const respondsTo = this.getRespondsTo()
-        if (respondsTo === undefined) {
-            throw new Error(`Argument "${this.argument.id}" is not a response.`)
-        }
+        const problems: TLinkViolation[] =
+            respondsTo === undefined
+                ? [
+                      {
+                          code: "LINK_TARGET_MISMATCH",
+                          severity: "error",
+                          message: `Argument "${this.argument.id}" is not a response, so it answers no argument.`,
+                      },
+                  ]
+                : this.responseLinkProblems(respondsTo, targetSnapshot)
+        return carryAnswersStandalone({
+            problems,
+            into: respondsTo ?? {
+                argumentId: targetSnapshot.argument.id,
+                argumentVersion: targetSnapshot.argument.version,
+            },
+            responsePremiseIds: this.listPremises().map((pm) => pm.getId()),
+            links: listLinks(this as unknown as ArgumentEngine),
+            linkAnswers,
+            target: targetSnapshot as unknown as TArgumentEngineSnapshot,
+            targetClaims,
+        })
+    }
+
+    /**
+     * What makes every check of this response against the snapshot answer
+     * `invalid`: a snapshot of another argument or version, or an error
+     * `validateLinks` reports.
+     */
+    private responseLinkProblems(
+        respondsTo: TCoreArgumentReference,
+        targetSnapshot: TArgumentEngineSnapshot
+    ): TLinkViolation[] {
         const { id, version } = targetSnapshot.argument
         const matches =
             id === respondsTo.argumentId &&
             version === respondsTo.argumentVersion
-        const problems: TLinkViolation[] = matches
+        return matches
             ? validateLinks(
                   this as unknown as ArgumentEngine,
                   targetSnapshot
@@ -3017,6 +3067,16 @@ export class ArgumentEngine<
                       message: `The response answers "${respondsTo.argumentId}" version ${respondsTo.argumentVersion}, but the snapshot is "${id}" version ${version}.`,
                   },
               ]
+    }
+
+    private asResponseCheckInput(
+        targetSnapshot: TArgumentEngineSnapshot
+    ): TResponseCheckInput {
+        const respondsTo = this.getRespondsTo()
+        if (respondsTo === undefined) {
+            throw new Error(`Argument "${this.argument.id}" is not a response.`)
+        }
+        const problems = this.responseLinkProblems(respondsTo, targetSnapshot)
         const argument = this.getArgument()
         return {
             problems,

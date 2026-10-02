@@ -22,6 +22,8 @@ import type {
 import type { TCoreMutationResult } from "../../types/mutation.js"
 import type {
     TBindingClassificationResult,
+    TCarryResult,
+    TLinkAnswer,
     TLinkCheckResult,
     TRebaseDecisions,
     TResponseCoherenceResult,
@@ -32,6 +34,7 @@ import type { TInvariantValidationResult } from "../../types/validation.js"
 import type { TGrammarTier, TViolation } from "../../grammar/types.js"
 import type { PremiseEngine } from "../premise-engine.js"
 import type { TArgumentEngineSnapshot } from "../argument-engine.js"
+import type { TClaimLookup } from "./library.interfaces.js"
 
 /**
  * Premise creation, removal, and lookup.
@@ -763,6 +766,38 @@ export interface TArgumentEvaluation {
     checkResponseCoherent(
         targetSnapshot: TArgumentEngineSnapshot
     ): TResponseCoherenceResult
+    /**
+     * What a reader's answers on this response's links carry into the
+     * argument it answers, one step along a chain of answers. Only `agree`
+     * answers carry, and each agreed link carries exactly what it says or is
+     * reported in `notCarried` with the reason it cannot (see
+     * `TNotCarriedReason`).
+     *
+     * - A statement link carries fixed claim values when what it says about
+     *   its expression, read with every claim free, is exactly a set of
+     *   fixed values; contradicting `Q ∧ R` is not.
+     * - A reinforce carries `accepted` only at a premise root that is
+     *   `implies` or `iff`; an undercut carries `rejected` wherever
+     *   evaluation honours a rejection.
+     * - Into another response, the result is answers on that response's
+     *   links.
+     *
+     * Merge the result into the reader's own input with `mergeCarriedInput`.
+     *
+     * @param targetSnapshot - The argument answered, at the version answered.
+     * @param linkAnswers - The reader's answers, keyed by link premise id.
+     * @param targetClaims - Resolves the answered argument's claims at the
+     *   versions it binds, to tell which are axioms.
+     * @returns `invalid`, carrying nothing, when this argument is not a
+     *   response, the snapshot is not the argument and version it answers, or
+     *   `validateLinks` reports an error. Never throws on an answer it cannot
+     *   carry.
+     */
+    carryAnswers(
+        targetSnapshot: TArgumentEngineSnapshot,
+        linkAnswers: Record<string, TLinkAnswer>,
+        targetClaims: TClaimLookup
+    ): TCarryResult
     /**
      * Derives a default truth-value assignment for every variable in the
      * argument, from claim type and immediate support structure alone. Values

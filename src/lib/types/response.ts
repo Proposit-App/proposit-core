@@ -1,4 +1,5 @@
 import type { TBoundAspect } from "../schemata/propositional.js"
+import type { TCoreArgumentReference } from "../schemata/argument.js"
 
 /**
  * What a link does to the expression it binds.
@@ -257,3 +258,89 @@ export type TBindingDecision =
 export interface TRebaseDecisions {
     bindings?: Record<string, TBindingDecision>
 }
+
+/** A reader's answer on one link of a response. */
+export type TLinkAnswer = "agree" | "disagree"
+
+/**
+ * Why an `agree` answer carried nothing into the argument answered.
+ *
+ * - `axiom`: the link fixes an axiom-bound claim false, or fixes nothing but
+ *   axiom-bound claims true, which they already are.
+ * - `notExpressible`: what the link says about its expression is not a set of
+ *   fixed values, as with contradicting `Q ∧ R`.
+ * - `impossible`: the expression can never have the value the link gives it.
+ * - `vacuous`: the expression has that value whatever its claims are.
+ * - `tooLarge`: the expression reads more claims than the search allows.
+ * - `nestedReinforce`: a reinforce of an operator below a premise's root.
+ * - `nonConditionalRoot`: a reinforce of a premise root that is not `implies`
+ *   or `iff`; accepting it would assert the premise, not a step.
+ * - `ignoredInConclusion`: an undercut of an operator below the conclusion's
+ *   root, which evaluation ignores.
+ * - `derivationOperator`: an undercut in a derivation premise, which
+ *   evaluation ignores.
+ * - `linkStep`: an inference link on another response's link, which has no
+ *   step to dispute.
+ * - `noLinkReached`: answering another response, the link fixes nothing any
+ *   of its links are about, or fixes nothing evaluation reads.
+ * - `conflict`: another agreed link of the same response fixes something it
+ *   fixes the other way; `conflictsWith` names those links.
+ * - `notALink`: the answer is on a premise that is not a link.
+ */
+export type TNotCarriedReason =
+    | "axiom"
+    | "notExpressible"
+    | "impossible"
+    | "vacuous"
+    | "tooLarge"
+    | "nestedReinforce"
+    | "nonConditionalRoot"
+    | "ignoredInConclusion"
+    | "derivationOperator"
+    | "linkStep"
+    | "noLinkReached"
+    | "conflict"
+    | "notALink"
+
+/** An `agree` answer that carried nothing, and why. */
+export interface TNotCarried {
+    premiseId: string
+    reason: TNotCarriedReason
+    /** For `conflict`: the other links involved. */
+    conflictsWith?: string[]
+}
+
+/** One carried value and every link of the response it came from. */
+export type TCarriedSource = { linkPremiseIds: string[] } & (
+    | { kind: "variable"; id: string; value: boolean }
+    | { kind: "operator"; id: string; value: "accepted" | "rejected" }
+    | { kind: "linkAnswer"; id: string; value: TLinkAnswer }
+)
+
+/**
+ * What a reader's answers on a response carry into the argument it answers,
+ * one step along a chain of answers.
+ *
+ * - `invalid`: the engine is not a response, the snapshot is not the argument
+ *   and version it answers, or `validateLinks` reports an error.
+ * - `carried`: into a standard argument, variable values and operator
+ *   decisions; into another response, answers on that response's links.
+ */
+export type TCarryResult =
+    | { status: "invalid"; problems: TLinkViolation[] }
+    | ({
+          status: "carried"
+          into: TCoreArgumentReference
+          sources: TCarriedSource[]
+          notCarried: TNotCarried[]
+      } & (
+          | {
+                intoResponse: false
+                variables: Record<string, boolean>
+                operatorAssignments: Record<string, "accepted" | "rejected">
+            }
+          | {
+                intoResponse: true
+                linkAnswers: Record<string, TLinkAnswer>
+            }
+      ))

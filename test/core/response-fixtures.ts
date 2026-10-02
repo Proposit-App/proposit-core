@@ -48,6 +48,7 @@ const op =
 export const not = (kid: TNode): TNode => op("not")(kid)
 export const and = op("and")
 export const or = op("or")
+export const xor = op("xor")
 export const implies = (left: TNode, right: TNode): TNode =>
     op("implies")(left, right)
 export const iff = (left: TNode, right: TNode): TNode => op("iff")(left, right)
