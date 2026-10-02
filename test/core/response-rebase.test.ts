@@ -8,6 +8,7 @@ import {
 } from "../../src/lib/core/response/fingerprint"
 import { classifyBindings } from "../../src/lib/core/response/rebase"
 import {
+    listLinks,
     snapshotExpressions,
     validateLinks,
 } from "../../src/lib/core/response/links"
@@ -1146,7 +1147,7 @@ describe("rebaseResponse", () => {
             ).toThrow(/decision/)
         })
 
-        it("converts the claim-bound variable to a link and adds an affirm link", () => {
+        it("converts the claim-bound variable in place and adds no link", () => {
             const { x3, x4, y } = conflict([
                 labelled("rule", implies(v("N"), not(x("c")))),
             ])
@@ -1173,7 +1174,7 @@ describe("rebaseResponse", () => {
                         variable.boundExpressionId === x4.expr("n")
                 )
             expect(bound).toBeDefined()
-            // The rule now reads the link variable.
+            // The rule now reads the link variable, and nothing was added.
             const rule = y.engine.getPremise(y.premise("rule"))!
             expect(
                 rule
@@ -1184,19 +1185,17 @@ describe("rebaseResponse", () => {
                             expr.variableId === bound!.id
                     )
             ).toBe(true)
-            // An affirm link was added: a premise holding only the variable.
-            const affirm = y.engine
-                .listPremises()
-                .filter((pm) => pm.getId() !== y.premise("rule"))
-            expect(affirm).toHaveLength(1)
-            expect(affirm[0].getExpressions()).toMatchObject([
-                { type: "variable", variableId: bound!.id, parentId: null },
-            ])
+            expect(y.engine.listPremiseIds()).toEqual([y.premise("rule")])
             expect(validateLinks(y.engine, x4.engine.snapshot()).ok).toBe(true)
         })
 
-        it("adds no affirm link when the converted premise already is one", () => {
-            const { x3, x4, y } = conflict([labelled("own", v("N"))])
+        it("keeps a denied claim denied: NOT(claim) becomes a contradict link, with no affirm link beside it", () => {
+            const { x3, x4, y } = conflict([
+                labelled("denial", not(v("N"))),
+                labelled("rule", implies(not(v("N")), not(x("c")))),
+                labelled("link", not(x("c"))),
+            ])
+            const before = y.engine.checkResponseCoherent(x3.engine.snapshot())
             y.engine.rebaseResponse(
                 x3.engine.snapshot(),
                 x4.engine.snapshot(),
@@ -1210,7 +1209,23 @@ describe("rebaseResponse", () => {
                 }
             )
             expectRebased(y.engine, x4.engine.snapshot())
-            expect(y.engine.listPremiseIds()).toEqual([y.premise("own")])
+            expect(y.engine.listPremiseIds()).toEqual([
+                y.premise("denial"),
+                y.premise("rule"),
+                y.premise("link"),
+            ])
+            const moves = listLinks(y.engine).map((link) => [
+                link.premiseId,
+                link.move,
+            ])
+            expect(moves).toEqual([
+                [y.premise("denial"), "contradict"],
+                [y.premise("link"), "contradict"],
+            ])
+            expect(before).toEqual({ status: "checked", coherent: true })
+            expect(
+                y.engine.checkResponseCoherent(x4.engine.snapshot())
+            ).toEqual(before)
         })
 
         it("drops every premise using the claim-bound variable", () => {
@@ -1293,5 +1308,31 @@ describe("rebaseResponse", () => {
                 )
             ).toThrow(/claim-N/)
         })
+    })
+})
+
+describe("classifying from a newer version back to an older one", () => {
+    it("works in either order, reading an expression the older version lacks as removed", () => {
+        const lib = newLib()
+        const x3 = target(lib, 3)
+        const x4 = target(lib, 4, [...basePremises(), at("n", v("N"))])
+        const y = build({
+            id: "y",
+            version: 1,
+            lib,
+            respondsTo: x4,
+            premises: [labelled("onC", not(x("c"))), labelled("onN", x("n"))],
+        })
+        const result = classifyBindings(
+            y.engine,
+            x4.engine.snapshot(),
+            x3.engine.snapshot()
+        )
+        const statusOf = (key: string) =>
+            result.bindings.find(
+                (entry) => entry.variableId === y.variable(key)
+            )?.status
+        expect(statusOf("c")).toBe("unchanged")
+        expect(statusOf("n")).toBe("removed")
     })
 })

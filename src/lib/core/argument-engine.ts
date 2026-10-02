@@ -1475,9 +1475,12 @@ export class ArgumentEngine<
      *   and `drop` removes it with every premise its entry lists;
      * - every claim-binding conflict takes its decision from
      *   `decisions.claimBindingConflicts`: `convertToLink` replaces the
-     *   claim-bound variable with a statement binding to the chosen
-     *   occurrence of the claim, adding an affirm link when the response has
-     *   none for it, and `drop` removes it with every premise its entry lists.
+     *   claim-bound variable, in place, with a statement binding to the
+     *   chosen occurrence of the claim, so `c` becomes the affirm link `x`,
+     *   `NOT(c)` the contradict link `NOT(x)`, and an occurrence inside a
+     *   larger formula keeps its place there. Nothing is added: the binding
+     *   reads the same claim the variable did, so every check answers as it
+     *   did before. `drop` removes it with every premise its entry lists.
      *
      * Before returning, it checks that every expression-bound variable is
      * bound to `targetTo` and names an expression present there, and that
@@ -1610,11 +1613,10 @@ export class ArgumentEngine<
     }
 
     /**
-     * Replaces a claim-bound variable, wherever it is used, with the
-     * statement binding to `expressionId`, reusing a variable that already
-     * binds it, and adds an affirm link for that variable when the response
-     * has none. Variables it adds are recorded on `collector`; everything
-     * else it changed is returned.
+     * Replaces a claim-bound variable, wherever it is used and keeping each
+     * use's polarity, with the statement binding to `expressionId`, reusing
+     * a variable that already binds it. Adds no premise. Variables it adds are
+     * recorded on `collector`; everything else it changed is returned.
      */
     private convertClaimToLink(
         claimVariableId: string,
@@ -1666,33 +1668,6 @@ export class ArgumentEngine<
             this.removeVariableCore(claimVariableId).changes
         )
 
-        const hasAffirm = this.listPremises().some((pm) => {
-            const link = readLink(
-                pm.getId(),
-                pm.getExpressions(),
-                (id) =>
-                    this.variables.getVariable(id) as unknown as
-                        | TCorePropositionalVariable
-                        | undefined
-            )
-            return link?.variableId === linkVariableId && link.move === "affirm"
-        })
-        if (!hasAffirm) {
-            const { result: pm, changes: created } = this.createPremise()
-            changes = composeChangesets(changes, created)
-            changes = composeChangesets(
-                changes,
-                pm.appendExpression(null, {
-                    id: this.generateId(),
-                    type: "variable" as const,
-                    variableId: linkVariableId,
-                    premiseId: pm.getId(),
-                    argumentId: this.argument.id,
-                    argumentVersion: this.argument.version,
-                } as unknown as import("./expression-manager.js").TExpressionWithoutPosition<TExpr>)
-                    .changes
-            )
-        }
         return changes
     }
 

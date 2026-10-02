@@ -249,6 +249,11 @@ function assertRebaseTargets(
  * two versions of the argument it answers, before the response is moved
  * from `targetFrom` to `targetTo`.
  *
+ * Nothing here compares the two version numbers: `targetTo` may be older
+ * than `targetFrom`, for example to show what a response pinned to a newer
+ * version would see on the older one. Every label is then read in that
+ * direction — `removed` means absent from `targetTo`.
+ *
  * Each expression-bound variable is judged against the snapshot of the
  * version it is bound to. One already bound to `targetTo` is
  * `alreadyRebased` when its expression is there and `removed` when it is

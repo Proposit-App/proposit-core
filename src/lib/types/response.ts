@@ -217,14 +217,18 @@ interface TBindingClassificationBase {
 
 /**
  * What happened to one expression-bound variable's expression between two
- * versions of the argument a response answers.
+ * versions of the argument a response answers, read from `targetFrom` to
+ * `targetTo`. Nothing compares the two version numbers, so `targetTo` may be
+ * the older one; each label then reads in that direction.
  *
  * - `unchanged`: re-pointed by a rebase with no decision.
  * - `changed`: still present, but differs as `reasons` says; needs a
  *   decision.
- * - `removed`: absent from the newer version; needs a decision.
- * - `alreadyRebased`: already bound to the newer version, and its expression
- *   is present there.
+ * - `removed`: absent from `targetTo`; needs a decision. Read from a newer
+ *   version back to an older one, it means the expression was added in the
+ *   newer version.
+ * - `alreadyRebased`: already bound to `targetTo`, and its expression is
+ *   present there.
  */
 export type TBindingClassification = TBindingClassificationBase &
     (
