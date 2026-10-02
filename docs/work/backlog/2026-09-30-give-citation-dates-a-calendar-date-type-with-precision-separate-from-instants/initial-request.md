@@ -39,3 +39,7 @@ These are the requester's provisional answers on the maintainer's behalf, given 
 
 - `intake.md`: the raw request, with background and the design direction.
 - `2026-09-30-ieee-citation-dates-render-a-day-off-outside-utc` (5.4.2): the fix this builds on, and where the noon-UTC convention and the display-zone upgrade path were decided.
+
+## Added 2026-10-02: a correction
+
+The "noon UTC" convention above, carried over from `intake.md`, is wrong. Since 5.4.2 a citation date has been stored as **midnight UTC** of the day it means, which is how `EncodableDate` decodes "1787-11-22" (`src/extensions/citations/ieee/segment-builder.ts:24`, `docs/release-notes/v5.4.2.md:50`). The 5.4.2 work rejected noon UTC because some zones were more than 12 hours from UTC historically. So the conversion rule is "the instant's UTC calendar day", with no time of day assumed.
