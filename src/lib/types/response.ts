@@ -274,10 +274,10 @@ export type TBindingDecision =
 /**
  * The decision for one claim-binding conflict.
  *
- * - `convertToLink`: replace the claim-bound variable, wherever it is used,
- *   with a statement binding to `expressionId`, a variable expression of the
- *   same claim in the newer version, and add an affirm link for it if the
- *   response has none.
+ * - `convertToLink`: replace the claim-bound variable, in place wherever it
+ *   is used and keeping each occurrence's polarity, with a statement binding
+ *   to `expressionId`, a variable expression of the same claim in `targetTo`.
+ *   No premise is added.
  * - `drop`: remove the variable and every premise listed for it.
  */
 export type TClaimConflictDecision =
