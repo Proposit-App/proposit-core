@@ -144,6 +144,15 @@
   mid-flight id would be the first round's rather than the last round's that
   `stage:llm-call` carries.
 
+- `formatCitationParts` threw `TypeError: d.getUTCMonth is not a function` for
+  any reference whose date fields held ISO strings, the form a reference
+  takes after `JSON.stringify` and `JSON.parse` without `Value.Decode`. The
+  `date` source kind and `formatDate` now read such a string the way
+  `EncodableDate` decodes one. `formatDate` accepts `Date | string`; a value
+  that is neither a valid date nor a date string throws a `TypeError`, and
+  the citation formatter names the field. An invalid `Date` used to print as
+  "undefined NaN, NaN" and now throws the same error.
+
 ## Tests
 
 - Every checksum is pinned to values captured from the published 5.4.2 (and,

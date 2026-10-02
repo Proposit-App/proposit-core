@@ -25,11 +25,40 @@ export const IEEE_MONTHS = [
 // way `EncodableDate` decodes "1787-11-22"). Read it back in UTC: the local-time
 // getters shift it into the formatting process's time zone and print the day
 // before or after, and no stored time of day avoids that for every zone.
-export function formatDate(d: Date): string {
-    const month = IEEE_MONTHS[d.getUTCMonth()]
-    const day = d.getUTCDate()
-    const year = d.getUTCFullYear()
+//
+// A stored reference that comes back from JSON holds its dates as the ISO
+// strings `JSON.stringify` wrote, unless the caller decoded it first, so a
+// string is read the way `EncodableDate` decodes one.
+export function formatDate(d: Date | string): string {
+    const date = toCitationDate(d)
+    if (date === undefined) {
+        throw new TypeError(`Not a date: ${describeValue(d)}`)
+    }
+    const month = IEEE_MONTHS[date.getUTCMonth()]
+    const day = date.getUTCDate()
+    const year = date.getUTCFullYear()
     return `${month} ${day}, ${year}`
+}
+
+// For an error message: `JSON.stringify` writes an invalid `Date` as `null`
+// and throws on a bigint or a cycle, so neither may hide the actual value.
+function describeValue(value: unknown): string {
+    if (value instanceof Date) return String(value)
+    try {
+        return JSON.stringify(value) ?? String(value)
+    } catch {
+        return String(value)
+    }
+}
+
+function toCitationDate(value: unknown): Date | undefined {
+    const date =
+        value instanceof Date
+            ? value
+            : typeof value === "string"
+              ? new Date(value)
+              : undefined
+    return date === undefined || Number.isNaN(date.getTime()) ? undefined : date
 }
 
 export function formatSingleAuthor(author: TAuthor): string {
@@ -66,8 +95,16 @@ function resolveSource(
     switch (src.kind) {
         case "string":
             return ref[src.field!] as string
-        case "date":
-            return formatDate(ref[src.field!] as Date)
+        case "date": {
+            const value = ref[src.field!]
+            const date = toCitationDate(value)
+            if (date === undefined) {
+                throw new TypeError(
+                    `Citation field "${src.field!}" is not a date: ${describeValue(value)}`
+                )
+            }
+            return formatDate(date)
+        }
         case "authors":
             return formatNamesInCitation(ref[src.field!] as TAuthor[])
         case "singleAuthor":
