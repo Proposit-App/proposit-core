@@ -49,7 +49,7 @@ Against the spec's fourth revision. "Criterion N" is the spec's acceptance crite
     - for an axiomatic variable, looked up through the claim lookup at its own claim version, `true` is skipped and `false` drops the whole link with reason `axiom`;
     - a link whose every value is skipped is also reported as `axiom`;
     - an external premise column goes onto its variable;
-  - **inference links:** maps each agreed inference link by the spec's Inference links table, using `positionClassOf` (which reads through formula nodes) and `isPremiseRootExpression` (`fingerprint.ts:128`). `positionClassOf` returns `inDerivation` for a derivation premise's root and its nested operators alike, so the root test is what separates `accepted` from `nestedReinforce` there. A reinforce carries `accepted` only on a premise root, and on the conclusion's root only when that operator is `implies` or `iff`; otherwise `conclusionStatement`. A nested one is reported `nestedReinforce`. A nested undercut in a freeform premise that is not the conclusion carries `rejected`;
+  - **inference links:** maps each agreed inference link by the spec's Inference links table, using `positionClassOf` (which reads through formula nodes) and `isPremiseRootExpression` (`fingerprint.ts:128`). `positionClassOf` returns `inDerivation` for a derivation premise's root and its nested operators alike, so the root test is what separates `accepted` from `nestedReinforce` there. `positionClassOf` also returns `nested` for nested operators of both freeform premises and the conclusion, so a nested undercut needs the premise id compared with the target's conclusion premise id: `rejected` in a freeform premise, `ignoredInConclusion` in the conclusion. A reinforce carries `accepted` only on a premise root, and on the conclusion's root only when that operator is `implies` or `iff`; otherwise `conclusionStatement`. A nested one is reported `nestedReinforce`. A nested undercut in a freeform premise that is not the conclusion carries `rejected`;
   - **non-links:** an `agree` on a non-link premise gives `notALink`;
   - **conflicts:** finds every link that fixes a variable, or decides an operator, both ways. All of those links carry nothing, with reason `conflict`;
   - **sources:** builds `sources` with one entry per value, naming every link behind it;
@@ -59,8 +59,7 @@ Against the spec's fourth revision. "Criterion N" is the spec's acceptance crite
   - criterion 1, except the `evaluateWithDefaults` bullet, which needs Task 5;
   - criteria 2, 3 and 4, and the provenance half of criterion 5;
   - the first collision bullet of criterion 6;
-  - criterion 7;
-  - decision 1.
+  - criterion 7.
   - Every bullet that evaluates X with the carried values merges them by hand until Task 5 lands, and is switched to `mergeCarriedInput` there.
 - **Proves it:** those tests. Three wrong implementations are tried and reverted, and each failure is recorded in the outcome:
   - placing a claim value on the first variable of a claim only (`getVariableIdForClaim`). The two-variable case must fail;
@@ -99,7 +98,7 @@ Against the spec's fourth revision. "Criterion N" is the spec's acceptance crite
 ### Task 7. Exports and the public surface
 
 - **Modifies** `src/lib/index.ts`: in the "Response arguments" block, export `mergeCarriedInput` and the new types. `carryAnswers` is an engine method.
-- **Modifies** `docs/api-surface.txt` through `pnpm run api-surface:update`. It must gain only those names, `TLinkAnswer`'s members, the new `evaluateWithDefaults` parameter and the `notALink` reason, and lose nothing (criterion 12).
+- **Modifies** `docs/api-surface.txt` through `pnpm run api-surface:update`. It must gain only those names, `TLinkAnswer`'s members, and the new `evaluateWithDefaults` parameter, and lose nothing (criterion 12).
 - **Proves it:** `pnpm run build` passes its API-surface check, and the diff of `docs/api-surface.txt` is read line by line.
 
 ### Task 8. Documentation Sync
