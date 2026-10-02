@@ -1,7 +1,7 @@
 slug: 2026-08-18-expose-an-ontextdelta-token-streaming-callback-through-executeturn
 title: Stream LLM text deltas to executeTurn and executePipeline callers
 created: '2026-08-18'
-resolution: null
+resolution: done
 priority: 42
 effort: low
 complexity: medium
