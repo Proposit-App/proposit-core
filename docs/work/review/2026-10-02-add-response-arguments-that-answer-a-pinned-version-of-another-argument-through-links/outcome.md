@@ -54,7 +54,10 @@ Implemented on `feat/response-arguments`. Not released: it joins 6.0.0 with the 
 - **Public names beyond the spec's list:**
   - `isResponse()`, `getRespondsTo()`, `positionClassOf`, and the result types in `src/lib/types/response.ts`;
   - invariant codes `ARG_RESPONDS_TO_ITSELF`, `ARG_EXPRESSION_BINDING_OUTSIDE_RESPONSE`, `VAR_BINDING_AMBIGUOUS`;
-  - `LINK_TARGET_MISMATCH`, used by the checks' `invalid` answer.
+  - `LINK_TARGET_MISMATCH`, used by the checks' `invalid` answer;
+  - `findSatisfyingAssignment` and `TSatisfyingAssignmentResult`, which the checks' counterexamples are built on;
+  - `TCoreArgumentReference` (the type of `respondsTo`), `TColumnReference` and `TColumnValue` (in check results), `BoundAspectSchema` and `CoreExpressionBoundVariableSchema`;
+  - the parameters of `defaultCompareArgument`, renamed from `_before`/`_after` to `before`/`after` now that they are read.
 - **`convertToLink`.** The approved text said to add an affirm link when the response has none. Against a response that denied the claim, that made the response contradict itself. It is now an in-place swap that keeps polarity (spec note of 2026-10-02, c2f5b466).
 - **`clearConclusionPremise` on a response** always clears, so a response reported by E-8 can be repaired. The spec did not say this; without it, such a response could not be repaired.
 - **Test placement:**
@@ -65,7 +68,7 @@ Implemented on `feat/response-arguments`. Not released: it joins 6.0.0 with the 
 ## Not done here
 
 - The combined review of 6.0.0, the consumer's validation of the release candidate, and the release itself.
-- The carrying item (backlog) is still to be specified.
+- The carrying item (backlog) is specified and planned, and waits for this item's acceptance.
 
 ## Speed, judged (2026-10-02)
 
@@ -74,3 +77,17 @@ The plan's verification item asked a person to read the check timings against ex
 ## Changed after this outcome
 
 Commit 6418cc30: a response may use the claims of the argument it answers (maintainer decision; spec amendment of 2026-10-02). It removes `LINK_CLAIM_USED_BY_TARGET`, `claimBindingConflicts` and `convertToLink`, and makes `positionClassOf` and `linkTargetsElement` look through formula nodes at a premise's root. Commit 8cc1387d, found while specifying the carrying item, fixes `strictUnknownAssignmentKeys`.
+ Commit 1eac5758 reads the conclusion step (`conclusionInferenceRejected`) through formula nodes at the conclusion's root; before it, a rejection of the operator just inside a root formula was silently ignored. Test first, in `test/evaluation/conclusion-step.test.ts`.
+
+## Fixes before acceptance (2026-10-02)
+
+Verification recommended acceptance with three gaps, and the maintainer chose to accept after fixing them, not through a rework cycle:
+
+- **Criterion 4's round trip** used a response with one contradict link. A response with one link of each move, a claim-bound premise and a citation-backed derivation premise now round-trips through `fromSnapshot` and `fromData` under strict checksum verification (`test/core/response-links.test.ts`, 855017c2). It pins behaviour that was already correct, so it passed when written.
+- **The changelog named `resolveChecksumFields`,** which is not exported. The entry no longer names it (ffc2f865).
+- **This outcome was out of date:** the later commits and the public names above are now listed.
+
+The maintainer also decided:
+
+- the renamed strict-mode refusal code goes under Breaking and Migrating as well as Fixed (ffc2f865);
+- the `rebaseResponse` documentation still listed conversion refusals that were removed with `convertToLink`. A consumer found this in the published declarations. The JSDoc, `docs/api-reference.md` and the skill now list the refusals the code makes (3807653e).
