@@ -103,3 +103,12 @@ wording for `xor` ("an odd number of these are true").
 - `src/lib/core/evaluation/belnap.ts` `belnapXor` — the four-valued `xor`
   definition, built from truth components so that it is associative; the model
   for defining the new operator's table.
+
+## Added 2026-10-02
+
+Asked again while scoping 6.0.0. The requester relayed:
+
+- **How long the mutually exclusive lists are**, and **whether "at most one" stays the preferred single operator** (with "exactly one" written as `atMostOne(...) ∧ or(...)`): still the maintainer's to answer. They have been passed to the maintainer, and the spec waits on them, as above.
+- **Editor support in the consuming application in 6.0.0:** no. The application would add it later either way. (Requester's answer.)
+- **Reference material:** asked; none provided.
+- **Whether it must ship in 6.0.0** is an open scope question with the maintainer. The spec has to say whether the operator needs a major version on its own, because that decides whether leaving it out of 6.0.0 costs a 7.0.0.
