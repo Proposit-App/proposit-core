@@ -15,7 +15,12 @@ import {
     type TCorePropositionalVariable,
     type TOptionalChecksum,
 } from "../schemata/index.js"
-import { readLink } from "./response/links.js"
+import {
+    checkLink as checkLinkStandalone,
+    checkResponseCoherent as checkResponseCoherentStandalone,
+    type TResponseCheckInput,
+} from "./response/check.js"
+import { readLink, validateLinks } from "./response/links.js"
 import type {
     TCoreArgumentEvaluationOptions,
     TCoreArgumentEvaluationResult,
@@ -26,6 +31,11 @@ import type {
     TCoreValidityCheckResult,
     TCoreVariableAssignment,
 } from "../types/evaluation.js"
+import type {
+    TLinkCheckResult,
+    TLinkViolation,
+    TResponseCoherenceResult,
+} from "../types/response.js"
 import type { TCoreChecksumConfig } from "../types/checksum.js"
 import type { TCorePositionConfig } from "../utils/position.js"
 import type { TInvariantValidationResult } from "../types/validation.js"
@@ -2760,6 +2770,93 @@ export class ArgumentEngine<
                 satisfiabilityForcedTrueVariableIds,
             }
         )
+    }
+
+    /**
+     * Whether one link of this response follows from the response's other
+     * premises, read against the snapshot of the argument it answers. Each
+     * statement link is expanded into the expression it names, so the
+     * question is asked of what the links say rather than of the links as
+     * opaque values. See `TLinkCheckResult` for each answer.
+     *
+     * Answers `invalid`, without searching, when the snapshot is not the
+     * argument and version this response answers or `validateLinks` reports a
+     * problem.
+     *
+     * @throws When this argument is not a response, or the premise is not one
+     * of its links.
+     */
+    public checkLink(
+        linkPremiseId: string,
+        targetSnapshot: TArgumentEngineSnapshot
+    ): TLinkCheckResult {
+        return checkLinkStandalone(
+            this.asResponseCheckInput(targetSnapshot),
+            linkPremiseId
+        )
+    }
+
+    /**
+     * Whether all of this response's premises can hold at once, read against
+     * the snapshot of the argument it answers. Uses the same expansion as
+     * `checkLink`, so the two never disagree: when the premises cannot all
+     * hold, every link checks as `incoherent`.
+     *
+     * @throws When this argument is not a response.
+     */
+    public checkResponseCoherent(
+        targetSnapshot: TArgumentEngineSnapshot
+    ): TResponseCoherenceResult {
+        return checkResponseCoherentStandalone(
+            this.asResponseCheckInput(targetSnapshot)
+        )
+    }
+
+    private asResponseCheckInput(
+        targetSnapshot: TArgumentEngineSnapshot
+    ): TResponseCheckInput {
+        const respondsTo = this.getRespondsTo()
+        if (respondsTo === undefined) {
+            throw new Error(`Argument "${this.argument.id}" is not a response.`)
+        }
+        const { id, version } = targetSnapshot.argument
+        const matches =
+            id === respondsTo.argumentId &&
+            version === respondsTo.argumentVersion
+        const problems: TLinkViolation[] = matches
+            ? validateLinks(
+                  this as unknown as ArgumentEngine,
+                  targetSnapshot
+              ).violations.filter((violation) => violation.severity === "error")
+            : [
+                  {
+                      code: "LINK_TARGET_MISMATCH",
+                      severity: "error",
+                      message: `The response answers "${respondsTo.argumentId}" version ${respondsTo.argumentVersion}, but the snapshot is "${id}" version ${version}.`,
+                  },
+              ]
+        const argument = this.getArgument()
+        return {
+            problems,
+            responseKey: argument.combinedChecksum,
+            responseArgumentId: argument.id,
+            responseArgumentVersion: argument.version,
+            premises: this.listPremises()
+                .filter((pm) => !isNakedQDerivationPremise(pm))
+                .map((pm) => ({
+                    id: pm.getId(),
+                    expressions:
+                        pm.getExpressions() as unknown as TCorePropositionalExpression[],
+                })),
+            getVariable: (variableId) =>
+                this.variables.getVariable(variableId) as unknown as
+                    | TCorePropositionalVariable
+                    | undefined,
+            groundedVariableIds: getGroundedBoundVariableIds(
+                this.asClaimVariableContext()
+            ),
+            target: targetSnapshot as unknown as TArgumentEngineSnapshot,
+        }
     }
 
     public checkValidity(
