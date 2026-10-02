@@ -1,6 +1,6 @@
 # The proposit-core command-line tool
 
-The package installs a `proposit-core` command. It keeps arguments, claims and the other libraries as JSON files on disk and runs the same engine the library exposes. `proposit-core --help`, and `--help` on any subcommand, lists every option.
+The package installs a `proposit-core` command. It keeps arguments, claims and the other libraries as JSON files on disk and runs the same engine the library exposes. `proposit-core --help`, and `--help` on any subcommand, lists every option. Response arguments are a library feature only: the CLI cannot create one and does not store `respondsTo` or expression-bound variables.
 
 ## Storage and versions
 

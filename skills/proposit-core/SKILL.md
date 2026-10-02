@@ -18,15 +18,17 @@ It has no notion of users, sessions or storage. It ships no user interface and n
     - `axiomatic`: something taken as true by definition, convention or logic.
 - **Connections** — `core.citations` records "claim X is supported by citation claim Y". `core.axioms` records "normal claim X is supported by axiomatic claim Y".
 - **Argument** — one `ArgumentEngine`, created with `core.arguments.create({ id, version })`.
-- **Variable** — a symbol such as `P` that expressions refer to. There are two kinds:
+- **Variable** — a symbol such as `P` that expressions refer to. There are three kinds:
     - **claim-bound**: stands for a claim;
-    - **premise-bound**: stands for another premise's truth value. Every new premise gets one automatically, with a symbol like `P0`.
+    - **premise-bound**: stands for another premise's truth value. Every new premise gets one automatically, with a symbol like `P0`;
+    - **expression-bound**: only in a response (below), stands for one expression of the argument the response answers.
 - **Premise** — one `PremiseEngine` holding one expression tree. Its `type` is `freeform` (any tree) or `derivation` (a fixed shape stating how a claim is supported).
 - **Expression** — a node in a premise's tree. It is a `variable` leaf, an `operator`, or a `formula` (a node that acts like a pair of parentheses around one child). There are six operators:
     - `not`: exactly one child;
     - `and`, `or`, `xor`: two or more children;
     - `implies`, `iff`: exactly two children, and allowed only at the root of a premise.
-- **Roles** — one premise is the **conclusion**. The first premise created becomes the conclusion until you call `setConclusionPremise`. Every other premise whose root is `implies` or `iff` is **supporting**. The rest are **constraints**, which limit which assignments count.
+- **Response** — an argument created with `respondsTo: { argumentId, argumentVersion }`. It answers that one argument at that pinned version, has no conclusion, and answers through **links**: premises that are just `x` or `NOT(x)`, where `x` is an expression-bound variable. A link contradicts or affirms a statement of the other argument, or undercuts or reinforces one of its steps.
+- **Roles** — one premise is the **conclusion**. The first premise created becomes the conclusion until you call `setConclusionPremise`. Every other premise whose root is `implies` or `iff` is **supporting**. The rest are **constraints**, which limit which assignments count. A response has no conclusion, and every premise of it that is not a link is supporting.
 
 ## Things that surprise people
 
@@ -37,19 +39,22 @@ It has no notion of users, sessions or storage. It ships no user interface and n
 - **An operator decision is not a truth value.** `"rejected"` takes the whole premise out of consideration. It does not make anything false.
 - **Axiomatic claims are always true.** Assigning a value to an axiom-bound variable throws `AXIOM_VARIABLE_ASSIGNMENT_FORBIDDEN`. Citation-bound variables can be assigned.
 - **One claim can have several variables.** Use `getVariableIdsForClaim`, not a `find` that picks the first one.
+- **`respondsTo` is not an extra.** It is fixed when the engine is built and changed only by `rebaseResponse`. `getExtras()` leaves it out, `setExtras` keeps it, and `setExtras({ respondsTo })` throws.
+- **Count a response's links by what they reach, not by variable.** Two links can bind two different occurrences of one claim. The checks treat them as one thing, and `validateLinks` reports the pair as `LINK_SAME_CLAIM` information. Code that counts or groups links by claim must merge such pairs the same way.
 - **Absent is not the same as `null`.** A checksum covers a field whenever the key is present. Never store `null`, `false` or `undefined` for an optional field that is unset, such as `enthymeme`; remove the key instead.
 
 ## Where to look
 
-| Topic                                                                                                                   | File                                                     |
-| ----------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
-| Creating claims, arguments, variables, premises and expressions; editing trees; roles; derivation premises              | [docs/building-arguments.md](docs/building-arguments.md) |
-| `evaluate`, the four truth values, operator decisions, the facts a result reports, default assignments, `checkValidity` | [docs/evaluation.md](docs/evaluation.md)                 |
-| The four grammar tiers, rule codes, `validate(tier)`, assistive versus permissive behavior, `normalize` and repairs     | [docs/grammar.md](docs/grammar.md)                       |
-| Snapshots, `fromData`, checksums, changesets and their storage order, reacting to changes, source texts                 | [docs/persistence.md](docs/persistence.md)               |
-| Forking an argument, diffing two arguments, premise relationships                                                       | [docs/forking-and-diffs.md](docs/forking-and-diffs.md)   |
-| The pipeline framework, LLM providers, turning text into an argument                                                    | [docs/pipelines.md](docs/pipelines.md)                   |
-| The `proposit-core` command-line tool                                                                                   | [docs/cli.md](docs/cli.md)                               |
+| Topic                                                                                                                   | File                                                                                                                                       |
+| ----------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| Creating claims, arguments, variables, premises and expressions; editing trees; roles; derivation premises              | [docs/building-arguments.md](docs/building-arguments.md)                                                                                   |
+| `evaluate`, the four truth values, operator decisions, the facts a result reports, default assignments, `checkValidity` | [docs/evaluation.md](docs/evaluation.md)                                                                                                   |
+| The four grammar tiers, rule codes, `validate(tier)`, assistive versus permissive behavior, `normalize` and repairs     | [docs/grammar.md](docs/grammar.md)                                                                                                         |
+| Snapshots, `fromData`, checksums, changesets and their storage order, reacting to changes, source texts                 | [docs/persistence.md](docs/persistence.md)                                                                                                 |
+| Forking an argument, diffing two arguments, premise relationships, moving a response to a newer version                 | [docs/forking-and-diffs.md](docs/forking-and-diffs.md)                                                                                     |
+| Response arguments: building one and its links; checking links and coherence; their grammar rules                       | [docs/building-arguments.md](docs/building-arguments.md#responses-and-links), [docs/evaluation.md](docs/evaluation.md#checking-a-response) |
+| The pipeline framework, LLM providers, turning text into an argument                                                    | [docs/pipelines.md](docs/pipelines.md)                                                                                                     |
+| The `proposit-core` command-line tool                                                                                   | [docs/cli.md](docs/cli.md)                                                                                                                 |
 
 For more detail:
 
