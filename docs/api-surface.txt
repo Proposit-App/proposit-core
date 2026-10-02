@@ -528,6 +528,8 @@ Method lib.StageAbortedError.captureStackTrace (1)
 Method lib.StageAbortedError.prepareStackTrace (1)
 Method lib.SubPipelineFailedError.captureStackTrace (1)
 Method lib.SubPipelineFailedError.prepareStackTrace (1)
+Method lib.TArgumentEvaluation.checkLink (1)
+Method lib.TArgumentEvaluation.checkResponseCoherent (1)
 Method lib.TArgumentEvaluation.checkValidity (1)
 Method lib.TArgumentEvaluation.deriveDefaultAssignment (1)
 Method lib.TArgumentEvaluation.evaluate (1)
@@ -553,6 +555,8 @@ Method lib.TArgumentExpressionQueries.listRootExpressions (1)
 Method lib.TArgumentExpressionQueries.patchExpressionAppFields (1)
 Method lib.TArgumentIdentity.getArgument (1)
 Method lib.TArgumentIdentity.getExtras (1)
+Method lib.TArgumentIdentity.getRespondsTo (1)
+Method lib.TArgumentIdentity.isResponse (1)
 Method lib.TArgumentIdentity.setExtras (1)
 Method lib.TArgumentIdentity.updateExtras (1)
 Method lib.TArgumentLifecycle.getSnapshot (1)
@@ -688,6 +692,7 @@ Method lib.TValidatablePremise.getVariables (1)
 Method lib.TValidatablePremise.validate (1)
 Method lib.TValidatablePremise.validateEvaluability (1)
 Method lib.TVariableManagement.addVariable (1)
+Method lib.TVariableManagement.bindVariableToExpression (1)
 Method lib.TVariableManagement.bindVariableToPremise (1)
 Method lib.TVariableManagement.buildVariableIndex (1)
 Method lib.TVariableManagement.ensureClaimBoundVariable (1)
@@ -696,6 +701,7 @@ Method lib.TVariableManagement.getVariableBySymbol (1)
 Method lib.TVariableManagement.getVariables (1)
 Method lib.TVariableManagement.getVariablesBoundToPremise (1)
 Method lib.TVariableManagement.hasVariable (1)
+Method lib.TVariableManagement.rebaseResponse (1)
 Method lib.TVariableManagement.removeVariable (1)
 Method lib.TVariableManagement.updateVariable (1)
 Method lib.TVariableReferences.deleteExpressionsUsingVariable (1)
@@ -4930,6 +4936,8 @@ Property lib.TArgumentExpressionQueries.collectReferencedVariables.bySymbol
 Property lib.TArgumentExpressionQueries.collectReferencedVariables.bySymbol.premiseIds
 Property lib.TArgumentExpressionQueries.collectReferencedVariables.bySymbol.variableIds
 Property lib.TArgumentExpressionQueries.collectReferencedVariables.variableIds
+Property lib.TArgumentIdentity.getRespondsTo.argumentId
+Property lib.TArgumentIdentity.getRespondsTo.argumentVersion
 Property lib.TArgumentLibraryLibraries.claimLibrary
 Property lib.TArgumentLibrarySnapshot.arguments
 Property lib.TArgumentLifecycle.validate.argumentId
@@ -5630,6 +5638,24 @@ Property lib.TVariableManagement.addVariable.variable.id
 Property lib.TVariableManagement.addVariable.variable.id
 Property lib.TVariableManagement.addVariable.variable.symbol
 Property lib.TVariableManagement.addVariable.variable.symbol
+Property lib.TVariableManagement.bindVariableToExpression.variable.argumentId
+Property lib.TVariableManagement.bindVariableToExpression.variable.argumentId
+Property lib.TVariableManagement.bindVariableToExpression.variable.argumentVersion
+Property lib.TVariableManagement.bindVariableToExpression.variable.argumentVersion
+Property lib.TVariableManagement.bindVariableToExpression.variable.boundArgumentId
+Property lib.TVariableManagement.bindVariableToExpression.variable.boundArgumentId
+Property lib.TVariableManagement.bindVariableToExpression.variable.boundArgumentVersion
+Property lib.TVariableManagement.bindVariableToExpression.variable.boundArgumentVersion
+Property lib.TVariableManagement.bindVariableToExpression.variable.boundAspect
+Property lib.TVariableManagement.bindVariableToExpression.variable.boundAspect
+Property lib.TVariableManagement.bindVariableToExpression.variable.boundExpressionId
+Property lib.TVariableManagement.bindVariableToExpression.variable.boundExpressionId
+Property lib.TVariableManagement.bindVariableToExpression.variable.checksum
+Property lib.TVariableManagement.bindVariableToExpression.variable.checksum
+Property lib.TVariableManagement.bindVariableToExpression.variable.id
+Property lib.TVariableManagement.bindVariableToExpression.variable.id
+Property lib.TVariableManagement.bindVariableToExpression.variable.symbol
+Property lib.TVariableManagement.bindVariableToExpression.variable.symbol
 Property lib.TVariableManagement.bindVariableToPremise.variable.argumentId
 Property lib.TVariableManagement.bindVariableToPremise.variable.argumentId
 Property lib.TVariableManagement.bindVariableToPremise.variable.argumentVersion

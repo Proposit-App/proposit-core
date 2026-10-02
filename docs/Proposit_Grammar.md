@@ -283,11 +283,13 @@ Every expression's discriminator is one of `variable`, `formula`, `not`,
 
 #### S-3 — Variable required reference
 
-Every variable has either a claim reference or a premise reference, not
-both, not neither.
+Every variable has exactly one kind of reference: a claim reference, a
+premise reference, or (in a response argument) an expression reference.
+Not two, and not none.
 
-- **Invalid:** a variable with both `claimId` and `boundPremiseId` set; a variable with neither.
-- **Valid:** a claim-bound variable (`claimId` set, `boundPremiseId` unset) or a premise-bound variable (the inverse).
+- **Invalid:** a variable with both `claimId` and `boundPremiseId` set; one with both `claimId` and `boundExpressionId`; a variable with none of the three.
+- **Valid:** a claim-bound variable (`claimId`), a premise-bound variable (`boundPremiseId`), or an expression-bound variable (`boundExpressionId`), each with no other reference.
+- **Load:** a stored variable with more than one kind of reference fails to load with the invariant code `VAR_BINDING_AMBIGUOUS`.
 - **Validator:** `validateS3`.
 
 #### S-4 — No cycles
@@ -405,6 +407,20 @@ or `iff` (allowed Structurally; flagged Derivable per D-1).
 - **Valid:** root `variable` (naked-Q); root `implies` (populated); root `iff` (Structural-only — fails D-1).
 - **Validator:** `validateS14`.
 
+#### S-15 — Response well formed
+
+An argument carrying `respondsTo` is a response. Its `respondsTo` names an
+argument other than itself. Only a response holds expression-bound
+variables, and each binds into the argument named by
+`respondsTo.argumentId`. Checked as an invariant on every mutation and on
+load, so data breaking it never loads (`ARG_RESPONDS_TO_ITSELF`,
+`ARG_EXPRESSION_BINDING_OUTSIDE_RESPONSE`). A binding on another _version_
+of the argument answered is E-10, not this rule.
+
+- **Invalid:** a response whose `respondsTo.argumentId` is its own id; an expression-bound variable in a standard argument; an expression-bound variable whose `boundArgumentId` is not `respondsTo.argumentId`.
+- **Valid:** a standard argument with no expression-bound variables; a response whose expression-bound variables all bind into the argument it answers.
+- **Validator:** `validateS15`.
+
 ### 3.2 Evaluable rules
 
 Required for `evaluate()` and `checkValidity()` to run.
@@ -474,9 +490,44 @@ violation regardless of premise count.
 
 > _**Engine-enforced invariant (1.0.2):** core guards the "non-empty argument always has a conclusion" invariant at the mutation surface. `clearConclusionPremise()` is a no-op when premises exist (the call refuses to leave the engine in an E-7-violating state). `removePremise(conclusionPremiseId)` on a multi-premise argument atomically reassigns the conclusion role to the lowest-id remaining premise rather than clearing. Snapshot loads (`fromSnapshot` / `fromData`) deliberately bypass these mutation-surface guards — they accept any Structural-valid state and surface E-7 via `validate()` like other Evaluable issues. The rule's strict reading therefore stays in place as the validate-time safety net for loaded snapshots and direct data-shape construction._
 
-- **Invalid:** an argument with one or more premises and `roleState.conclusionPremiseId === undefined`; any argument with `roleState.conclusionPremiseId` set to a non-existent premise id.
-- **Valid:** an argument with zero premises (brand-new); an argument with one or more premises and a designated conclusion.
+A response argument is exempt: it has no conclusion (see E-8). On a
+response the engine designates no conclusion and promotes none, and
+`clearConclusionPremise()` clears one it was stored with.
+
+- **Invalid:** a standard argument with one or more premises and `roleState.conclusionPremiseId === undefined`; any standard argument with `roleState.conclusionPremiseId` set to a non-existent premise id.
+- **Valid:** an argument with zero premises (brand-new); an argument with one or more premises and a designated conclusion; a response with premises and no conclusion.
 - **Validator:** `validateE7`.
+
+#### E-8 — A response has no conclusion
+
+A response answers another argument through its links and asserts no
+conclusion of its own. Evaluable rather than Structural, so a response
+stored with a conclusion still loads and can be repaired with
+`clearConclusionPremise()`.
+
+- **Invalid:** a response with `roleState.conclusionPremiseId` set.
+- **Valid:** a response with no conclusion; any standard argument.
+- **Validator:** `validateE8`.
+
+#### E-9 — One variable per referent
+
+In a response, no two expression-bound variables bind the same expression
+in the same aspect. `bindVariableToExpression` returns the existing
+variable instead of adding a second, so this reports only stored data.
+
+- **Invalid:** two variables with the same `boundArgumentId`, `boundExpressionId` and `boundAspect`.
+- **Valid:** one variable per expression and aspect; the statement and the inference of one operator bound by two variables.
+- **Validator:** `validateE9`.
+
+#### E-10 — Links name the version answered
+
+In a response, every expression-bound variable's `boundArgumentVersion`
+equals `respondsTo.argumentVersion`. A mismatch loads, so that a partly
+saved rebase can be finished, and is reported here.
+
+- **Invalid:** a variable bound to version 2 of the argument while the response answers version 3.
+- **Valid:** every binding on the version answered.
+- **Validator:** `validateE10`.
 
 ### 3.3 Derivable rules
 
@@ -541,6 +592,8 @@ claims appear only in the antecedent of a derivation premise.
 - **Invalid:** a citation-bound variable in a freeform premise; a citation-bound variable at the consequent slot of a derivation premise.
 - **Valid:** citation-bound variable in the antecedent.
 - **Validator:** `validateD5`.
+
+> _D-4 and D-5 restrict citation- and axiom-bound variables, not expression-bound ones. A response may therefore contradict or undercut anything in the argument it answers that rests on a source or an axiom. It cannot deny a source cited two arguments back, because links reach only the argument answered and D-4 and D-5 forbid placing the response's own citation variable under `NOT`._
 
 #### D-6 — Derivation premise role
 
@@ -849,8 +902,8 @@ The string-literal codes are the wire format shared across core, server,
 and mobile:
 
 ```
-S-1  S-2  S-3  S-4  S-5  S-6  S-7  S-8  S-9  S-10  S-11  S-12  S-13  S-14
-E-1            E-3  E-4  E-5  E-6  E-7
+S-1  S-2  S-3  S-4  S-5  S-6  S-7  S-8  S-9  S-10  S-11  S-12  S-13  S-14  S-15
+E-1            E-3  E-4  E-5  E-6  E-7  E-8  E-9  E-10
 D-1  D-2  D-3  D-4  D-5  D-6
 P-1  P-2  P-3  P-4  P-5  P-6
 ```
