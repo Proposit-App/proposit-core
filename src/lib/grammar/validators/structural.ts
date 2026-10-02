@@ -20,7 +20,11 @@
 
 import type { TViolation } from "../types.js"
 import type { TValidatorContext } from "./context.js"
-import { isClaimBound, isPremiseBound } from "../../schemata/propositional.js"
+import {
+    isClaimBound,
+    isExpressionBound,
+    isPremiseBound,
+} from "../../schemata/propositional.js"
 import { buildChildMap, buildExpressionsById } from "./tree-views.js"
 
 /**
@@ -164,32 +168,35 @@ export function validateS2(ctx: TValidatorContext): readonly TViolation[] {
 }
 
 /**
- * S-3 — Variable required reference. Every variable has either a claim ref
- * or a premise ref, not both, not neither.
+ * S-3 — Variable required reference. Every variable has exactly one kind of
+ * reference: a claim, a premise, or (in a response) an expression of the
+ * argument it answers. Not two, and not none.
  */
 export function validateS3(ctx: TValidatorContext): readonly TViolation[] {
     const violations: TViolation[] = []
     for (const v of ctx.variables) {
-        // Capture id before type-guard narrowing: the "neither" branch
-        // below corresponds to malformed data that TypeScript narrows to
-        // `never` (the static union is exhaustive). Preserving the id via
-        // a separate read works around the narrowing.
+        // Capture id before type-guard narrowing: the "none" branch below
+        // corresponds to malformed data that TypeScript narrows to `never`
+        // (the static union is exhaustive).
         const variableId = v.id
-        const hasClaimRef = isClaimBound(v)
-        const hasPremiseRef = isPremiseBound(v)
-        if (hasClaimRef && hasPremiseRef) {
+        const kinds = [
+            isClaimBound(v) ? "claim" : undefined,
+            isPremiseBound(v) ? "premise" : undefined,
+            isExpressionBound(v) ? "expression" : undefined,
+        ].filter((kind) => kind !== undefined)
+        if (kinds.length > 1) {
             violations.push({
                 tier: "structural",
                 code: "S-3",
-                message: `variable ${variableId} has both claim and premise references`,
+                message: `variable ${variableId} has more than one kind of reference (${kinds.join(", ")})`,
                 argumentId: ctx.argument.id,
                 variableId,
             })
-        } else if (!hasClaimRef && !hasPremiseRef) {
+        } else if (kinds.length === 0) {
             violations.push({
                 tier: "structural",
                 code: "S-3",
-                message: `variable ${variableId} has neither claim nor premise reference`,
+                message: `variable ${variableId} has no claim, premise or expression reference`,
                 argumentId: ctx.argument.id,
                 variableId,
             })
@@ -589,20 +596,43 @@ export function validateS14(ctx: TValidatorContext): readonly TViolation[] {
 
 /**
  * S-15 — A response is well formed. A response's `respondsTo` names an
- * argument other than itself. Checked on every mutation and on load, as an
- * invariant, so a response that names itself is never loaded.
+ * argument other than itself; only a response holds expression-bound
+ * variables; and each binds into the argument the response answers. Checked
+ * on every mutation and on load, as an invariant, so such data never loads.
+ * A binding on another version of that argument is E-10, not this rule.
  */
 export function validateS15(ctx: TValidatorContext): readonly TViolation[] {
+    const violations: TViolation[] = []
     const respondsTo = ctx.argument.respondsTo
-    if (respondsTo?.argumentId !== ctx.argument.id) return []
-    return [
-        {
+    if (respondsTo?.argumentId === ctx.argument.id) {
+        violations.push({
             tier: "structural",
             code: "S-15",
             message: `argument ${ctx.argument.id} responds to itself`,
             argumentId: ctx.argument.id,
-        },
-    ]
+        })
+    }
+    for (const v of ctx.variables) {
+        if (!isExpressionBound(v)) continue
+        if (respondsTo === undefined) {
+            violations.push({
+                tier: "structural",
+                code: "S-15",
+                message: `variable ${v.id} is bound to an expression of another argument, but argument ${ctx.argument.id} is not a response`,
+                argumentId: ctx.argument.id,
+                variableId: v.id,
+            })
+        } else if (v.boundArgumentId !== respondsTo.argumentId) {
+            violations.push({
+                tier: "structural",
+                code: "S-15",
+                message: `variable ${v.id} is bound into argument ${v.boundArgumentId}, but the response answers ${respondsTo.argumentId}`,
+                argumentId: ctx.argument.id,
+                variableId: v.id,
+            })
+        }
+    }
+    return violations
 }
 
 export function validateStructural(

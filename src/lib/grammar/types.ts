@@ -55,6 +55,8 @@ export const GrammarRuleCodeSchema = Type.Union([
     Type.Literal("E-6"),
     Type.Literal("E-7"),
     Type.Literal("E-8"),
+    Type.Literal("E-9"),
+    Type.Literal("E-10"),
     // Derivable (D-1..D-6 — 'D-7' reserved)
     Type.Literal("D-1"),
     Type.Literal("D-2"),

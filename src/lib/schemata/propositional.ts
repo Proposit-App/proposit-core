@@ -167,9 +167,42 @@ export type TPremiseBoundVariable = Static<
     typeof CorePremiseBoundVariableSchema
 >
 
+export const BoundAspectSchema = Type.Union(
+    [Type.Literal("statement"), Type.Literal("inference")],
+    {
+        description:
+            'What an expression-bound variable stands for: "statement" — the truth of the bound expression; "inference" — whether the bound operator\'s step holds.',
+    }
+)
+
+export type TBoundAspect = Static<typeof BoundAspectSchema>
+
+export const CoreExpressionBoundVariableSchema = Type.Object(
+    {
+        ...CoreVariableBaseFields,
+        boundExpressionId: UUID,
+        boundArgumentId: UUID,
+        boundArgumentVersion: Type.Number({
+            description:
+                "The version of the argument that owns the bound expression. For a response, the version it answers.",
+        }),
+        boundAspect: BoundAspectSchema,
+    },
+    {
+        additionalProperties: true,
+        description:
+            "An expression-bound propositional variable: in a response argument, one expression of the argument it answers.",
+    }
+)
+
+export type TExpressionBoundVariable = Static<
+    typeof CoreExpressionBoundVariableSchema
+>
+
 export const CorePropositionalVariableSchema = Type.Union([
     CoreClaimBoundVariableSchema,
     CorePremiseBoundVariableSchema,
+    CoreExpressionBoundVariableSchema,
 ])
 
 export type TCorePropositionalVariable = Static<
@@ -188,6 +221,13 @@ export function isPremiseBound(
     v: TCorePropositionalVariable
 ): v is TPremiseBoundVariable {
     return "boundPremiseId" in v
+}
+
+/** Type guard: returns `true` if the variable is expression-bound. */
+export function isExpressionBound(
+    v: TCorePropositionalVariable
+): v is TExpressionBoundVariable {
+    return "boundExpressionId" in v
 }
 
 /** Returns `true` if the premise-bound variable references a premise in a different argument. */

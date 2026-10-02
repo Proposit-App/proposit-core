@@ -35,6 +35,8 @@ export const DEFAULT_CHECKSUM_CONFIG: Readonly<TCoreChecksumConfig> = {
         "boundPremiseId",
         "boundArgumentId",
         "boundArgumentVersion",
+        "boundExpressionId",
+        "boundAspect",
     ]),
     premiseFields: new Set([
         "argumentId",
@@ -149,6 +151,7 @@ const ALWAYS_HASHED_FIELDS: Partial<
     Record<(typeof CHECKSUM_CONFIG_KEYS)[number], readonly string[]>
 > = {
     argumentFields: ["respondsTo"],
+    variableFields: ["boundExpressionId", "boundAspect"],
 }
 
 /**

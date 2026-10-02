@@ -1,8 +1,11 @@
 import {
     isClaimBound,
+    isExpressionBound,
     isPremiseBound,
     type TClaimBoundVariable,
     type TPremiseBoundVariable,
+    type TExpressionBoundVariable,
+    type TBoundAspect,
     type TCoreArgument,
     type TCoreArgumentReference,
     type TCoreClaim,
@@ -1329,6 +1332,87 @@ export class ArgumentEngine<
         })
     }
 
+    /**
+     * Adds an expression-bound variable to a response: a variable that stands
+     * for one expression of the argument the response answers, either its
+     * truth (`boundAspect: "statement"`) or whether its step holds
+     * (`"inference"`). Only a response may hold one, and it binds only into
+     * the argument and version named by `respondsTo`. A variable with the same
+     * referent — the same expression and aspect — is returned instead of a
+     * second one being added.
+     */
+    public bindVariableToExpression(
+        variable: TOptionalChecksum<TExpressionBoundVariable> &
+            Record<string, unknown>
+    ): TCoreMutationResult<TVar, TExpr, TVar, TPremise, TArg> {
+        return this.withValidation(() => {
+            this.assertVariableInThisArgument(variable)
+            const respondsTo = this.getRespondsTo()
+            if (respondsTo === undefined) {
+                throw new Error(
+                    `Argument "${this.argument.id}" is not a response; only a response binds variables to another argument's expressions.`
+                )
+            }
+            // Loading keeps what was stored, so that rules E-9 and E-10 can
+            // report it: dropping a variable here would leave an expression
+            // already restored pointing at nothing.
+            if (!this.restoringFromSnapshot) {
+                if (
+                    variable.boundArgumentId !== respondsTo.argumentId ||
+                    variable.boundArgumentVersion !== respondsTo.argumentVersion
+                ) {
+                    throw new Error(
+                        `A response binds only into the argument it answers, "${respondsTo.argumentId}" version ${respondsTo.argumentVersion}.`
+                    )
+                }
+                const existing = this.findExpressionBinding(
+                    variable.boundArgumentId,
+                    variable.boundExpressionId,
+                    variable.boundAspect
+                )
+                if (existing !== undefined) {
+                    return { result: existing, changes: {} }
+                }
+            }
+            if (
+                !this.canBind(
+                    variable.boundArgumentId,
+                    variable.boundArgumentVersion
+                )
+            ) {
+                throw new Error(
+                    `Binding to argument "${variable.boundArgumentId}" version ${variable.boundArgumentVersion} is not allowed.`
+                )
+            }
+            return this.addNewVariable(
+                variable as unknown as TOptionalChecksum<TVar>
+            )
+        })
+    }
+
+    /** The argument this response answers, or `undefined` for a standard argument. */
+    public getRespondsTo(): TCoreArgumentReference | undefined {
+        return (this.argument as Record<string, unknown>).respondsTo as
+            | TCoreArgumentReference
+            | undefined
+    }
+
+    private findExpressionBinding(
+        boundArgumentId: string,
+        boundExpressionId: string,
+        boundAspect: TBoundAspect
+    ): TVar | undefined {
+        return this.variables.toArray().find((v) => {
+            const base = v as unknown as TCorePropositionalVariable
+            return (
+                isExpressionBound(base) &&
+                base.boundArgumentId === boundArgumentId &&
+                base.boundExpressionId === boundExpressionId &&
+                base.boundAspect === boundAspect
+            )
+        })
+    }
+
     /** Adds a premise-bound variable that references another argument's conclusion premise. */
     public bindVariableToArgument(
         variable: Omit<
@@ -1359,11 +1443,33 @@ export class ArgumentEngine<
             const updatesObj = updates
 
             // Reject binding-type conversion
-            if (isClaimBound(existingVar)) {
+            const expressionBindingFields = [
+                "boundExpressionId",
+                "boundAspect",
+            ] as const
+            if (isExpressionBound(existingVar)) {
+                // A link is re-pointed only by rebasing the response, which
+                // keeps it on the version the response answers.
+                for (const f of [
+                    ...expressionBindingFields,
+                    "boundArgumentId",
+                    "boundArgumentVersion",
+                    "boundPremiseId",
+                    "claimId",
+                    "claimVersion",
+                ] as const) {
+                    if (updatesObj[f] !== undefined) {
+                        throw new Error(
+                            `Cannot set "${f}" on an expression-bound variable. Rebase the response to re-point it.`
+                        )
+                    }
+                }
+            } else if (isClaimBound(existingVar)) {
                 const premiseBoundFields = [
                     "boundPremiseId",
                     "boundArgumentId",
                     "boundArgumentVersion",
+                    ...expressionBindingFields,
                 ] as const
                 for (const f of premiseBoundFields) {
                     if (updatesObj[f] !== undefined) {
@@ -1394,7 +1500,11 @@ export class ArgumentEngine<
                     }
                 }
             } else if (isPremiseBound(existingVar)) {
-                const claimBoundFields = ["claimId", "claimVersion"] as const
+                const claimBoundFields = [
+                    "claimId",
+                    "claimVersion",
+                    ...expressionBindingFields,
+                ] as const
                 for (const f of claimBoundFields) {
                     if (updatesObj[f] !== undefined) {
                         throw new Error(
@@ -1999,6 +2109,13 @@ export class ArgumentEngine<
                 }
             }
         }
+        for (const v of snapshot.variables.variables) {
+            if (isExpressionBound(v as unknown as TCorePropositionalVariable)) {
+                engine.bindVariableToExpression(
+                    v as unknown as TOptionalChecksum<TExpressionBoundVariable>
+                )
+            }
+        }
         // Restore conclusion role (don't use setConclusionPremise to avoid auto-assign logic)
         engine.conclusionPremiseId = snapshot.conclusionPremiseId
 
@@ -2118,6 +2235,13 @@ export class ArgumentEngine<
                         v as unknown as TOptionalChecksum<TPremiseBoundVariable>
                     )
                 }
+            }
+        }
+        for (const v of variables) {
+            if (isExpressionBound(v as unknown as TCorePropositionalVariable)) {
+                engine.bindVariableToExpression(
+                    v as unknown as TOptionalChecksum<TExpressionBoundVariable>
+                )
             }
         }
 

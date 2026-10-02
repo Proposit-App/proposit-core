@@ -55,6 +55,8 @@ export function defaultCompareVariable<
         "boundPremiseId",
         "boundArgumentId",
         "boundArgumentVersion",
+        "boundExpressionId",
+        "boundAspect",
     ] as const
 
     for (const field of bindingFields) {
