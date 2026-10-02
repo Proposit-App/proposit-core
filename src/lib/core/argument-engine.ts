@@ -43,6 +43,7 @@ import {
     CLAIM_NOT_FOUND,
     CREATE_DERIVATION_CLAIM_NOT_FOUND,
     CREATE_DERIVATION_REQUIRES_DERIVED_CLAIM_ID,
+    VAR_BINDING_AMBIGUOUS,
 } from "../types/validation.js"
 import { validateDerivationStructure } from "../grammar/derivation-validation.js"
 import { withoutUndefinedValues } from "../utils/collections.js"
@@ -171,6 +172,33 @@ export type TArgumentEngineSnapshot<
     premises: TPremiseEngineSnapshot<TPremise, TExpr>[]
     conclusionPremiseId?: string
     config?: TLogicEngineOptions
+}
+
+/**
+ * Refuses stored variables carrying more than one kind of reference — a
+ * claim, a premise, an expression. Each load path restores one kind at a
+ * time, so such a variable would otherwise be added twice and fail with a
+ * message about a duplicate symbol rather than about its shape.
+ */
+function assertOneReferenceKind(
+    variables: readonly TCorePropositionalVariable[]
+): void {
+    const violations = variables
+        .filter(
+            (v) =>
+                [
+                    isClaimBound(v),
+                    isPremiseBound(v),
+                    isExpressionBound(v),
+                ].filter(Boolean).length > 1
+        )
+        .map((v) => ({
+            code: VAR_BINDING_AMBIGUOUS,
+            message: `Variable "${v.id}" has more than one kind of reference.`,
+            entityType: "variable" as const,
+            entityId: v.id,
+        }))
+    if (violations.length > 0) throw new InvariantViolationError(violations)
 }
 
 /**
@@ -2107,6 +2135,10 @@ export class ArgumentEngine<
             engine.premises.set(pe.getId(), pe)
             engine.wirePremiseEngine(pe)
         }
+        assertOneReferenceKind(
+            snapshot.variables
+                .variables as unknown as TCorePropositionalVariable[]
+        )
         // Restore claim-bound variables first, then premise-bound variables
         for (const v of snapshot.variables.variables) {
             if (isClaimBound(v as unknown as TCorePropositionalVariable)) {
@@ -2202,6 +2234,9 @@ export class ArgumentEngine<
         )
         engine.restoringFromSnapshot = true
 
+        assertOneReferenceKind(
+            variables as unknown as TCorePropositionalVariable[]
+        )
         // Register claim-bound variables first (no dependencies)
         for (const v of variables) {
             if (isClaimBound(v as unknown as TCorePropositionalVariable)) {

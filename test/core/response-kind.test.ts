@@ -139,7 +139,7 @@ describe("a response has no conclusion", () => {
     it("refuses to build a response that names itself", () => {
         expect(() =>
             response({ argumentId: ARG.id, argumentVersion: 0 })
-        ).toThrow()
+        ).toThrow(/respond to itself/)
     })
 
     it("makes no premise the conclusion when the first premise is created", () => {

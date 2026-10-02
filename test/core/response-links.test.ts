@@ -86,7 +86,7 @@ describe("binding a variable to an expression of the argument a response answers
             response().bindVariableToExpression(
                 binding({ boundArgumentId: "arg-other" })
             )
-        ).toThrow()
+        ).toThrow(/binds only into the argument it answers/)
     })
 
     it("refuses a binding into another version of the argument answered", () => {
@@ -94,7 +94,7 @@ describe("binding a variable to an expression of the argument a response answers
             response().bindVariableToExpression(
                 binding({ boundArgumentVersion: 2 })
             )
-        ).toThrow()
+        ).toThrow(/binds only into the argument it answers/)
     })
 
     it("refuses what canBind refuses", () => {
@@ -106,7 +106,9 @@ describe("binding a variable to an expression of the argument a response answers
         const eng = new Refusing({ ...ARG, respondsTo: TARGET }, aLib(), {
             behavior: "permissive",
         })
-        expect(() => eng.bindVariableToExpression(binding())).toThrow()
+        expect(() => eng.bindVariableToExpression(binding())).toThrow(
+            /is not allowed/
+        )
     })
 
     it("returns the existing variable for a second binding with the same referent", () => {
@@ -145,7 +147,45 @@ describe("shapes and loading", () => {
                 ? { ...v, claimId: "claim-default", claimVersion: 0 }
                 : v
         )
-        expect(() => ArgumentEngine.fromSnapshot(snap, aLib())).toThrow()
+        expect(() => ArgumentEngine.fromSnapshot(snap, aLib())).toThrow(
+            /more than one kind of reference/
+        )
+    })
+
+    it("refuses, through fromData, a variable with both a claim and an expression reference", () => {
+        const eng = responseWithLink()
+        const snap = eng.snapshot()
+        const variables = eng
+            .getVariables()
+            .map((v) =>
+                v.id === "v-x"
+                    ? { ...v, claimId: "claim-default", claimVersion: 0 }
+                    : v
+            )
+        expect(() =>
+            ArgumentEngine.fromData(
+                eng.getArgument(),
+                aLib(),
+                variables,
+                snap.premises.map((ps) => ps.premise),
+                snap.premises.flatMap((ps) => ps.expressions.expressions),
+                {}
+            )
+        ).toThrow(/more than one kind of reference/)
+    })
+
+    it("refuses to load a variable with both a claim and a premise reference", () => {
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
+        eng.createPremiseWithId("premise-1")
+        const snap = eng.snapshot()
+        snap.variables.variables = snap.variables.variables.map((v) => ({
+            ...v,
+            claimId: "claim-default",
+            claimVersion: 0,
+        }))
+        expect(() => ArgumentEngine.fromSnapshot(snap, aLib())).toThrow(
+            /more than one kind of reference/
+        )
     })
 
     it("refuses to load an expression-bound variable in a standard argument", () => {
@@ -155,7 +195,9 @@ describe("shapes and loading", () => {
             unknown
         >
         snap.argument = standard as typeof snap.argument
-        expect(() => ArgumentEngine.fromSnapshot(snap, aLib())).toThrow()
+        expect(() => ArgumentEngine.fromSnapshot(snap, aLib())).toThrow(
+            /not a response/
+        )
     })
 
     it("refuses to load a binding into an argument other than the one answered", () => {
@@ -163,7 +205,9 @@ describe("shapes and loading", () => {
         snap.variables.variables = snap.variables.variables.map((v) =>
             v.id === "v-x" ? { ...v, boundArgumentId: "arg-other" } : v
         )
-        expect(() => ArgumentEngine.fromSnapshot(snap, aLib())).toThrow()
+        expect(() => ArgumentEngine.fromSnapshot(snap, aLib())).toThrow(
+            /is bound into argument "arg-other"/
+        )
     })
 
     it("loads a binding on another version of the argument answered and reports E-10", () => {
@@ -195,13 +239,13 @@ describe("shapes and loading", () => {
         const eng = responseWithLink()
         expect(() =>
             eng.updateVariable("v-x", { boundExpressionId: "e-other" })
-        ).toThrow()
+        ).toThrow(/Rebase the response/)
         expect(() =>
             eng.updateVariable("v-x", { boundAspect: "inference" })
-        ).toThrow()
+        ).toThrow(/Rebase the response/)
         expect(() =>
             eng.updateVariable("v-x", { boundArgumentVersion: 4 })
-        ).toThrow()
+        ).toThrow(/Rebase the response/)
     })
 
     it("refuses turning an expression-bound variable into another kind", () => {
@@ -211,7 +255,7 @@ describe("shapes and loading", () => {
                 claimId: "claim-default",
                 claimVersion: 0,
             })
-        ).toThrow()
+        ).toThrow(/on an expression-bound variable/)
     })
 
     it("still renames", () => {
