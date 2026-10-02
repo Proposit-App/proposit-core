@@ -219,8 +219,8 @@ Example: Y.1 answers X.3, and Z.0 answers Y.1. Publishing X.4 changes nothing in
     - externally premise-bound: `(boundArgumentId, boundPremiseId)`;
     - expression-bound: `(boundArgumentId, boundExpressionId, boundAspect)`.
   - Other arguments' versions are left out of the hash, so a rebase of Y does not change the hash of Z's bindings into Y. They are not ignored, though: each re-pinned outside reference is followed when the caller supplies the snapshots it needs, and reported when it does not (`outsideReferenceRepinned`, below).
-- **`classifyBindings(response, targetFrom, targetTo)`.** `targetTo` must have the same argument id as `targetFrom`. Each expression-bound variable is classified against the snapshot of its own `boundArgumentVersion`. A variable already bound to `targetTo`'s version is reported `alreadyRebased`, which is how a partly saved rebase gets finished. Every other variable must be bound to `targetFrom`'s version. Each entry gives the variable id, the premise ids that use it (marking which are links), and one label:
-  - `unchanged`: the same expression id is present in `targetTo`, with the same fingerprint, the same **position class**, and the same set of `(argumentId, argumentVersion)` pairs referenced from inside the subtree.
+- **`classifyBindings(response, targetFrom, targetTo, options?)`**, where `options.outsideSnapshots` is described below. `targetTo` must have the same argument id as `targetFrom`. Each expression-bound variable is classified against the snapshot of its own `boundArgumentVersion`. A variable already bound to `targetTo`'s version is reported `alreadyRebased`, which is how a partly saved rebase gets finished. Every other variable must be bound to `targetFrom`'s version. Each entry gives the variable id, the premise ids that use it (marking which are links), and one label:
+  - `unchanged`: the same expression id is present in `targetTo`, with the same fingerprint, the same **position class**, and every `(argumentId, argumentVersion)` pair referenced from inside the subtree either the same or re-pinned with no change, as judged below.
   - `changed`: the id is present, but something differs. The entry's `reasons` say what, from `content`, `position` and `outsideReferenceRepinned`.
     - **Departure, an addition:** position class is one of root of a freeform premise, root of the conclusion premise, nested, or inside a derivation premise. The sibling item carries a move differently by position class.
     - **Re-pinned outside references.** A reference inside the subtree may point at a different version of some third argument in `targetTo` than in `targetFrom`. Example: Z.1 is brought from Y.1 to Y.2, and Y.2 itself moved from X.3 to X.4, so Y's link expressions now reference X.4 instead of X.3. `classifyBindings` takes an optional `outsideSnapshots`: snapshots of other arguments, each identified by its id and version.
@@ -234,7 +234,7 @@ Example: Y.1 answers X.3, and Z.0 answers Y.1. Publishing X.4 changes nothing in
   - `alreadyRebased`: as above.
 
   Separately, `claimBindingConflicts` lists each claim-bound variable in the response for a claim that `targetTo` uses and `targetFrom` did not. This answers intake Q4.
-- **`rebaseResponse(targetFrom, targetTo, decisions)`** is an `ArgumentEngine` mutation.
+- **`rebaseResponse(targetFrom, targetTo, decisions, options?)`**, taking the same `outsideSnapshots`, is an `ArgumentEngine` mutation.
   - **Departure:** the intake names this `rebaseChanges` and describes it as returning a changeset. No changeset can be produced without mutating an engine. So, like every other mutation, it returns `TCoreMutationResult`, whose `changes` (including the argument entity's new `respondsTo`) the caller persists. It rolls back entirely on any failure.
   - It recomputes the classification itself and consults `canBind` for `targetTo`.
   - It sets `respondsTo` to `targetTo`, and re-points every `unchanged` variable.
