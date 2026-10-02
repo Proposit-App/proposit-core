@@ -96,6 +96,11 @@
   evaluated premise names it, and the refusal uses the code
   `ASSIGNMENT_UNKNOWN_VARIABLE` (it was `ASSIGNMENT_MISSING_VARIABLE`). Pinned
   by `test/evaluation/strict-unknown-keys.test.ts`.
+- `validateEvaluability` warned `EXPR_BOUND_PREMISE_EMPTY` for every variable
+  bound to a premise in another argument, because it looked the premise up
+  among this argument's own; when a local premise shared the id, the warning
+  described that unrelated premise. A premise in another argument is no longer
+  checked here. Pinned by `test/core/variables.test.ts`.
 
 ## Tests
 

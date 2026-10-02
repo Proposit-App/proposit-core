@@ -66,6 +66,8 @@ and returns an assignment under which every premise holds, when there is one.
 - `strictUnknownAssignmentKeys` now accepts an assignment with values for
   variables in several premises; it rejected nearly every real assignment
   before. Its refusal now has the code `ASSIGNMENT_UNKNOWN_VARIABLE`.
+- A variable bound to a premise in another argument no longer draws a warning
+  that its premise is empty.
 
 ## Migrating
 
