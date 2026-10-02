@@ -343,8 +343,10 @@ export interface TVariableManagement<
      */
     buildVariableIndex<K>(keyFn: (v: TVar) => K): Map<K, TVar>
     /**
-     * Returns all premise-bound variables whose `boundPremiseId` matches the
-     * given premise ID. This is a linear scan over all variables.
+     * Returns the premise-bound variables bound to the given premise of this
+     * argument. A variable bound into another argument is never included, even
+     * when that argument's premise has the same ID. This is a linear scan over
+     * all variables.
      *
      * @param premiseId - The premise ID to filter by.
      * @returns An array of variables bound to the given premise.
