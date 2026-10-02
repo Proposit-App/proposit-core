@@ -204,7 +204,7 @@ export interface TBindingPremiseUse {
     cascaded: boolean
 }
 
-interface TBindingClassificationBase {
+export interface TBindingClassificationBase {
     variableId: string
     /** The bound expression, as the variable names it before any rebase. */
     boundExpressionId: string

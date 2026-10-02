@@ -99,6 +99,25 @@ export type {
     TPremiseSetSatisfiabilityInput,
     TSatisfyingAssignmentResult,
 } from "./core/evaluation/satisfiability.js"
+
+// ---------------------------------------------------------------------------
+// Response arguments
+// ---------------------------------------------------------------------------
+
+export * from "./types/response.js"
+export {
+    elementsWithinPremise,
+    listLinks,
+    validateLinks,
+} from "./core/response/links.js"
+export {
+    positionClassOf,
+    structuralFingerprint,
+} from "./core/response/fingerprint.js"
+export { classifyBindings } from "./core/response/rebase.js"
+export type { TClassifyBindingsOptions } from "./core/response/rebase.js"
+export { linkTargetsElement } from "./core/response/link-reference.js"
+
 export { collectArgumentReferencedClaims } from "./core/review-helpers.js"
 export type { TCollectArgumentReferencedClaimsResult } from "./core/review-helpers.js"
 export { canonicalizeOperatorAssignments } from "./core/review-helpers.js"

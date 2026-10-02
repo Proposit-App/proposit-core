@@ -119,6 +119,7 @@ Function lib.buildPremiseProfile (1)
 Function lib.canonicalSerialize (1)
 Function lib.canonicalizeOperatorAssignments (1)
 Function lib.checkArgumentValidity (1)
+Function lib.classifyBindings (1)
 Function lib.closeUnderAcceptedOperators (1)
 Function lib.codePointLength (1)
 Function lib.collectArgumentReferencedClaims (1)
@@ -137,6 +138,7 @@ Function lib.defaultCompareVariable (1)
 Function lib.defaultGenerateId (1)
 Function lib.deterministicStage (1)
 Function lib.diffArguments (1)
+Function lib.elementsWithinPremise (1)
 Function lib.emptyClaimConnectionLookup (1)
 Function lib.entityChecksum (1)
 Function lib.evaluateArgument (1)
@@ -157,6 +159,8 @@ Function lib.isNakedQTree (1)
 Function lib.isPremiseBound (1)
 Function lib.isPremiseSetSatisfiable (1)
 Function lib.launchStage (1)
+Function lib.linkTargetsElement (1)
+Function lib.listLinks (1)
 Function lib.llmStage (1)
 Function lib.mergeChangesets (1)
 Function lib.midpoint (1)
@@ -165,17 +169,20 @@ Function lib.normalizeOriginText (1)
 Function lib.optional (1)
 Function lib.orderChangeset (1)
 Function lib.parseFormula (1)
+Function lib.positionClassOf (1)
 Function lib.propagateOperatorConstraints (1)
 Function lib.serializeChecksumConfig (1)
 Function lib.sha256Hex (1)
 Function lib.sliceByCodePoints (1)
 Function lib.sliceByCodePointsIndexed (1)
+Function lib.structuralFingerprint (1)
 Function lib.subPipelineStage (1)
 Function lib.validateArgument (1)
 Function lib.validateArgumentAfterPremiseMutation (1)
 Function lib.validateArgumentEvaluability (1)
 Function lib.validateDerivationStructure (1)
 Function lib.validateGrammar (1)
+Function lib.validateLinks (1)
 Function lib/pipelines/scheduling.computeDagProgress (1)
 Function lib/pipelines/scheduling.depId (1)
 Function lib/pipelines/scheduling.hasRequiredFailureUpstream (1)
@@ -194,12 +201,18 @@ Interface lib.TArgumentIdentity
 Interface lib.TArgumentLifecycle
 Interface lib.TArgumentRoleState
 Interface lib.TArgumentValidationContext
+Interface lib.TBindingClassificationBase
+Interface lib.TBindingClassificationResult
+Interface lib.TBindingPremiseUse
 Interface lib.TCanonicalizeOperatorAssignmentsInput
+Interface lib.TClaimBindingConflict
 Interface lib.TClaimConnectionLibraryManagement
 Interface lib.TClaimConnectionLookup
 Interface lib.TClaimLibraryManagement
 Interface lib.TClaimLookup
+Interface lib.TClassifyBindingsOptions
 Interface lib.TCollectArgumentReferencedClaimsResult
+Interface lib.TColumnValue
 Interface lib.TCoreArgumentDiff
 Interface lib.TCoreArgumentEvaluationOptions
 Interface lib.TCoreArgumentEvaluationResult
@@ -241,14 +254,20 @@ Interface lib.TForkRemapTable
 Interface lib.TFormulaTreeVisitor
 Interface lib.TFormulaTreeWalking
 Interface lib.THierarchicalChecksummable
+Interface lib.TLinkReference
+Interface lib.TLinkValidationResult
+Interface lib.TLinkViolation
 Interface lib.TOriginLibraryManagement
 Interface lib.TOriginLookup
 Interface lib.TPremiseClassification
 Interface lib.TPremiseCrud
+Interface lib.TPremiseElements
 Interface lib.TPremiseEvaluation
 Interface lib.TPremiseIdentity
 Interface lib.TPremiseLifecycle
 Interface lib.TPremiseSetSatisfiabilityInput
+Interface lib.TRebaseDecisions
+Interface lib.TResponseLink
 Interface lib.TValidatablePremise
 Interface lib.TVariableManagement
 Interface lib.TVariableReferences
@@ -4970,14 +4989,40 @@ Property lib.TArgumentValidationContext.getVariables.id
 Property lib.TArgumentValidationContext.getVariables.symbol
 Property lib.TArgumentValidationContext.getVariables.symbol
 Property lib.TArgumentValidationContext.getVariables.symbol
+Property lib.TBindingClassification.reasons
+Property lib.TBindingClassification.status
+Property lib.TBindingClassification.status
+Property lib.TBindingClassification.status
+Property lib.TBindingClassification.status
+Property lib.TBindingClassificationBase.boundArgumentVersion
+Property lib.TBindingClassificationBase.boundAspect
+Property lib.TBindingClassificationBase.boundExpressionId
+Property lib.TBindingClassificationBase.premises
+Property lib.TBindingClassificationBase.variableId
+Property lib.TBindingClassificationResult.bindings
+Property lib.TBindingClassificationResult.claimBindingConflicts
+Property lib.TBindingDecision.action
+Property lib.TBindingDecision.action
+Property lib.TBindingDecision.action
+Property lib.TBindingDecision.expressionId
+Property lib.TBindingPremiseUse.cascaded
+Property lib.TBindingPremiseUse.isLink
+Property lib.TBindingPremiseUse.premiseId
 Property lib.TCanonicalizeOperatorAssignmentsInput.expressionOverrides
 Property lib.TCanonicalizeOperatorAssignmentsInput.premiseScope
+Property lib.TClaimBindingConflict.claimId
+Property lib.TClaimBindingConflict.premises
+Property lib.TClaimBindingConflict.variableId
+Property lib.TClaimConflictDecision.action
+Property lib.TClaimConflictDecision.action
+Property lib.TClaimConflictDecision.expressionId
 Property lib.TClaimConnectionLibrarySnapshot.connections
 Property lib.TClaimCreateInput.id
 Property lib.TClaimLibraryManagement.create.claim.id
 Property lib.TClaimLibraryManagement.freeze.current
 Property lib.TClaimLibraryManagement.freeze.frozen
 Property lib.TClaimLibrarySnapshot.claims
+Property lib.TClassifyBindingsOptions.outsideSnapshots
 Property lib.TCodePointIndex.offsets
 Property lib.TCodePointIndex.text
 Property lib.TCollectArgumentReferencedClaimsResult.byId
@@ -4985,6 +5030,18 @@ Property lib.TCollectArgumentReferencedClaimsResult.byId.claimVersion
 Property lib.TCollectArgumentReferencedClaimsResult.byId.premiseIds
 Property lib.TCollectArgumentReferencedClaimsResult.byId.variableIds
 Property lib.TCollectArgumentReferencedClaimsResult.claimIds
+Property lib.TColumnReference.argumentId
+Property lib.TColumnReference.argumentId
+Property lib.TColumnReference.argumentVersion
+Property lib.TColumnReference.aspect
+Property lib.TColumnReference.claimId
+Property lib.TColumnReference.expressionId
+Property lib.TColumnReference.kind
+Property lib.TColumnReference.kind
+Property lib.TColumnReference.kind
+Property lib.TColumnReference.premiseId
+Property lib.TColumnValue.column
+Property lib.TColumnValue.value
 Property lib.TConversation.closed
 Property lib.TConversation.lastResponseId
 Property lib.TConversation.tokenUsage
@@ -5260,6 +5317,33 @@ Property lib.TInvariantViolation.message
 Property lib.TInvariantViolation.premiseId
 Property lib.TLaunchStageResult.responseId
 Property lib.TLaunchStageResult.status
+Property lib.TLinkCheckResult.attemptedSupport
+Property lib.TLinkCheckResult.counterexample
+Property lib.TLinkCheckResult.problems
+Property lib.TLinkCheckResult.reason
+Property lib.TLinkCheckResult.restsOnlyOnLinks
+Property lib.TLinkCheckResult.status
+Property lib.TLinkCheckResult.status
+Property lib.TLinkCheckResult.status
+Property lib.TLinkCheckResult.status
+Property lib.TLinkCheckResult.status
+Property lib.TLinkCheckResult.supportPremiseIds
+Property lib.TLinkElement.claimId
+Property lib.TLinkElement.expressionId
+Property lib.TLinkElement.kind
+Property lib.TLinkElement.kind
+Property lib.TLinkReference.argumentId
+Property lib.TLinkReference.argumentVersion
+Property lib.TLinkReference.premiseId
+Property lib.TLinkValidationResult.ok
+Property lib.TLinkValidationResult.violations
+Property lib.TLinkViolation.claimId
+Property lib.TLinkViolation.code
+Property lib.TLinkViolation.expressionId
+Property lib.TLinkViolation.message
+Property lib.TLinkViolation.premiseIds
+Property lib.TLinkViolation.severity
+Property lib.TLinkViolation.variableId
 Property lib.TLlmOutputCheckFailure.code
 Property lib.TLlmOutputCheckFailure.message
 Property lib.TLlmRequest._typeMarker
@@ -5407,6 +5491,8 @@ Property lib.TPremiseCrud.createPremiseWithId.options.derivedClaimId
 Property lib.TPremiseCrud.createPremiseWithId.options.extras
 Property lib.TPremiseCrud.createPremiseWithId.options.symbol
 Property lib.TPremiseCrud.createPremiseWithId.options.type
+Property lib.TPremiseElements.claimIds
+Property lib.TPremiseElements.expressionIds
 Property lib.TPremiseEngineSnapshot.config
 Property lib.TPremiseEngineSnapshot.expressions
 Property lib.TPremiseEngineSnapshot.premise
@@ -5440,6 +5526,23 @@ Property lib.TReactiveSnapshot.argument
 Property lib.TReactiveSnapshot.premises
 Property lib.TReactiveSnapshot.roles
 Property lib.TReactiveSnapshot.variables
+Property lib.TRebaseDecisions.bindings
+Property lib.TRebaseDecisions.claimBindingConflicts
+Property lib.TResponseCoherenceResult.coherent
+Property lib.TResponseCoherenceResult.coherent
+Property lib.TResponseCoherenceResult.coherent
+Property lib.TResponseCoherenceResult.problems
+Property lib.TResponseCoherenceResult.reason
+Property lib.TResponseCoherenceResult.status
+Property lib.TResponseCoherenceResult.status
+Property lib.TResponseCoherenceResult.status
+Property lib.TResponseCoherenceResult.status
+Property lib.TResponseCoherenceResult.unsatisfiablePremiseIds
+Property lib.TResponseLink.boundAspect
+Property lib.TResponseLink.boundExpressionId
+Property lib.TResponseLink.move
+Property lib.TResponseLink.premiseId
+Property lib.TResponseLink.variableId
 Property lib.TRetrievedResponse.errorMessage
 Property lib.TRetrievedResponse.incompleteReason
 Property lib.TRetrievedResponse.output
@@ -6359,12 +6462,17 @@ TypeAlias lib.TArgumentEngineSnapshot
 TypeAlias lib.TArgumentLibraryLibraries
 TypeAlias lib.TArgumentLibrarySnapshot
 TypeAlias lib.TArgumentParserResult
+TypeAlias lib.TBindingChangeReason
+TypeAlias lib.TBindingClassification
+TypeAlias lib.TBindingDecision
 TypeAlias lib.TBoundAspect
 TypeAlias lib.TClaimBoundVariable
+TypeAlias lib.TClaimConflictDecision
 TypeAlias lib.TClaimConnectionLibrarySnapshot
 TypeAlias lib.TClaimCreateInput
 TypeAlias lib.TClaimLibrarySnapshot
 TypeAlias lib.TCodePointIndex
+TypeAlias lib.TColumnReference
 TypeAlias lib.TConversation
 TypeAlias lib.TCoreAnalysisFile
 TypeAlias lib.TCoreArgument
@@ -6436,6 +6544,10 @@ TypeAlias lib.TJsonObject
 TypeAlias lib.TJsonPrimitive
 TypeAlias lib.TJsonValue
 TypeAlias lib.TLaunchStageResult
+TypeAlias lib.TLinkCheckResult
+TypeAlias lib.TLinkElement
+TypeAlias lib.TLinkMove
+TypeAlias lib.TLinkViolationCode
 TypeAlias lib.TLlmModel
 TypeAlias lib.TLlmOutputCheckFailure
 TypeAlias lib.TLlmProvider
@@ -6468,6 +6580,7 @@ TypeAlias lib.TPipelineEvent
 TypeAlias lib.TPipelineFinalize
 TypeAlias lib.TPipelineResult
 TypeAlias lib.TPopulateResult
+TypeAlias lib.TPositionClass
 TypeAlias lib.TPremiseBoundVariable
 TypeAlias lib.TPremiseEngineSnapshot
 TypeAlias lib.TProcessingFailure
@@ -6478,6 +6591,7 @@ TypeAlias lib.TPropositCoreSnapshot
 TypeAlias lib.TReactivePremiseSnapshot
 TypeAlias lib.TReactiveSnapshot
 TypeAlias lib.TReasoningEffort
+TypeAlias lib.TResponseCoherenceResult
 TypeAlias lib.TResponseId
 TypeAlias lib.TResponseStatus
 TypeAlias lib.TRetrievedResponse
@@ -6492,6 +6606,7 @@ TypeAlias lib.TToolSpec
 TypeAlias lib.TTurnInput
 TypeAlias lib.TTurnResult
 TypeAlias lib.TUUID
+TypeAlias lib.TUndeterminedReason
 TypeAlias lib.TValidatorContext
 TypeAlias lib.TVariableManagerSnapshot
 TypeAlias lib.TVersionedEntity
