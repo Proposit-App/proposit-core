@@ -70,8 +70,11 @@ export type TLlmRequest<T> = {
      * recovered from the upstream's stored copy.
      *
      * Only providers that can surface an id mid-flight invoke it (the
-     * OpenAI provider in background-stream mode, from the first
-     * `response.created` SSE event). Synchronous providers leave it
+     * OpenAI provider in either streaming mode, from the first
+     * `response.created` SSE event). Recovery after an interruption is
+     * guaranteed only in background-stream mode, where the response keeps
+     * generating upstream after the caller disconnects. Synchronous and
+     * poll-only providers leave it
      * uncalled and surface the id only at completion via
      * {@link TLlmResponse.rawResponseId}. Optional: callers that don't
      * set it are unaffected. Invoked at most once per

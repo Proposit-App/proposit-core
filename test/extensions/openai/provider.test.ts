@@ -1117,7 +1117,15 @@ describe("createOpenAiResponsesProvider — abort propagation", () => {
 
 // -- SSE streaming helpers ------------------------------------------
 
-function sseResponse(events: { type: string; response: unknown }[]): Response {
+type TSseFrame = { type: string } & Record<string, unknown>
+
+function sseFrames(events: TSseFrame[]): string {
+    return events
+        .map((e) => `event: ${e.type}\ndata: ${JSON.stringify(e)}\n\n`)
+        .join("")
+}
+
+function sseResponse(events: TSseFrame[]): Response {
     const body = events
         .map((e) => `event: ${e.type}\ndata: ${JSON.stringify(e)}\n\n`)
         .join("")
@@ -1133,10 +1141,7 @@ function sseResponse(events: { type: string; response: unknown }[]): Response {
     })
 }
 
-function sseResponseChunked(
-    events: { type: string; response: unknown }[],
-    splitAt: number
-): Response {
+function sseResponseChunked(events: TSseFrame[], splitAt: number): Response {
     const full = events
         .map((e) => `event: ${e.type}\ndata: ${JSON.stringify(e)}\n\n`)
         .join("")
@@ -1152,6 +1157,39 @@ function sseResponseChunked(
         status: 200,
         headers: { "Content-Type": "text/event-stream" },
     })
+}
+
+// A stream that delivers `early` at once and holds `late` back until the
+// test calls `release()`, so a test can observe what a callback saw while
+// `respond()` is still pending.
+function gatedSseResponse(
+    early: TSseFrame[],
+    late: TSseFrame[]
+): { response: Response; release: () => void } {
+    let release: () => void = () => undefined
+    const gate = new Promise<void>((resolve) => {
+        release = resolve
+    })
+    const encoder = new TextEncoder()
+    const stream = new ReadableStream<Uint8Array>({
+        async start(controller) {
+            controller.enqueue(encoder.encode(sseFrames(early)))
+            await gate
+            controller.enqueue(encoder.encode(sseFrames(late)))
+            controller.close()
+        },
+    })
+    return {
+        response: new Response(stream, {
+            status: 200,
+            headers: { "Content-Type": "text/event-stream" },
+        }),
+        release,
+    }
+}
+
+function letStreamRun(): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, 10))
 }
 
 // -- background-mode helpers ----------------------------------------
@@ -1631,6 +1669,66 @@ describe("OpenAI provider — streaming (Level 1b)", () => {
 })
 
 // -- C-1: backgroundStreamMode tests ------------------------------------
+
+describe("OpenAI provider — foreground streaming callbacks", () => {
+    const completed = (id: string): TSseFrame => ({
+        type: "response.completed",
+        response: {
+            id,
+            status: "completed",
+            output: [
+                {
+                    type: "message",
+                    content: [
+                        {
+                            type: "output_text",
+                            text: JSON.stringify({ answer: "streamed" }),
+                        },
+                    ],
+                },
+            ],
+            usage: { input_tokens: 1, output_tokens: 1 },
+        },
+    })
+
+    it("fires onResponseCreated mid-flight on the default foreground stream", async () => {
+        const { response, release } = gatedSseResponse(
+            [
+                {
+                    type: "response.created",
+                    response: { id: "resp_fg", status: "in_progress" },
+                },
+            ],
+            [completed("resp_fg")]
+        )
+        const provider = createOpenAiResponsesProvider({
+            apiKey: "k",
+            fetch: () => Promise.resolve(response),
+        })
+        const observedIds: string[] = []
+        let resolved = false
+        const pending = provider
+            .respond({
+                model: "gpt-5.4",
+                systemPrompt: "s",
+                userMessage: "u",
+                outputSchema: simpleSchema,
+                onResponseCreated: (id) => observedIds.push(id),
+            })
+            .then((r) => {
+                resolved = true
+                return r
+            })
+
+        await letStreamRun()
+        expect(resolved).toBe(false)
+        expect(observedIds).toEqual(["resp_fg"])
+
+        release()
+        await pending
+        expect(observedIds).toEqual(["resp_fg"])
+    })
+})
 
 describe("OpenAI provider — backgroundStreamMode (background + live SSE)", () => {
     const completedSsePayload = {

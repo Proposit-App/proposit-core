@@ -78,7 +78,7 @@ export async function fetchResponseEnvelope(args: {
             fetchImpl: args.fetchImpl,
             signal: args.signal,
         })
-        return readSseEnvelope(response)
+        return readSseEnvelope(response, args.onResponseId)
     }
     const response = await callOnce({
         url: args.url,

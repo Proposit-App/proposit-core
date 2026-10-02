@@ -83,8 +83,8 @@ function parseSseEvent(raw: string): TParsedSseEvent {
  *
  * `onResponseId`, when supplied, fires the moment the `response.created`
  * lifecycle event is parsed — i.e. while the call is still streaming,
- * before the terminal event arrives. This is the load-bearing seam for
- * background-stream mode: it lets a caller persist the response id
+ * before the terminal event arrives. Both streaming modes pass it. It is
+ * load-bearing for background-stream mode: it lets a caller persist the response id
  * mid-flight so an in-flight call interrupted before completion can be
  * recovered from the upstream's stored copy. Invoked at most once.
  *
