@@ -1367,3 +1367,47 @@ describe("premise checksum in changeset", () => {
         )
     })
 })
+
+describe("strict verification of an argument or premise with nothing beneath it", () => {
+    it("reloads an argument with no premises", () => {
+        const eng = new ArgumentEngine(ARG, aLib())
+        expect(() =>
+            ArgumentEngine.fromSnapshot(eng.snapshot(), aLib(), "strict")
+        ).not.toThrow()
+    })
+
+    it("reloads a premise with no expressions", () => {
+        const eng = new ArgumentEngine(ARG, aLib())
+        eng.createPremise()
+        expect(() =>
+            ArgumentEngine.fromSnapshot(eng.snapshot(), aLib(), "strict")
+        ).not.toThrow()
+    })
+
+    it("reloads both from data", () => {
+        const eng = new ArgumentEngine(ARG, aLib())
+        eng.createPremise()
+        const snap = eng.snapshot()
+        expect(() =>
+            ArgumentEngine.fromData(
+                eng.getArgument(),
+                aLib(),
+                eng.getVariables(),
+                snap.premises.map((ps) => ps.premise),
+                [],
+                eng.getRoleState(),
+                undefined,
+                "strict"
+            )
+        ).not.toThrow()
+    })
+
+    it("still reports a stored checksum that disagrees", () => {
+        const eng = new ArgumentEngine(ARG, aLib())
+        const snap = eng.snapshot()
+        snap.argument = { ...snap.argument, descendantChecksum: "wrong" }
+        expect(() =>
+            ArgumentEngine.fromSnapshot(snap, aLib(), "strict")
+        ).toThrow(/descendantChecksum/)
+    })
+})
