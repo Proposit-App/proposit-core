@@ -181,3 +181,6 @@
 2026-09-30-ieee-citation-dates-render-a-day-off-outside-utc:
   resolution: done
   resolved: '2026-09-30'
+2026-10-02-forking-breaks-bindings-into-another-argument:
+  resolution: done
+  resolved: '2026-10-02'
