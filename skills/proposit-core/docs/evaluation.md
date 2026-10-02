@@ -21,7 +21,7 @@ type TCoreExpressionAssignment = {
     - no entry means ordinary evaluation.
 - `not` operators are not decided. `premise.getDecidableOperatorExpressions()` lists the operators a reader can decide. `canonicalizeOperatorAssignments` expands per-premise decisions into per-operator ones.
 - The conclusion premise and derivation premises are never struck. A rejection recorded on a derivation premise, or on an operator nested inside the conclusion premise, is ignored.
-- A rejection of the conclusion premise's **root** operator means the reader withholds the final step. The result then carries `conclusionInferenceRejected: true`, and nothing else changes: the conclusion premise is not struck and stays out of `struckPremiseIds`, its nested accepted operators keep carrying values, and `conclusionTrue`, `premisesHoldConclusionFalse` and `conclusionAttribution` keep their values.
+- A rejection of the conclusion premise's **root** operator means the reader withholds the final step. A formula (parenthesis) node at the root is looked through, so the operator just inside it is the root. The result then carries `conclusionInferenceRejected: true`, and nothing else changes: the conclusion premise is not struck and stays out of `struckPremiseIds`, its nested accepted operators keep carrying values, and `conclusionTrue`, `premisesHoldConclusionFalse` and `conclusionAttribution` keep their values.
 
 ```typescript
 const rootId = engine.getConclusionPremise()!.getRootExpressionId()!

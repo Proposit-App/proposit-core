@@ -319,10 +319,19 @@ export function evaluateArgument(
     // inference. It is reported here and nowhere else: the conclusion premise
     // is not struck and every aggregate keeps its value, because an operator
     // decision is never a truth value. A rejection of a nested operator in the
-    // conclusion premise stays ignored.
-    const conclusionRootId = conclusion
-        .getExpressions()
-        .find((expr) => expr.parentId === null)?.id
+    // conclusion premise stays ignored. Formula (parenthesis) nodes at the
+    // root are looked through, so the step is the first expression below them.
+    const conclusionExpressions = conclusion.getExpressions()
+    let conclusionRoot = conclusionExpressions.find(
+        (expr) => expr.parentId === null
+    )
+    while (conclusionRoot?.type === "formula") {
+        const formulaId = conclusionRoot.id
+        conclusionRoot = conclusionExpressions.find(
+            (expr) => expr.parentId === formulaId
+        )
+    }
+    const conclusionRootId = conclusionRoot?.id
     const conclusionInferenceRejected =
         conclusionRootId !== undefined &&
         assignment.operatorAssignments[conclusionRootId] === "rejected"

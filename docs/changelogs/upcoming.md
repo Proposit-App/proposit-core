@@ -66,8 +66,8 @@
   Invariant codes `ARG_RESPONDS_TO_ITSELF`,
   `ARG_EXPRESSION_BINDING_OUTSIDE_RESPONSE` and `VAR_BINDING_AMBIGUOUS`.
 - `conclusionInferenceRejected: true` on the evaluation result when the reader
-  rejects the conclusion premise's root operator. Nothing is struck and no other
-  result field changes.
+  rejects the conclusion premise's root operator, read through formula nodes at
+  the root. Nothing is struck and no other result field changes.
 - `findSatisfyingAssignment`, which answers the premise-set satisfiability
   search with a satisfying assignment; `isPremiseSetSatisfiable` wraps it.
 - `defaultCompareArgument` reports a change of `respondsTo`, and

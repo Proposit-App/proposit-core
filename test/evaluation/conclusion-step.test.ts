@@ -4,6 +4,14 @@
 
 import { describe, it, expect } from "vitest"
 import { buildArgument, and, implies, v } from "./fixtures.js"
+import {
+    and as andNode,
+    at,
+    build as buildLabelled,
+    newLib,
+    paren,
+    v as claim,
+} from "../core/response-fixtures.js"
 
 const withoutFlag = (result: object): object => {
     const { conclusionInferenceRejected: _flag, ...rest } = result as {
@@ -82,5 +90,24 @@ describe("rejecting the conclusion's step", () => {
         expect(nestedRejected.conclusionInferenceRejected).toBeUndefined()
         expect(nestedRejected.struckPremiseIds).toEqual(plain.struckPremiseIds)
         expect(nestedRejected.conclusionTrue).toEqual(plain.conclusionTrue)
+    })
+
+    it("reads the operator just inside a formula at the conclusion's root as its step", () => {
+        const built = buildLabelled({
+            id: "a",
+            version: 0,
+            lib: newLib(),
+            conclusion: paren(at("top", andNode(claim("A"), claim("B")))),
+        })
+
+        const result = built.engine.evaluate({
+            variables: {},
+            operatorAssignments: { [built.expr("top")]: "rejected" },
+        })
+
+        expect(result.ok).toBe(true)
+        if (!result.ok) return
+        expect(result.conclusionInferenceRejected).toBe(true)
+        expect(result.struckPremiseIds).toEqual([])
     })
 })
