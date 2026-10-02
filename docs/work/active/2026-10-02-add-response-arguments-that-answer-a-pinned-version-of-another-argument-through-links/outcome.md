@@ -66,3 +66,11 @@ Implemented on `feat/response-arguments`. Not released: it joins 6.0.0 with the 
 
 - The combined review of 6.0.0, the consumer's validation of the release candidate, and the release itself.
 - The carrying item (backlog) is still to be specified.
+
+## Speed, judged (2026-10-02)
+
+The plan's verification item asked a person to read the check timings against expected response sizes. The maintainer, relayed by the requester, judged them acceptable: the 16-column ceiling stays, and above it the checks answer `undetermined` as they do today. The consumer runs the checks when a response is published and in the background after an edit pauses, never on every keystroke. This closes that item.
+
+## Changed after this outcome
+
+Commit 6418cc30: a response may use the claims of the argument it answers (maintainer decision; spec amendment of 2026-10-02). It removes `LINK_CLAIM_USED_BY_TARGET`, `claimBindingConflicts` and `convertToLink`, and makes `positionClassOf` and `linkTargetsElement` look through formula nodes at a premise's root. Commit 8cc1387d, found while specifying the carrying item, fixes `strictUnknownAssignmentKeys`.
