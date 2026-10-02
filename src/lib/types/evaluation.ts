@@ -267,6 +267,19 @@ export interface TCoreArgumentEvaluationResult {
      */
     premisesHoldConclusionFalse?: TCoreQuadrivalentValue
     /**
+     * Present, and `true`, when the reader rejected the conclusion premise's
+     * root operator: they withhold the final inference, so the conclusion is
+     * not established for them.
+     *
+     * Nothing else moves. The conclusion premise is not struck and stays out
+     * of `struckPremiseIds`, its nested accepted operators keep propagating,
+     * and `conclusionTrue`, `premisesHoldConclusionFalse` and
+     * `conclusionAttribution` keep their values — an operator decision is
+     * never a truth value. A rejection of a nested operator inside the
+     * conclusion premise is ignored and sets nothing.
+     */
+    conclusionInferenceRejected?: true
+    /**
      * Variable IDs whose value came out {@link CONTESTED}, sorted. Always
      * present when `ok`, and **not** gated on `includeDiagnostics`.
      *

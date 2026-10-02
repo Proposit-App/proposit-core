@@ -267,6 +267,18 @@ export function evaluateArgument(
         .map((pm) => pm.getId())
     const struckIds = new Set(struckPremiseIds)
 
+    // A rejection of the conclusion premise's root step withholds the final
+    // inference. It is reported here and nowhere else: the conclusion premise
+    // is not struck and every aggregate keeps its value, because an operator
+    // decision is never a truth value. A rejection of a nested operator in the
+    // conclusion premise stays ignored.
+    const conclusionRootId = conclusion
+        .getExpressions()
+        .find((expr) => expr.parentId === null)?.id
+    const conclusionInferenceRejected =
+        conclusionRootId !== undefined &&
+        assignment.operatorAssignments[conclusionRootId] === "rejected"
+
     try {
         const premiseSetSatisfiable =
             options?.premiseSetSatisfiable !== undefined
@@ -508,6 +520,9 @@ export function evaluateArgument(
             supportingPremises: supportingEvaluations.map(strip),
             constraintPremises: constraintEvaluations.map(strip),
             struckPremiseIds,
+            ...(conclusionInferenceRejected
+                ? { conclusionInferenceRejected: true as const }
+                : {}),
             survivingSupportingPremiseCount: survivingSupport.length,
             isAdmissibleAssignment,
             survivingSupportingPremisesTrue,
