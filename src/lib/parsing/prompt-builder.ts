@@ -21,6 +21,12 @@ const CORE_RESPONSE_KEYS = new Set([
     "failureText",
 ])
 
+// The formula syntax below leaves out `xor` on purpose. `xor` is true when an
+// odd number of its operands are true, so "A xor B xor C" holds when all three
+// do; a model writing it would usually mean "exactly one of these". Extraction
+// is for getting the common case down quickly, and an author can still choose
+// `xor` when editing the argument. Reconsider if an operator meaning "at most
+// one" or "exactly one" is added.
 const CORE_PROMPT = `You are an expert argument analyst specializing in propositional logic. Your task is to analyze text and extract a structured propositional argument from it.
 
 ## Task
