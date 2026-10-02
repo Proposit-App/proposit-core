@@ -437,6 +437,47 @@ describe("carrying a statement link into a standard argument", () => {
     })
 })
 
+describe("a claim the lookup cannot resolve", () => {
+    it("is not carried, so an axiom it could not see never reaches evaluation", () => {
+        const lib = newLib()
+        const t = build({
+            id: "x",
+            version: 3,
+            lib,
+            conclusion: v("C"),
+            premises: [implies(at("a", v("A")), v("C"))],
+            claimTypes: { A: "axiomatic" },
+        })
+        const y = build({
+            id: "y",
+            version: 0,
+            lib,
+            respondsTo: t,
+            premises: [labelled("L", not(x("a")))],
+        })
+        // The response's own library, standing in for one that does not hold
+        // the answered argument's claims.
+        const result = y.engine.carryAnswers(
+            t.engine.snapshot(),
+            { [y.premise("L")]: "agree" },
+            newLib()
+        )
+        expect(result).toMatchObject({
+            status: "carried",
+            variables: {},
+            notCarried: [{ premiseId: y.premise("L"), reason: "unknownClaim" }],
+        })
+        if (result.status !== "carried" || result.intoResponse) return
+        const merged = mergeCarriedInput({}, result)
+        expect(() =>
+            t.engine.evaluate({
+                variables: merged.variables,
+                operatorAssignments: merged.operatorAssignments,
+            })
+        ).not.toThrow()
+    })
+})
+
 describe("carrying an inference link into a standard argument", () => {
     const step = (
         premises: (TNode | TPremiseSpec)[],
@@ -657,7 +698,7 @@ describe("what carries, and from where", () => {
     })
 
     it("unanswered and disagreed links carry nothing, even one that would come out true", () => {
-        const { carried } = carryOne({
+        const { t, carried } = carryOne({
             conclusion: at("c", v("C")),
             premises: [at("pc", implies(v("P"), v("C"))), v("P")],
             response: [
@@ -666,6 +707,14 @@ describe("what carries, and from where", () => {
             ],
             answers: { denied: "disagree" },
         })
+        // With P asserted and the step granted, C comes out true by
+        // propagation: what the unanswered affirm says holds, yet it carries
+        // nothing.
+        const withStep = t.engine.evaluate({
+            variables: { [t.variable("P")]: true },
+            operatorAssignments: { [t.expr("pc")]: "accepted" },
+        })
+        expect(withStep.assignment?.variables[t.variable("C")]).toBe(true)
         expect(carried().variables).toEqual({})
         expect(carried().operatorAssignments).toEqual({})
         expect(carried().sources).toEqual([])
@@ -766,28 +815,29 @@ describe("refusing to carry", () => {
         expect(result.status).toBe("invalid")
     })
 
-    it("refuses a snapshot of another argument or version", () => {
-        const { y, lib } = carryOne({
-            conclusion: at("c", v("C")),
-            response: [labelled("L", x("c"))],
-            answers: {},
-        })
-        const elsewhere = build({
-            id: "x",
-            version: 4,
-            lib,
-            conclusion: v("C"),
-        })
-        const result = y.engine.carryAnswers(
-            elsewhere.engine.snapshot(),
-            {},
-            lib
-        )
-        expect(result).toMatchObject({
-            status: "invalid",
-            problems: [{ code: "LINK_TARGET_MISMATCH" }],
-        })
-    })
+    it.each([
+        ["another version", "x", 4],
+        ["another argument", "w", 3],
+    ] as [string, string, number][])(
+        "refuses a snapshot of %s",
+        (_, id, version) => {
+            const { y, lib } = carryOne({
+                conclusion: at("c", v("C")),
+                response: [labelled("L", x("c"))],
+                answers: {},
+            })
+            const elsewhere = build({ id, version, lib, conclusion: v("C") })
+            const result = y.engine.carryAnswers(
+                elsewhere.engine.snapshot(),
+                {},
+                lib
+            )
+            expect(result).toMatchObject({
+                status: "invalid",
+                problems: [{ code: "LINK_TARGET_MISMATCH" }],
+            })
+        }
+    )
 
     it("refuses a response whose links do not fit the snapshot", () => {
         const { t, y, lib } = carryOne({
@@ -811,6 +861,7 @@ describe("a carried statement means exactly what its link says", () => {
         ["contradicting P → Q", implies(v("P"), v("Q")), false, []],
         ["contradicting a lone claim", v("Q"), false, []],
         ["affirming a wrapped Q ∧ R", paren(and(v("Q"), v("R"))), true, []],
+        ["contradicting a cited claim", v("S"), false, []],
         [
             "contradicting S ∧ Q, with S grounded by the response",
             and(v("S"), v("Q")),

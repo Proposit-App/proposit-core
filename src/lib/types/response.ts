@@ -267,6 +267,9 @@ export type TLinkAnswer = "agree" | "disagree"
  *
  * - `axiom`: the link fixes an axiom-bound claim false, or fixes nothing but
  *   axiom-bound claims true, which they already are.
+ * - `unknownClaim`: the claim lookup passed to `carryAnswers` does not hold a
+ *   claim the link fixes, at the version the argument binds, so whether it is
+ *   an axiom cannot be told.
  * - `notExpressible`: what the link says about its expression is not a set of
  *   fixed values, as with contradicting `Q ∧ R`.
  * - `impossible`: the expression can never have the value the link gives it.
@@ -289,6 +292,7 @@ export type TLinkAnswer = "agree" | "disagree"
  */
 export type TNotCarriedReason =
     | "axiom"
+    | "unknownClaim"
     | "notExpressible"
     | "impossible"
     | "vacuous"

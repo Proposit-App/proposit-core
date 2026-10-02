@@ -197,7 +197,10 @@ function carryStatement(
                     variable.claimId,
                     variable.claimVersion
                 )
-                if (claim?.type === "axiomatic") {
+                // Without the claim there is no telling whether it is an
+                // axiom, and evaluation throws on an assigned axiom.
+                if (claim === undefined) return { reason: "unknownClaim" }
+                if (claim.type === "axiomatic") {
                     // An axiom is always true: fixing it true adds nothing,
                     // and fixing it false contradicts it.
                     if (!value) return { reason: "axiom" }
