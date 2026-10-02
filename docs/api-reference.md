@@ -1826,7 +1826,7 @@ Every `agree` answer appears in `sources` or `notCarried`. It never throws on an
 
 This deliberately differs from `checkLink` when the response grounds a claim E also uses: `checkLink` holds that claim true, but carrying does not, so a link's carried meaning never depends on the response's own reasons. A response that cites S and contradicts the target's `S ∧ Q` carries nothing (`notExpressible`).
 
-A fixed claim value goes onto **every** variable bound to that claim in the premises evaluation reads (an unpopulated naked-Q derivation premise is not one). An axiom-bound variable, decided at its own claim version, is skipped when the value is `true`; a `false` value makes the whole link `axiom`, and so does a link whose every value is skipped. A citation-bound variable is carried: a reader may disagree with a source. A fixed value of a premise of a third argument goes onto the variable bound to it.
+A fixed claim value goes onto **every** variable bound to that claim in the premises evaluation reads (an unpopulated naked-Q derivation premise is not one). When `targetClaims` cannot resolve such a variable's claim at its version, the whole link is `unknownClaim`: whether the claim is an axiom cannot be told, and `evaluate` throws on an assigned axiom. An axiom-bound variable, decided at its own claim version, is skipped when the value is `true`; a `false` value makes the whole link `axiom`, and so does a link whose every value is skipped. A citation-bound variable is carried: a reader may disagree with a source. A fixed value of a premise of a third argument goes onto the variable bound to it.
 
 **Inference links.** A reinforce carries `accepted` and an undercut `rejected`, following what evaluation does with the decision:
 
@@ -1847,7 +1847,7 @@ A fixed claim value goes onto **every** variable bound to that claim in the prem
 
 **Conflicts.** When agreed links of one response fix one variable, decide one operator, or answer one link both ways, every link involved carries nothing (`conflict`, with `conflictsWith` naming the others): carrying only the uncontested part of a link would assert less than it says. This happens only in a response `checkResponseCoherent` calls incoherent; carrying does not require coherence.
 
-**Reasons a link carries nothing** (`TNotCarriedReason`): `axiom`, `notExpressible`, `impossible`, `vacuous`, `tooLarge`, `nestedReinforce`, `nonConditionalRoot`, `ignoredInConclusion`, `derivationOperator`, `linkStep`, `noLinkReached`, `conflict`, and `notALink` for an `agree` on a premise that is not a link (a `disagree` there is not reported).
+**Reasons a link carries nothing** (`TNotCarriedReason`): `axiom`, `unknownClaim`, `notExpressible`, `impossible`, `vacuous`, `tooLarge`, `nestedReinforce`, `nonConditionalRoot`, `ignoredInConclusion`, `derivationOperator`, `linkStep`, `noLinkReached`, `conflict`, and `notALink` for an `agree` on a premise that is not a link (a `disagree` there is not reported). Into a standard argument, `noLinkReached` means the link's values reach no variable evaluation reads, for example a claim used only in an unpopulated naked-Q derivation premise.
 
 #### `mergeCarriedInput(own, carried)` → `TMergedCarriedInput`
 

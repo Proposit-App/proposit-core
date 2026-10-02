@@ -107,6 +107,8 @@ and returns an assignment under which every premise holds, when there is one.
 - **Keep ids stable across versions.** Rebasing a response matches the
   answered argument's expressions by id between its versions. If you copy an
   argument into a new version, keep the ids of everything that persists.
+- **Implementing `TArgumentEvaluation` yourself?** It gains `carryAnswers`;
+  add it, or extend `ArgumentEngine` instead.
 - **A renamed refusal code.** With `strictUnknownAssignmentKeys: true`, an
   assignment naming a variable that no evaluated premise uses is now refused
   with `ASSIGNMENT_UNKNOWN_VARIABLE` instead of `ASSIGNMENT_MISSING_VARIABLE`.

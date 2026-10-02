@@ -23,6 +23,8 @@
   (variable fields) are hashed under every checksum configuration, including a
   configuration stored in an older snapshot. They are hashed only when
   present, so no existing checksum changes.
+- The public `TArgumentEvaluation` interface gains `carryAnswers`, so a class
+  implementing it itself must add the method.
 - With `strictUnknownAssignmentKeys: true`, an assignment key that no evaluated
   premise names is refused with the code `ASSIGNMENT_UNKNOWN_VARIABLE`; it was
   `ASSIGNMENT_MISSING_VARIABLE`. Code matching the old code must match the new
