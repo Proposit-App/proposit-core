@@ -1486,13 +1486,13 @@ export class ArgumentEngine<
      * `respondsTo` and every variable re-pointed, added or removed.
      *
      * @returns The classification the rebase acted on.
-     * @throws When `canBind` refuses `targetTo`; when a binding or conflict
-     * needing a decision has none, or a decision names one needing none; when
-     * a removed binding is kept; when a keep or retarget would bind an
-     * expression another variable already binds in the same aspect; when a
-     * conversion names an expression that is not an occurrence of the claim,
-     * or the claim is a citation or is derived by a derivation premise of
-     * the response; or when the check above fails.
+     * @throws When this argument is not a response, or the snapshots are not
+     * versions of the argument it answers; when `canBind` refuses `targetTo`;
+     * when a changed or removed binding has no decision, or a decision names
+     * a variable needing none; when a removed binding is kept; when a
+     * retarget names an expression absent from `targetTo`; when a keep or
+     * retarget would bind an expression another variable already binds in
+     * the same aspect; or when the check above fails.
      */
     public rebaseResponse(
         targetFrom: TArgumentEngineSnapshot,

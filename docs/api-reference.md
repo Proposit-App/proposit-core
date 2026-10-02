@@ -1757,6 +1757,7 @@ An `ArgumentEngine` mutation that moves a response to `targetTo`. `decisions` is
 
 It throws, and changes nothing, when:
 
+- this argument is not a response, or the snapshots are not versions of the argument it answers;
 - `canBind` refuses `targetTo`;
 - a binding that needs a decision has none, or a decision names a variable that needs none;
 - `keep` is given for a `removed` binding;
@@ -1765,7 +1766,7 @@ It throws, and changes nothing, when:
 
 **Postcondition.** Before returning, it checks that every expression-bound variable is bound to `targetTo`'s version and names an expression present in `targetTo`, and that `validateLinks` against `targetTo` reports no error it did not report before the rebase (compared by code, variable id and expression id). If the check fails, the mutation throws and the whole rebase is rolled back.
 
-`changes` holds the argument with its new `respondsTo`, every variable re-pointed, added or removed, and every premise and expression the drops and conversions removed or changed. The consumer persists it like the changeset of any other mutation.
+`changes` holds the argument with its new `respondsTo`, every variable re-pointed, added or removed, and every premise and expression the drops removed. The consumer persists it like the changeset of any other mutation.
 
 #### `structuralFingerprint(snapshot, expressionId)` → `string`
 
