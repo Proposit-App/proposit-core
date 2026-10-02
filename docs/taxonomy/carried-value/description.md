@@ -1,0 +1,1 @@
+A value an agreed link of a response puts into the reader's input for the argument the response answers: a variable value, an operator decision, or an answer on another response's link. It counts as the reader's own assertion, and names the links it came from.

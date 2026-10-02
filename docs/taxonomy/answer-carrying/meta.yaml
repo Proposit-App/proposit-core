@@ -1,0 +1,6 @@
+name: Answer carrying
+kind: Feature
+relatesTo: []
+vocabulary:
+- argument
+- carried-value
