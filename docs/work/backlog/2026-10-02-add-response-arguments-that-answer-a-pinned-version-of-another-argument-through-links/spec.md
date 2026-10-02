@@ -218,12 +218,18 @@ Example: Y.1 answers X.3, and Z.0 answers Y.1. Publishing X.4 changes nothing in
     - internally premise-bound: the bound premise's root fingerprint, recursively;
     - externally premise-bound: `(boundArgumentId, boundPremiseId)`;
     - expression-bound: `(boundArgumentId, boundExpressionId, boundAspect)`.
-  - Other arguments' versions are left out of the hash, so a rebase of Y does not change the hash of Z's bindings into Y. They are not ignored, though: `outsideReferenceRepinned` below reports them. So when Z.1 is brought from Y.1 to Y.2, and Y.2 was itself moved from X.3 to X.4, each of Z's bindings on a Y expression containing a reference into X (typically Y's own link expressions) is reported `changed` for that reason, and needs a decision. That is noisy but safe: Z sees only Y.1 and Y.2, and cannot tell whether Y kept the old meaning.
+  - Other arguments' versions are left out of the hash, so a rebase of Y does not change the hash of Z's bindings into Y. They are not ignored, though: each re-pinned outside reference is followed when the caller supplies the snapshots it needs, and reported when it does not (`outsideReferenceRepinned`, below).
 - **`classifyBindings(response, targetFrom, targetTo)`.** `targetTo` must have the same argument id as `targetFrom`. Each expression-bound variable is classified against the snapshot of its own `boundArgumentVersion`. A variable already bound to `targetTo`'s version is reported `alreadyRebased`, which is how a partly saved rebase gets finished. Every other variable must be bound to `targetFrom`'s version. Each entry gives the variable id, the premise ids that use it (marking which are links), and one label:
   - `unchanged`: the same expression id is present in `targetTo`, with the same fingerprint, the same **position class**, and the same set of `(argumentId, argumentVersion)` pairs referenced from inside the subtree.
   - `changed`: the id is present, but something differs. The entry's `reasons` say what, from `content`, `position` and `outsideReferenceRepinned`.
     - **Departure, an addition:** position class is one of root of a freeform premise, root of the conclusion premise, nested, or inside a derivation premise. The sibling item carries a move differently by position class.
-    - `outsideReferenceRepinned` means a reference inside the subtree now points at another version of some third argument. Core cannot fetch that argument to tell whether the change matters, so it reports it and lets the caller decide.
+    - **Re-pinned outside references.** A reference inside the subtree may point at a different version of some third argument in `targetTo` than in `targetFrom`. Example: Z.1 is brought from Y.1 to Y.2, and Y.2 itself moved from X.3 to X.4, so Y's link expressions now reference X.4 instead of X.3. `classifyBindings` takes an optional `outsideSnapshots`: snapshots of other arguments, each identified by its id and version.
+      - **Both versions supplied.** If both versions of the referenced argument are present (X.3 and X.4), the referenced element is compared across them: the expression for an expression-bound reference, with its aspect; the bound premise's root for an external premise binding.
+        - **Same.** The element exists in both, with the same structural fingerprint (claim versions included) and the same position class. The re-pin then counts as no change. This applies recursively, so the element's own outside references are judged the same way.
+        - **Different.** Otherwise the binding is `changed` with reason `content`.
+      - **A version missing.** If either version is not supplied, the binding is `changed` with reason `outsideReferenceRepinned`. Core cannot fetch the argument to tell whether the change matters, so it never assumes it does not.
+      - **The outcome when nothing changed.** In the example, with X.3 and X.4 supplied and nothing changed beneath Y's links, every such binding of Z is `unchanged`. The author faces only the argument-level question, "bring Z up to Y.2?". This is the maintainer's decision of 2026-10-02.
+      - **Reach.** Classification therefore reaches as far back as the caller supplies snapshots. The checks in C3 still reach one argument back.
   - `removed`: the id is absent.
   - `alreadyRebased`: as above.
 
@@ -340,7 +346,10 @@ Each names the test file that pins it. All are new unless stated.
     - A deleted operator is `removed`.
     - An unchanged operator moved from a premise root to a nested position is `changed`.
     - Rebasing Y does not mark as `changed` any of Z's variables bound to a Y expression containing no reference into another argument.
-    - A Z variable bound to one of Y's link expressions is `changed` with reason `outsideReferenceRepinned` after Y rebases.
+    - A Z variable bound to one of Y's link expressions, after Y.2 moved from X.3 to X.4:
+      - with X.3 and X.4 supplied and the linked X expression unchanged: `unchanged`;
+      - with the linked X expression's claim version bumped: `changed`, reason `content`;
+      - without X's snapshots: `changed`, reason `outsideReferenceRepinned`.
     - A claim newly used by `targetTo` and claim-bound in the response appears in `claimBindingConflicts`.
     - `rebaseResponse` with a missing decision throws and leaves the snapshot unchanged.
     - After a successful rebase, `diffArguments` between the before and after snapshots reports the `respondsTo` change and each re-pointed variable.
@@ -445,7 +454,7 @@ The second review's findings are all resolved. The rewrite introduced eight defe
 - **B8 (version mismatch):** `validateLinks` reports E-10.
 - **B1 (re-pins cascading down a chain):** the noisy but safe behaviour is kept, and criterion 11 is narrowed to match.
   - The cost: after Y rebases, each of Z's bindings on one of Y's link expressions needs a manual `keep`.
-  - **For the maintainer to confirm at plan approval.**
+  - Superseded by the maintainer's decision recorded below.
 - The `isGroundedVariable` path is corrected.
 
 **For the plan to state:**
@@ -460,3 +469,9 @@ The second review's findings are all resolved. The rewrite introduced eight defe
 - **`fromData` and conclusions.** `fromData` creates premises through `createPremiseWithId`, so the no-automatic-conclusion rule covers that path. A stored conclusion is assigned directly only when present.
 - **Recursion guard.** The recursive expansion of a caller-supplied target snapshot guards against binding cycles.
 - **Documentation.** The reference documentation says that an affirm link cannot be backed by a derivation premise for that same claim; it is backed through a separate claim D and `D → x`.
+
+### Maintainer's decision at spec approval (2026-10-02, relayed by the requester)
+
+Approved: the split, and departures 1-7, 9 and 10 as sent to the requester. Departure 8 is changed. A binding whose meaning provably did not change must not ask for a decision: "If a claim didn't change between versions, then we don't need to ask the user to update anything other than if they want to update the linkage at an argument level."
+
+So C4's re-pinned outside references are followed through caller-supplied `outsideSnapshots`. Without them, the conservative `outsideReferenceRepinned` stays, so nothing is ever silently missed. Criterion 11 is updated to match.
