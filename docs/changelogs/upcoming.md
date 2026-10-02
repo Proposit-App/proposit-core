@@ -29,7 +29,6 @@
   premise names is refused with the code `ASSIGNMENT_UNKNOWN_VARIABLE`; it was
   `ASSIGNMENT_MISSING_VARIABLE`. Code matching the old code must match the new
   one. The repair behind it is under Fixed.
-
 - `TPipelineEvent` gains a member, `stage:llm-text-delta`. A `switch` over
   `kind` with no `default` stops compiling until it handles the new kind.
 
@@ -94,7 +93,6 @@
   explicit input, keeping the reader's value on every collision and listing
   each. Types `TLinkAnswer`, `TCarryResult`, `TCarriedSource`, `TNotCarried`,
   `TNotCarriedReason`, `TCarryCollision` and `TMergedCarriedInput`.
-
 - `stage:llm-text-delta` pipeline event (`{ stageId, attempt, delta, at }`),
   emitted by `llmStage` once per chunk of streamed assistant output text,
   between `stage:llm-request` and `stage:llm-call`. Not emitted after the
@@ -123,7 +121,6 @@
   and a premise) failed to load with `Variable symbol "…" already exists.`
   It now fails naming the problem, `VAR_BINDING_AMBIGUOUS`. Pinned by
   `test/core/response-links.test.ts`.
-
 - `strictUnknownAssignmentKeys: true` rejected every assignment that gave
   values to variables in two different premises, because each premise was
   checked against its own variables. A key is now unknown only when no
@@ -135,7 +132,6 @@
   among this argument's own; when a local premise shared the id, the warning
   described that unrelated premise. A premise in another argument is no longer
   checked here. Pinned by `test/core/variables.test.ts`.
-
 - The OpenAI provider's default foreground stream dropped the
   `response.created` id instead of passing it to `onResponseCreated`, so
   `stage:llm-response-created` fired only at completion. It now fires
@@ -143,7 +139,6 @@
   A function-tool loop still reports its id at completion, since a
   mid-flight id would be the first round's rather than the last round's that
   `stage:llm-call` carries.
-
 - `formatCitationParts` threw `TypeError: d.getUTCMonth is not a function` for
   any reference whose date fields held ISO strings, the form a reference
   takes after `JSON.stringify` and `JSON.parse` without `Value.Decode`. The
@@ -161,7 +156,6 @@
   round trips, rollbacks, strict reloads, `setExtras` and forking
   (`test/core/checksum-stability.test.ts`, built by
   `scripts/checksum-fixtures/`).
-
 - SSE fixtures for `response.output_text.delta` now use the documented wire
   shape (top-level `delta`, not nested under `response`).
 - The mock provider takes `deltas` and `lateDeltas` on `ok` and
