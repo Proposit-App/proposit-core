@@ -936,7 +936,7 @@ Naked-Q (a derivation premise whose tree is a single variable bound to `derivedC
 
 ### Response arguments
 
-A response carries `respondsTo` and answers that argument through links (see `docs/api-reference.md`).
+A response carries `respondsTo` and answers that argument through links (see `docs/api-reference.md`). A reader's agreement with a response's links is carried into the argument it answers with `carryAnswers` and `mergeCarriedInput`; a link that cannot be carried exactly is reported, never thrown on (see "Carrying a reader's answers" there).
 
 | Invalid construction                                                                         | What happens / code                                                                  |
 | -------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |

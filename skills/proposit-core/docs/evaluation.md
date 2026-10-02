@@ -131,7 +131,8 @@ Other variable kinds:
 ### Default assignments
 
 - `deriveDefaultAssignment()` returns a starting value for every variable. Citation and axiomatic claims start `true`. A normal claim starts `true` only when its derivation premise's antecedent is made true by citation or axiomatic claims alone. Everything else starts `null`. It never returns `false`.
-- `evaluateWithDefaults(overrides?, options?)` merges your overrides over those defaults and evaluates. It drops the axiomatic keys, so it does not trip the axiom rule.
+- `evaluateWithDefaults(overrides?, options?, operatorAssignments?)` merges your overrides over those defaults and evaluates, passing `operatorAssignments` through to `evaluate`. It drops the axiomatic keys, so it does not trip the axiom rule.
+- **With values carried from a response**, the order is defaults, then carried values, then the reader's own: `evaluateWithDefaults(merged.variables, options, merged.operatorAssignments)` with `merged = mergeCarriedInput(explicit, carried)`. Pass only the reader's explicit input as `explicit`, never the defaults, or a citation's default `true` would outrank a carried "the citation is false".
 
 If you build your own assignment from the defaults and call `evaluate` directly, remove the axiom-bound keys but **keep** the citation-bound ones. Dropping those would leave the citations unknown.
 

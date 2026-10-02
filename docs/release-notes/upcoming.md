@@ -45,6 +45,23 @@ in a response is its reasons.
 `linkTargetsElement` tells you whether a stored link reference is about a
 given claim or expression.
 
+### Carrying a reader's answers
+
+A reader who agrees with a response's links can now see that agreement in the
+argument the response answers. `carryAnswers` on the response turns the
+reader's `agree` answers into input for the argument answered, and
+`mergeCarriedInput` adds it to the reader's own input, keeping the reader's
+value wherever the two differ and listing each difference. Pass the merged
+values to `evaluateWithDefaults`, which now also takes operator decisions.
+
+Carrying is exact. A link carries what it says and nothing it does not:
+affirming `Q ∧ R` carries Q and R true, but contradicting `Q ∧ R` carries
+nothing, because no fixed values say "not both". A link that cannot be carried
+is reported with the reason, never approximated and never dropped. Carried
+values count as the reader's own assertions in attribution, and each one names
+the links it came from. For a chain of answers, carry one step at a time:
+carrying into another response gives answers on its links.
+
 ### Rejected conclusion step
 
 When a reader rejects the conclusion premise's root operator, the evaluation

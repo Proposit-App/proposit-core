@@ -76,9 +76,25 @@
 - `defaultCompareArgument` reports a change of `respondsTo`, and
   `defaultCompareVariable` compares `boundExpressionId` and `boundAspect`.
 - `toDisplayString` on a response names the argument and version it answers.
+- `ArgumentEngine.carryAnswers(targetSnapshot, linkAnswers, targetClaims)`,
+  which reads what a reader's `agree` answers on a response's links carry into
+  the argument it answers: variable values and operator decisions, or answers
+  on another response's links. A statement link carries the fixed claim values
+  its expression's expansion reduces to, read with every column free; a
+  reinforce carries `accepted` only at an `implies` or `iff` premise root; an
+  undercut carries `rejected` where evaluation honours one. Every value names
+  its links in `sources`, and every agreed link that carries nothing is in
+  `notCarried` with a `TNotCarriedReason`.
+- `mergeCarriedInput(own, carried)`, which adds carried values to the reader's
+  explicit input, keeping the reader's value on every collision and listing
+  each. Types `TLinkAnswer`, `TCarryResult`, `TCarriedSource`, `TNotCarried`,
+  `TNotCarriedReason`, `TCarryCollision` and `TMergedCarriedInput`.
 
 ## Changed
 
+- `evaluateWithDefaults` takes an optional third parameter,
+  `operatorAssignments`, passed to `evaluate` unchanged. Existing calls behave
+  as before.
 - The satisfiability walk stops evaluating a row at its first false premise.
   Answers and witnesses are unchanged; a search with no satisfying row is
   several times faster.

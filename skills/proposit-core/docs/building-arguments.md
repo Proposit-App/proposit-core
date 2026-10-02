@@ -442,3 +442,40 @@ console.log(validateLinks(y, x.snapshot()).ok) // true
 ```
 
 [evaluation.md](evaluation.md#checking-a-response) continues this example with the checks, and [forking-and-diffs.md](forking-and-diffs.md#moving-a-response-to-a-newer-version) with moving Y to a newer version of X.
+
+### Carrying a reader's answers
+
+A reader who agrees with a response's links has asserted what they say about the argument answered. `y.carryAnswers(targetSnapshot, linkAnswers, targetClaims)` turns that into input for X; `mergeCarriedInput(own, carried)` adds it to the reader's own input. Continuing the example, with `mergeCarriedInput` added to the import:
+
+```typescript
+// The reader agrees with both of Y's links.
+const carried = y.carryAnswers(
+    x.snapshot(),
+    { "y-contradict": "agree", "y-undercut": "agree" },
+    core.claims
+)
+if (carried.status === "carried" && !carried.intoResponse) {
+    console.log(carried.variables) // { [xq]: false }
+    console.log(carried.operatorAssignments) // { "x-step": "rejected" }
+
+    // The reader also holds P true. Carried values sit between the defaults
+    // and the reader's own input.
+    const merged = mergeCarriedInput({ variables: { [xp]: true } }, carried)
+    const result = x.evaluateWithDefaults(
+        merged.variables,
+        undefined,
+        merged.operatorAssignments
+    )
+    console.log(result.conclusionTrue) // false
+    console.log(result.struckPremiseIds) // [step.getId()]: the undercut struck it
+}
+```
+
+- **Only `agree` answers carry**, and only links, never the response's other premises.
+- **A statement link carries fixed claim values** when what it says is exactly that: affirming `Q ∧ R` carries Q and R true, contradicting `P → Q` carries P true and Q false. Contradicting `Q ∧ R` says less than any fixed values would, so it carries nothing and is reported `notExpressible`. The expression is read with every claim free, even one the response itself cites.
+- **A reinforce carries `accepted` only at a premise root that is `implies` or `iff`.** At any other root, or below a root, accepting the operator would assert a statement, not a step. An undercut carries `rejected` wherever evaluation honours a rejection.
+- **Every `agree` is accounted for**: each carried value lists its links in `sources`, and each link that carried nothing is in `notCarried` with its reason. Agreed links that fix something both ways all carry nothing (`conflict`).
+- **Into another response** (Z answers Y), the result is answers on Y's links (`intoResponse: true`, `linkAnswers`). Merge them with the reader's own answers on Y, then carry Y into X.
+- **The reader's own value wins** every collision in `mergeCarriedInput`, and each collision is listed. Carried values enter `variables`, so attribution counts them as the reader's assertions.
+
+The full rules are under "Carrying a reader's answers" in the API reference.

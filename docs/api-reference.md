@@ -442,11 +442,13 @@ Consumers key their state by `claimId`; translate with `getVariableIdForClaim` /
 
 ---
 
-### `evaluateWithDefaults(overrides?, options?)` → `TArgumentEvaluationResult` (since 3.1.0)
+### `evaluateWithDefaults(overrides?, options?, operatorAssignments?)` → `TArgumentEvaluationResult` (since 3.1.0)
 
-Convenience that merges caller `overrides` (`TCoreVariableAssignment`) over `deriveDefaultAssignment()` and calls `evaluate` in one step. Default-sourced **axiomatic-bound** keys are dropped before evaluation (the engine force-sets them `true`), so the defaults and the pre-pass agree without tripping `AXIOM_VARIABLE_ASSIGNMENT_FORBIDDEN`. An `override` that names an axiomatic variable is left intact, so `evaluate` still enforces the one-way rule. `options` is the same `TCoreArgumentEvaluationOptions` accepted by `evaluate`.
+Convenience that merges caller `overrides` (`TCoreVariableAssignment`) over `deriveDefaultAssignment()` and calls `evaluate` in one step. `operatorAssignments` (6.0.0) is passed to `evaluate` unchanged; without it no operator decision is made, as before. Default-sourced **axiomatic-bound** keys are dropped before evaluation (the engine force-sets them `true`), so the defaults and the pre-pass agree without tripping `AXIOM_VARIABLE_ASSIGNMENT_FORBIDDEN`. An `override` that names an axiomatic variable is left intact, so `evaluate` still enforces the one-way rule. `options` is the same `TCoreArgumentEvaluationOptions` accepted by `evaluate`.
 
 **Axiom vs. citation asymmetry (important for consumers).** Only **axiomatic**-bound variables are engine-forced: `evaluate` force-sets them `true` and rejects any explicit assignment for them. **Citation**-bound variables are _free_ — the engine does not force them and does not reject an explicit citation assignment. Both read as `true` under `deriveDefaultAssignment`, but the axiom `true` comes from the engine while the **citation `true` is supplied by the map** and is therefore _kept_ (never dropped) when evaluating — dropping it would leave the citation unknown. Consequence for a consumer building its own effective assignment and calling `evaluate` directly: strip axiomatic-bound keys, but **keep** citation-bound keys. Because citations are not locked, a citation default is reviewer-overridable; an axiom is not.
+
+**With values carried from a response** (see "Carrying a reader's answers"), the order is defaults, then carried values, then the reader's own: `evaluateWithDefaults(merged.variables, options, merged.operatorAssignments)`, where `merged = mergeCarriedInput(explicit, carried)` and `explicit` is the reader's explicit input only. Passing defaults as the reader's own input would let a citation's default `true` outrank a carried "the citation is false".
 
 ---
 
@@ -1795,6 +1797,80 @@ Whether a referenced link is about an element of the target. `element` (`TLinkEl
 - for an expression, the link binds that expression, or the root of the premise that contains it. The root is read through formula nodes, as `positionClassOf` reads it, so an undercut of the operator just inside a premise's root formula is about the whole premise.
 
 A reference to another argument, another version, or a premise that is not a link is never about anything. Throws when `targetSnapshot` is not the target of `response`.
+
+### Carrying a reader's answers
+
+A reader who agrees with a response's links has asserted what those links say about the argument answered. Carrying puts that into the reader's input for the argument answered, one step at a time along a chain of answers: Z answers Y, which answers X, is carried Z into Y, then Y into X.
+
+#### `carryAnswers(targetSnapshot, linkAnswers, targetClaims)` → `TCarryResult`
+
+An `ArgumentEngine` method on the response. `linkAnswers` is `Record<premiseId, TLinkAnswer>`, where `TLinkAnswer` is `"agree" | "disagree"`; a link with no entry is unanswered. `targetClaims` is a `TClaimLookup` that resolves the answered argument's claims at the versions it binds, used to tell which are axioms; a snapshot carries no claims, and the response's own library need not hold them.
+
+It answers `{ status: "invalid", problems }` when the engine is not a response, the snapshot is not the argument and version `respondsTo` names (`LINK_TARGET_MISMATCH`), or `validateLinks` reports an error. Otherwise `{ status: "carried", into, sources, notCarried, ... }`:
+
+- into a standard argument, `intoResponse: false` with `variables: Record<variableId, boolean>` and `operatorAssignments: Record<expressionId, "accepted" | "rejected">`;
+- into another response, `intoResponse: true` with `linkAnswers: Record<premiseId, TLinkAnswer>`;
+- `sources`: one `TCarriedSource` per carried value, `{ kind: "variable" | "operator" | "linkAnswer", id, value, linkPremiseIds }`, naming every link the value came from;
+- `notCarried`: one `TNotCarried` per `agree` answer that carried nothing, `{ premiseId, reason, conflictsWith? }`.
+
+Every `agree` answer appears in `sources` or `notCarried`. It never throws on an answer it cannot carry.
+
+**Only `agree` answers carry.** A disagreed or unanswered link carries nothing, and neither does a link that merely evaluates true. Only links carry, never a response's other premises: agreeing with a move is not agreeing with every reason given for it, even when a reason is a claim of the argument answered.
+
+**Statement links.** An affirm says its bound expression E is true, a contradict that it is false. E is expanded the way the checks expand it (claims become one column each, a variable bound to another premise of the argument expands into that premise, a premise of a third argument is one column), and read with **every column free**: nothing outside E enters, not the response's premises, not the claims the response grounds, not the target's axioms. The rows where E has the link's value then fall into one of four cases:
+
+- **a cube**: some columns each have one fixed value and the rest are free. The link carries exactly those fixed values. Affirming `Q ∧ R` carries Q and R true; contradicting `Q ∨ R` carries both false; contradicting `P → Q` carries P true and Q false.
+- **not a cube**, as with contradicting `Q ∧ R` or affirming `P → Q`: `notExpressible`;
+- **no rows**: `impossible`; **every row**: `vacuous`;
+- more columns than `SATISFIABILITY_VARIABLE_CEILING`: `tooLarge`.
+
+This deliberately differs from `checkLink` when the response grounds a claim E also uses: `checkLink` holds that claim true, but carrying does not, so a link's carried meaning never depends on the response's own reasons. A response that cites S and contradicts the target's `S ∧ Q` carries nothing (`notExpressible`).
+
+A fixed claim value goes onto **every** variable bound to that claim in the premises evaluation reads (an unpopulated naked-Q derivation premise is not one). An axiom-bound variable, decided at its own claim version, is skipped when the value is `true`; a `false` value makes the whole link `axiom`, and so does a link whose every value is skipped. A citation-bound variable is carried: a reader may disagree with a source. A fixed value of a premise of a third argument goes onto the variable bound to it.
+
+**Inference links.** A reinforce carries `accepted` and an undercut `rejected`, following what evaluation does with the decision:
+
+| The bound operator                             | Reinforce carries              | Undercut carries                               |
+| ---------------------------------------------- | ------------------------------ | ---------------------------------------------- |
+| root of a freeform premise, `implies` or `iff` | `accepted`                     | `rejected`: the premise is struck              |
+| root of a freeform premise, any other operator | nothing (`nonConditionalRoot`) | `rejected`: the premise is struck              |
+| nested in a freeform premise                   | nothing (`nestedReinforce`)    | `rejected`: the premise is struck              |
+| root of the conclusion, `implies` or `iff`     | `accepted`                     | `rejected`: sets `conclusionInferenceRejected` |
+| root of the conclusion, any other operator     | nothing (`nonConditionalRoot`) | `rejected`: sets `conclusionInferenceRejected` |
+| nested in the conclusion                       | nothing (`nestedReinforce`)    | nothing (`ignoredInConclusion`)                |
+| root of a derivation premise                   | `accepted`                     | nothing (`derivationOperator`)                 |
+| nested in a derivation premise                 | nothing (`nestedReinforce`)    | nothing (`derivationOperator`)                 |
+
+"Root" is read through formula nodes, as `positionClassOf` reads it. Evaluation reads an accepted operator as "this subexpression is true": an accepted `and` forces its children true. That is what reinforcing a conditional's step means, but at any other root it asserts the premise outright, and below a root it asserts a subexpression; neither is what a reinforce says, and an outright assertion would also let attribution report a conclusion reached on the argument's own merits through a value the reader supplied. A rejection asserts nothing: it strikes the premise it lives in, so carrying one never asserts more than the link.
+
+**Into another response.** When the argument answered is itself a response, the result is answers on its links. Each of its links is `x` or `NOT(x)` for one of its expression-bound variables, and the expansion keeps `x` as a column, so whenever an agreed statement link fixes `x`, that value answers every link on `x`: `x` true agrees with an affirm or reinforce link on it and disagrees with a contradict or undercut link, and `x` false the reverse. Values of claims are dropped, since the response answered is never evaluated. A link fixing no `x` is `noLinkReached`; an inference link on a link's `NOT` is `linkStep`, and one on any other operator `noLinkReached`. Agreeing with a link that fixes `x` true when the answered response holds only the contradict link `NOT(x)` therefore disagrees with that link, and carries nothing further.
+
+**Conflicts.** When agreed links of one response fix one variable, decide one operator, or answer one link both ways, every link involved carries nothing (`conflict`, with `conflictsWith` naming the others): carrying only the uncontested part of a link would assert less than it says. This happens only in a response `checkResponseCoherent` calls incoherent; carrying does not require coherence.
+
+**Reasons a link carries nothing** (`TNotCarriedReason`): `axiom`, `notExpressible`, `impossible`, `vacuous`, `tooLarge`, `nestedReinforce`, `nonConditionalRoot`, `ignoredInConclusion`, `derivationOperator`, `linkStep`, `noLinkReached`, `conflict`, and `notALink` for an `agree` on a premise that is not a link (a `disagree` there is not reported).
+
+#### `mergeCarriedInput(own, carried)` → `TMergedCarriedInput`
+
+Adds a `carried` result to the reader's own **explicit** input for the argument it was carried into: `own` is `{ variables?, operatorAssignments?, linkAnswers? }`. Returns `{ variables, operatorAssignments, linkAnswers, collisions }`. The reader's value wins every collision, and each `TCarryCollision` gives `kind`, `id`, `own`, `carried` and the source links. An explicit `null` ("not sure") is not a value: a carried value replaces it without a collision. A value the argument's accepted steps contradict comes out `CONTESTED` at evaluation, as any reader value does. The merged input never contains `CONTESTED`. It does not check that `own` is for `carried.into`.
+
+**Carried values are the reader's assertions.** They enter `variables` and `operatorAssignments`, so evaluation's attribution counts them exactly as the reader's own: `assertedByReader` and `claimAttribution` include them, and a conclusion reached through one is not reached without the reader's assertion. Which link a value came from lives in `sources`, not in the evaluation result.
+
+```typescript
+// Z answers Y, which answers X. The reader agreed with some of Z's links.
+const intoY = z.carryAnswers(ySnapshot, readerAnswersOnZ, claims)
+if (intoY.status === "carried" && intoY.intoResponse) {
+    const onY = mergeCarriedInput({ linkAnswers: readerAnswersOnY }, intoY)
+    const intoX = y.carryAnswers(xSnapshot, onY.linkAnswers, claims)
+    if (intoX.status === "carried" && !intoX.intoResponse) {
+        const merged = mergeCarriedInput(readerInputOnX, intoX)
+        const result = x.evaluateWithDefaults(
+            merged.variables,
+            undefined,
+            merged.operatorAssignments
+        )
+    }
+}
+```
 
 ### Persisting responses: the cross-argument reference
 
