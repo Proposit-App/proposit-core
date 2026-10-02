@@ -3,6 +3,20 @@
 
 import { describe, it, expect } from "vitest"
 import { and, buildArgument, implies, not, or, v } from "./fixtures.js"
+import { mergeCarriedInput } from "../../src/lib/core/response/carry.js"
+import {
+    and as rand,
+    at,
+    build,
+    implies as rimplies,
+    labelled,
+    newLib,
+    not as rnot,
+    s as rs,
+    v as rv,
+    x as rx,
+    type TNode as TResponseNode,
+} from "../core/response-fixtures.js"
 
 describe("conclusion attribution", () => {
     it("reports a conclusion the reader supplied as not reached by the argument", () => {
@@ -291,4 +305,67 @@ describe("conclusion attribution", () => {
             ].sort()
         )
     })
+})
+
+describe("attribution of values carried from a response", () => {
+    const carryAgreed = (
+        conclusion: TResponseNode,
+        premises: TResponseNode[],
+        link: TResponseNode
+    ) => {
+        const lib = newLib()
+        const x = build({ id: "x", version: 3, lib, conclusion, premises })
+        const y = build({
+            id: "y",
+            version: 0,
+            lib,
+            respondsTo: x,
+            premises: [labelled("L", link)],
+        })
+        const carried = y.engine.carryAnswers(
+            x.engine.snapshot(),
+            { [y.premise("L")]: "agree" },
+            lib
+        )
+        if (carried.status !== "carried" || carried.intoResponse)
+            throw new Error("expected values carried into a standard argument")
+        const merged = mergeCarriedInput({}, carried)
+        const result = x.engine.evaluate({
+            variables: merged.variables,
+            operatorAssignments: merged.operatorAssignments,
+        })
+        return { x, carried, result }
+    }
+
+    it("counts a carried value as the reader's assertion", () => {
+        // C is true only because the reader agreed with "C is true".
+        const { result } = carryAgreed(
+            at("c", rv("C")),
+            [rimplies(rv("M"), rv("C"))],
+            rx("c")
+        )
+        expect(result.conclusionTrue).toBe(true)
+        expect(result.conclusionAttribution).toEqual({
+            assertedByReader: true,
+            reachedWithoutAssertion: false,
+        })
+    })
+
+    it.each([
+        ["an and conclusion root", at("op", rand(rv("Q"), rv("R"))), []],
+        ["a not conclusion root", at("op", rnot(rv("Q"))), []],
+        [
+            "a freeform Q ∧ R root, concluding Q",
+            rv("Q"),
+            [at("op", rand(rv("Q"), rv("R")))],
+        ],
+    ] as [string, TResponseNode, TResponseNode[]][])(
+        "never reports a conclusion reached on its own merits through a reinforce of %s",
+        (_, conclusion, premises) => {
+            const { result } = carryAgreed(conclusion, premises, rs("op"))
+            expect(
+                result.conclusionAttribution?.reachedWithoutAssertion
+            ).not.toBe(true)
+        }
+    )
 })
