@@ -2210,7 +2210,10 @@ export class ArgumentEngine<
             // clearing on an empty argument is fine because the
             // invariant ("non-empty argument has a conclusion") is
             // vacuously satisfied.
-            if (this.premises.size > 0) {
+            //
+            // A response is the exception: it has no conclusion, so clearing
+            // one it was stored with (reported by E-8) is always allowed.
+            if (this.premises.size > 0 && !this.isResponse()) {
                 return {
                     result: this.getRoleState(),
                     changes: {},

@@ -125,6 +125,18 @@ describe("a response has no conclusion", () => {
         )
     })
 
+    it("clears a stored conclusion, so a response reported by E-8 can be repaired", () => {
+        const snap = responseWithPremise().snapshot()
+        snap.conclusionPremiseId = "premise-1"
+        const restored = ArgumentEngine.fromSnapshot(snap, aLib())
+        const { result, changes } = restored.clearConclusionPremise()
+        expect(result.conclusionPremiseId).toBeUndefined()
+        expect(changes.roles).toEqual({})
+        expect(restored.validate("evaluable").map((v) => v.code)).not.toContain(
+            "E-8"
+        )
+    })
+
     it("refuses to load a response that names itself", () => {
         const snap = response().snapshot()
         snap.argument = {
