@@ -32,12 +32,23 @@ export const IEEE_MONTHS = [
 export function formatDate(d: Date | string): string {
     const date = toCitationDate(d)
     if (date === undefined) {
-        throw new TypeError(`Not a date: ${JSON.stringify(d)}`)
+        throw new TypeError(`Not a date: ${describeValue(d)}`)
     }
     const month = IEEE_MONTHS[date.getUTCMonth()]
     const day = date.getUTCDate()
     const year = date.getUTCFullYear()
     return `${month} ${day}, ${year}`
+}
+
+// For an error message: `JSON.stringify` writes an invalid `Date` as `null`
+// and throws on a bigint or a cycle, so neither may hide the actual value.
+function describeValue(value: unknown): string {
+    if (value instanceof Date) return String(value)
+    try {
+        return JSON.stringify(value) ?? String(value)
+    } catch {
+        return String(value)
+    }
 }
 
 function toCitationDate(value: unknown): Date | undefined {
@@ -89,7 +100,7 @@ function resolveSource(
             const date = toCitationDate(value)
             if (date === undefined) {
                 throw new TypeError(
-                    `Citation field "${src.field!}" is not a date: ${JSON.stringify(value)}`
+                    `Citation field "${src.field!}" is not a date: ${describeValue(value)}`
                 )
             }
             return formatDate(date)

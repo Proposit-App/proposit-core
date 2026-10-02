@@ -847,7 +847,15 @@ describe("IEEE extension", () => {
         it("formats a reference that came through JSON exactly as the original", () => {
             // A stored citation comes back from JSON with its dates as ISO
             // strings, unless the consumer decodes it first.
-            for (const ref of oneOfEachType()) {
+            const withOptionalDates: TIEEEReference[] = oneOfEachType().map(
+                (ref) =>
+                    ref.type === "Video"
+                        ? { ...ref, releaseDate: new Date("2024-03-01") }
+                        : ref.type === "SocialMedia"
+                          ? { ...ref, accessedDate: new Date("2024-03-02") }
+                          : ref
+            )
+            for (const ref of withOptionalDates) {
                 const stored = JSON.parse(JSON.stringify(ref)) as TIEEEReference
                 expect(formatCitationParts(stored)).toEqual(
                     formatCitationParts(ref)
@@ -856,7 +864,9 @@ describe("IEEE extension", () => {
         })
 
         it("formatDate rejects a value that is not a date", () => {
-            expect(() => formatDate("not a date")).toThrow(TypeError)
+            expect(() => formatDate("not a date")).toThrow(
+                /^Not a date: "not a date"$/
+            )
         })
 
         it("names the field when a date field holds something that is not a date", () => {
@@ -866,6 +876,16 @@ describe("IEEE extension", () => {
             } as unknown as TIEEEReference
             expect(() => formatCitationParts(ref)).toThrow(
                 /accessedDate.*not a date/
+            )
+        })
+
+        it("shows an invalid Date as such in the error, not as null", () => {
+            const ref = {
+                ...validWebsite(),
+                accessedDate: new Date("nonsense"),
+            } as unknown as TIEEEReference
+            expect(() => formatCitationParts(ref)).toThrow(
+                'Citation field "accessedDate" is not a date: Invalid Date'
             )
         })
 
