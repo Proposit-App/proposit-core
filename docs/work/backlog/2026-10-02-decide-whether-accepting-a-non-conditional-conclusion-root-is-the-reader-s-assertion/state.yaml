@@ -1,0 +1,10 @@
+slug: 2026-10-02-decide-whether-accepting-a-non-conditional-conclusion-root-is-the-reader-s-assertion
+title: Decide whether accepting a non-conditional conclusion root is the reader's
+  assertion
+created: '2026-10-02'
+resolution: null
+effort: low
+complexity: medium
+blocked_by:
+- external: 'maintainer decision: is accepting an and/not/or/xor conclusion root a
+    reader assertion?'
