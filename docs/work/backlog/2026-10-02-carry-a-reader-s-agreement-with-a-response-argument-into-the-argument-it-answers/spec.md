@@ -1,45 +1,49 @@
 # Spec: carry a reader's agreement with a response argument into the argument it answers
 
-Line numbers are against `e10555ab`, on `feat/response-arguments`, where response arguments are implemented. "The intake" is the first item's `intake.md`, section C5. "The first spec" is that item's `spec.md`. "The first review" is the adversarial review of the first spec, whose findings on carrying moved here: blocking 1 and 2, and significant 2 and 3. `## Notes` says how each is handled. Every departure from the intake is marked **Departure**, with its reason.
+Second revision, after the first adversarial review of this spec (verdict NOT DONE). Line numbers are against `8cc1387d` on `feat/response-arguments`, where response arguments are implemented.
+
+Sources referred to:
+- **"The intake"**: the first item's `intake.md`, section C5.
+- **"The first spec"**: that item's `spec.md`.
+- **"The first item's review"**: the adversarial review of the first spec. Its carrying findings moved here.
+- **"This review"**: the review of this spec's first draft.
+
+Every departure from the intake is marked **Departure**. `## Notes` says how each finding was handled, and lists one question for the requester that must be answered before planning.
 
 ## Capability changes
 
 The capability ledger is empty (`tcw capabilities list` prints nothing), so no ledger record changes. At implementation time the taxonomy gains:
 
-- **Vocabulary:**
-  - **carried value**: a value one argument's agreed link puts into the input for the argument it answers;
-  - **held premise**: a reader's input saying a whole premise is true or false.
-- **Features:**
-  - **answer carrying** (`carryAnswers`, `mergeCarriedInput`).
-- **Changed features:** `argument-evaluation` gains `heldPremises`.
+- **Vocabulary:** **carried value**, a value one argument's agreed link puts into the reader's input for the argument it answers.
+- **Features:** **answer carrying** (`ArgumentEngine.carryAnswers`, `mergeCarriedInput`).
+- **Changed features:** `argument-evaluation`. `evaluateWithDefaults` gains operator decisions.
 
 ## Problem
 
 Responses can answer arguments (first item), but a reader's verdict on a response stops at the response. Suppose a reader agrees with Y's link "C is false", and Y answers X, whose conclusion is C. When the reader then evaluates X, nothing they agreed to in Y reaches X. They must re-enter it by hand, and the record of where the value came from is lost.
 
-Three things in today's evaluation make carrying harder than copying values:
+What makes carrying harder than copying values:
 
-- **Evaluation inputs exist only for variables and operators.** `TCoreExpressionAssignment` has `variables` and `operatorAssignments` (`src/lib/types/evaluation.ts:51-56`). A link may target a compound expression, such as "`Q ∧ R` is false", or a whole premise, and no input can say that.
-- **Propagation keeps values on variables only.** `closeUnderAcceptedOperators` (`src/lib/core/evaluation/propagation.ts:78-468`) stores one value per variable (`:86`). `mergeIntoChild` writes only into a leaf variable and does nothing for an operator child (`:234-241`). Holding a compound expression's value therefore has nowhere to go.
-- **Attribution decides what the reader asserted from `assignment.variables` alone** (`argument-evaluation.ts:425-427`). It withholds only the conclusion's claim variables in its counterfactual (`:448-471`). A carried value kept anywhere else would let `reachedWithoutAssertion` report a conclusion reached on its own merits using a value the reader supplied. That is the trap the guide records for `forcedTrueVariableIds`.
+- **Evaluation takes input only for variables and operators** (`TCoreExpressionAssignment`, `src/lib/types/evaluation.ts:51-56`). A link can name a compound expression, such as "`Q ∧ R` is false", and no input can say that.
+- **Attribution decides what the reader asserted from `assignment.variables` alone** (`src/lib/core/evaluation/argument-evaluation.ts:446-448`). A carried value kept anywhere else would let `reachedWithoutAssertion` report a conclusion reached on its own merits using a value the reader supplied. The guide records that trap for `forcedTrueVariableIds`.
+- **Whether a target's claim is axiomatic needs a claim library.** A snapshot carries no claims (`TArgumentEngineSnapshot`, `src/lib/core/argument-engine.ts:174-185`). Assigning an axiom-bound variable makes `evaluate` throw `AXIOM_VARIABLE_ASSIGNMENT_FORBIDDEN` (`src/lib/core/argument/claim-variables.ts:77-89`).
 
 ## Goals
 
-1. **Carry one step.** Given a response, the snapshot of the argument it answers, and the reader's answers on the response's links, produce the input those answers imply for the argument answered. A path is carried by applying this one step at a time.
-2. **Carry only what is exact.** Every carried value means exactly what the agreed link says, read the way `checkLink` reads it, so a check and a carry never give one link two meanings. What cannot be carried exactly is reported, with its reason, and never approximated.
-3. **Carried values are the reader's assertions.** They enter evaluation as the reader's own input, so attribution counts them as asserted.
+1. **Carry one step.** Given a response, the snapshot of the argument it answers, that argument's claims, and the reader's answers on the response's links, produce the input those answers imply for the argument answered. A path is carried one step at a time.
+2. **Carry only what is exact.** A carried value means exactly what the agreed link says, read the way `checkLink` reads it, so a check and a carry never give one link two meanings. What cannot be carried exactly is reported with its reason, never approximated, and never dropped silently.
+3. **Carried values are the reader's assertions.** They enter evaluation as the reader's own input, so attribution counts them.
 4. **Provenance.** Every carried value names every link it came from.
-5. **No silent resolution.** A carried value that disagrees with another carried value, or with what the reader already holds, is reported. A carried value that disagrees with what the argument's accepted steps derive surfaces as `CONTESTED`, as it does today.
-6. **Hold a whole premise.** A reader can say a premise is true or false, so that contradicting or affirming a premise whose content does not break down into variable values can still carry.
-7. **Nothing existing changes.** No evaluation result field changes value for any input expressible today, and no checksum changes.
+5. **No silent resolution.** Disagreements among carried values, or with the reader's own input, are reported. A carried value that the argument's accepted steps contradict comes out `CONTESTED`, as any reader value does today.
+6. **Nothing existing changes.** No evaluation result field changes value for any input expressible today, and no checksum changes. This item adds no new evaluation input.
 
 ## Non-goals
 
-- **Holding an arbitrary nested expression.** Only whole premises can be held (Goal 6). A nested compound that does not break down into variable values is reported as not carried. See Design, "Why not held statements".
-- **Evaluating a response under a reader's input.** Carrying into a response needs only its links' answers (Design, "Carrying into a response"), so a response is still refused by `evaluate` (`ARGUMENT_IS_RESPONSE`).
-- **Automatic scoring** of a web of answers, or deciding which answers a reader "should" hold.
-- **Who answered, storage, display.** Answers arrive as plain records; core does not know whose they are.
-- **A claim-level contested roll-up.** Setting one claim on every variable bound to it can leave those variables contested differently. Reporting the claim as contested is the backlog item `2026-08-14-decide-whether-an-argument-asserting-one-claim-both-ways-is-a-validation-error`, and stays there.
+- **Holding a statement or a premise.** The intake's held statements are deferred, with the reason under Design, "Why no held statements", and a question for the requester in Notes. Until then, a link that does not reduce to fixed variable values is reported as not carried.
+- **Evaluating a response under a reader's input.** Carrying into a response needs only its links' answers ("Carrying into a response"), so `evaluate` still refuses a response (`ARGUMENT_IS_RESPONSE`).
+- **Automatic scoring** of a web of answers.
+- **Who answered, storage, display.** Answers arrive as plain records.
+- **A claim-level contested roll-up.** Carrying sets every variable bound to a claim, and those variables can come out contested differently. Reporting the claim as contested is the backlog item `2026-08-14-decide-whether-an-argument-asserting-one-claim-both-ways-is-a-validation-error`. The request asks that it be planned alongside this item. It is weighed under Risks and stays separate: this item makes the case more common but no different in kind.
 - **The CLI.** It stores no responses (first spec, Non-goals).
 
 ## Design
@@ -47,201 +51,255 @@ Three things in today's evaluation make carrying harder than copying values:
 ### Words
 
 - **Answers on a response**: `linkAnswers: Record<premiseId, "agree" | "disagree">`. A link with no entry is unanswered.
-- **Agreed link**: a link answered `agree`, either by the reader or as derived when carrying into a response (below).
-- **Carry target**: the argument the response answers, given as a snapshot at the version `respondsTo` names.
+- **Agreed link**: a link answered `agree`, either by the reader or as derived when carrying into a response.
+- **Target**: the argument the response answers, supplied as a snapshot at the version `respondsTo` names.
+- **Premise root**: an expression E is the root of premise P when E, after unwrapping `formula` nodes from P's root, is P's root operator or variable. Formula nodes are transparent everywhere else (`combined-premise-set.ts:173-176`).
 
 ### What an agreed link means
 
-An agreed link asserts its content: affirm `x` asserts the bound expression E is true, contradict `NOT(x)` asserts it is false; reinforce `s` asserts E's step holds, undercut `NOT(s)` that it does not. A disagreed or unanswered link carries nothing.
+An agreed link asserts its content:
 
-**Departure from the first spec's draft, now matching the intake:** only agreed links carry, never a link that merely evaluates true. Carrying links that "come out true" was lopsided. An affirm link can become true by propagation, but a contradict link never does, because propagation does not merge into a `not` child (`propagation.ts:180-193`). That was the first review's significant finding 2.
+- affirm `x` asserts the bound expression E is true;
+- contradict `NOT(x)` asserts E is false;
+- reinforce `s` asserts E's step holds;
+- undercut `NOT(s)` asserts E's step does not hold.
+
+A disagreed or unanswered link carries nothing.
+
+Only agreed links carry, never a link that merely evaluates true. Carrying links that "come out true" was lopsided. An affirm link can become true by propagation, but a contradict link never can, because propagation does not merge into a `not` child (`propagation.ts:180-193`). This matches the intake and answers the first item's review, significant finding 2.
 
 ### Statement links: exact decomposition
 
-A statement link asserts "E has value v". It is read as `checkLink` reads it: E is expanded as the checks expand a statement link (`buildCombinedSet`, `src/lib/core/response/combined-premise-set.ts:101`, its target expansion at `:156`). Claim-bound variables become one column per claim. Internally premise-bound variables expand into their bound premise's formula. Externally premise-bound variables, and expression-bound variables when the target is itself a response, become one column each.
+A statement link asserts "E has value v". It is read as `checkLink` reads it, by expanding E the way the checks expand a statement link (`buildCombinedSet`, `src/lib/core/response/combined-premise-set.ts:101`; target expansion at `:156`):
 
-Over those columns, the rows where E has value v either:
+- claim-bound variables become one column per claim id;
+- internally premise-bound variables expand into their bound premise's formula;
+- externally premise-bound variables, and the target's expression-bound variables when the target is itself a response, are one column each.
 
-- **form a cube**, meaning E = v exactly when each of some columns has one fixed value and every other column is free. For example, affirm `Q ∧ R` means Q true and R true. Contradict `Q ∨ R` means Q false and R false. Contradict `P → Q` means P true and Q false. Any link on a single claim is a cube. Then the link **carries those fixed values and nothing else**:
-  - a claim column carries its value onto **every** variable of the target bound to that claim (`getVariableIdsForClaim`, `argument-engine.ts:3175`);
-  - an externally premise-bound column carries onto that variable;
-  - an expression-bound column (target is a response) carries as described in "Carrying into a response";
-  - a fixed column whose claim is axiomatic: a value of `true` is dropped, since it is already true. A value of `false` means the link contradicts an axiom, and **the whole link** is not carried (reason `axiom`). Rule E-4 forbids assigning one, and the engine throws `AXIOM_VARIABLE_ASSIGNMENT_FORBIDDEN`.
-  - a fixed column whose claim is a citation carries normally: a reader may disagree with a source.
-- **do not form a cube**, as with contradict `Q ∧ R`. If E is the root of a premise of the target, the link carries as a **held premise** with value v (below). Otherwise it is not carried (reason `notExpressible`).
-- **are none**, meaning E can never have value v. Not carried (reason `impossible`).
-- **are all rows**, meaning E has value v whatever the columns are. Nothing to carry (reason `vacuous`).
+Over those columns, the rows where E has value v fall into four cases:
 
-If E's expansion has more columns than `SATISFIABILITY_VARIABLE_CEILING` (`src/lib/core/evaluation/satisfiability.ts:17`), the link is not carried (reason `tooLarge`).
+- **They form a cube.** E = v exactly when some columns each have one fixed value and every other column is free. Examples:
+  - affirm `Q ∧ R`: Q true and R true;
+  - contradict `Q ∨ R`: Q false and R false;
+  - contradict `P → Q`: P true and Q false;
+  - any link on a single claim.
 
-Because the decomposition is exact, carrying never approximates, and the check and the carry give the link one meaning. That is the first review's blocking finding 1, "two meanings".
+  The link carries those fixed values and nothing else (placement below).
+- **They do not form a cube**, as with contradict `Q ∧ R`. Not carried (reason `notExpressible`).
+- **There are none**: E can never have value v. Not carried (reason `impossible`).
+- **They are all rows**: E has value v whatever the columns. Not carried (reason `vacuous`).
 
-### Held premises
+If the expansion has more columns than `SATISFIABILITY_VARIABLE_CEILING` (`src/lib/core/evaluation/satisfiability.ts:17`), the link is not carried (reason `tooLarge`).
 
-A new optional evaluation input, beside `variables` and `operatorAssignments`:
+**Columns of axiomatic claims are free while the cube is found,** exactly as `checkLink` leaves the target's columns unseeded. This is a deliberate choice: it keeps the one-meaning goal. Its cost is that contradicting `A ∧ Q` with A axiomatic reports `notExpressible`, although in X, where A is forced true, it means "Q false".
 
-- `heldPremises?: Record<premiseId, boolean>`, on `TCoreExpressionAssignment` (`src/lib/types/evaluation.ts:51`).
-- **Where it applies:**
-  - **Premise evaluation.** `evaluatePremise` (`src/lib/core/premise/evaluation.ts:33`) joins the held value into the premise's root value in the knowledge order: `join(computed, held)`, the same join propagation uses (`joinKnowledge`, `belnap.ts`). It records the joined value as the root's entry in `expressionValues`. A held `false` on a premise that evaluates `true` comes out `CONTESTED`.
-  - **Bindings to the premise.** The premise-bound resolver evaluates a bound premise through the same function (`premise-resolver.ts`), so a variable bound to a held premise reads the joined value. One function applies it, so the premise result and every reader of it agree.
-- **Where it does not apply:**
-  - **Propagation.** Propagation reads compound values only for children of accepted operators (`resolveValue`, `propagation.ts:117`), and a premise root is no operator's child. So the closure never sees a held value, and its monotonicity and order-independence are untouched. A held premise contributes its value, not its consequences. A reader who wants the consequences accepts the premise's operators.
-  - **Satisfiability and derivation suppression.** The satisfiability search builds its own assignment (`walkGroup`, `satisfiability.ts`), so held premises are excluded there automatically. A premise the reader holds false makes the argument unsound for that reader, not self-contradictory. This is intake criterion 6.
-  - **`evaluateSubtree`** (`argument-evaluation.ts:131`), the standalone subtree evaluator, takes no held input. It evaluates subtrees, not premises.
-- **Results:**
-  - Each premise result's `rootValue` is the joined value, and the aggregates follow from it as today.
-  - **New optional field** `contestedPremiseIds: string[]`: premises whose held value disagrees with their computed value. It is present only when `heldPremises` is supplied, so no existing result changes.
-- **Attribution:**
-  - The counterfactual for `reachedWithoutAssertion` evaluates the conclusion under an assignment built from `variables` and `operatorAssignments` alone (`argument-evaluation.ts:462-469`). It therefore withholds every held premise, including any reached through a premise-bound variable. This is stated as a rule and pinned by a test.
-  - `assertedByReader` becomes true also when the conclusion premise, or a premise the conclusion reaches through bound variables, is held.
-  - `claimAttribution` is unchanged, because held premises never enter the closure.
-- **Strictness and refusals:**
-  - Under `strictUnknownAssignmentKeys`, a held premise id the argument does not have is an error, as an unknown variable id is today.
-  - A struck premise is struck whether or not it is held. Striking discards a premise whole (`docs/api-reference.md:308`). The held value is ignored and `contestedPremiseIds` does not list it.
-  - Holding a derivation premise is allowed and evaluated like any other.
+**Placing a fixed value:**
 
-### Why not held statements on any expression
+- **A claim column** goes onto each variable bound to that claim in the premises the target's evaluation sees: every premise except an unpopulated naked-Q derivation stub, which evaluation hides (`argument-engine.ts:2975-2979`). Each variable's claim type is looked up at that variable's own claim version through the supplied claim lookup, so one claim bound at two versions is decided per variable:
+  - **axiomatic, value `true`:** skipped; it is already true;
+  - **axiomatic, value `false`:** the link contradicts an axiom, and the whole link is not carried (reason `axiom`);
+  - **citation:** carried. A reader may disagree with a source.
+  - If every fixed value of a link is skipped, the link is reported with reason `axiom`, so nothing is dropped silently.
+- **An externally premise-bound column** goes onto that variable.
+- **An expression-bound column** (the target is a response) becomes link answers, as described in "Carrying into a response".
 
-The intake asked for `heldStatements: Record<expressionId, boolean>` on any expression. Holding a nested expression has to join into every evaluator that computes a value, and propagation is one of them. Otherwise propagation and premise evaluation disagree about a value, and propagation keeps no per-expression state (first review, blocking 1). Joining it into propagation's `resolveValue` would also mean defining a contested compound's provenance, and which counterfactual withholds it, for every expression.
-
-Most links do not need it. A link on a single claim, an affirmed conjunction, and a contradicted disjunction or conditional all decompose exactly. A link on a whole premise is covered by held premises. What remains is a nested compound that does not decompose, such as contradicting the `Q ∧ R` inside `(Q ∧ R) → C`. That is reported as `notExpressible`.
-
-**Departure:** held statements on arbitrary expressions are replaced by exact decomposition plus held premises. A later item can add nested holds if consumers need them, on top of this design.
+Because the decomposition is exact, the check and the carry give a link one meaning. That resolves the "two meanings" part of the first item's review, blocking 1.
 
 ### Inference links
 
-An agreed inference link carries an operator decision: reinforce → `accepted`, undercut → `rejected`. The intake's table, unchanged:
+An agreed inference link carries an operator decision: reinforce gives `accepted`, undercut gives `rejected`. The intake's table, with "root" as defined under Words:
 
 | The bound operator | Carried |
 |---|---|
-| root of a freeform premise that is not the conclusion | the decision; a rejection strikes the premise, as today (`argument-evaluation.ts:276-295`) |
+| root of a freeform premise that is not the conclusion (including a `not` root) | the decision; a rejection strikes the premise, as today (`argument-evaluation.ts:297-316`) |
 | root of the conclusion premise | the decision; a rejection sets `conclusionInferenceRejected` |
 | nested in any premise | nothing (reason `nestedOperator`) |
 | in a derivation premise | nothing (reason `derivationOperator`) |
 
 ### Carrying into a response
 
-When the carry target is itself a response (Z answers Y, which answers X), the carried result for Y includes **derived answers on Y's links**. These are what the reader's agreement with Z implies about Y's links. This answers the intake's Q3:
+When the target is itself a response (Z answers Y, which answers X), the carried result for Y is **answers on Y's links**. This answers the intake's Q3.
 
-- Every link L of Y is `x` or `NOT(x)` for one of Y's expression-bound variables `x`, and the expansion keeps `x` as one column (`combined-premise-set.ts:156`). So whenever a statement link of Z decomposes to a fixed value of `x`, that value answers every link of Y on `x`:
-  - `x` true: each affirm or reinforce link `x` is agreed, each contradict or undercut link `NOT(x)` disagreed;
+- Every link L of Y is `x` or `NOT(x)` for one of Y's expression-bound variables `x`. The expansion keeps `x` as one column (`combined-premise-set.ts:156`). So whenever an agreed statement link of Z decomposes to a fixed value of `x`, that value answers every link of Y on `x`:
+  - `x` true: each affirm or reinforce link `x` is agreed, and each contradict or undercut link `NOT(x)` is disagreed;
   - `x` false: the reverse.
-- This covers both places Z can point. A statement on L's root `NOT(x)` with value v fixes `x` to not v. A statement on the `x` inside it fixes `x` directly. A statement on a non-link premise of Y that decomposes to a value of `x` answers L too, since that premise says the same about `x`.
+- This covers every place Z can point:
+  - a statement on L's root `NOT(x)` with value v fixes `x` to not v;
+  - a statement on the `x` inside it fixes `x` directly;
+  - a statement on another premise of Y that decomposes to a value of `x` answers L too, because that premise says the same about `x`.
 - An inference link of Z on L's `NOT` is not carried (reason `linkStep`). A link has no step to dispute.
-- So agreeing with Z's affirm of Y's link counts as agreeing with that link, and agreeing with Z's contradiction of it counts as disagreeing. If carried values of one `x` disagree, the `x` is a conflict (Collisions) and no derived answer is given on its links.
-- Values Z carries onto Y's claims and operators are returned as for any target, but Y is never evaluated, so they reach X only through the link answers they fix. Whether L follows from Y's other premises is `checkLink`'s question; agreeing with L is the reader's.
+- Agreeing with Z's affirm of Y's link therefore counts as agreeing with it, and agreeing with Z's contradiction counts as disagreeing.
+- **One consequence, matching the intake.** Suppose Z fixes `x` true, and Y holds only the contradict link `NOT(x)`. That link becomes disagreed, and disagreeing carries nothing into X. Agreeing with Z never asserts E in X unless Y has a link asserting it.
+- **Only link answers are returned for a response target.** Y is never evaluated, so values on Y's claims and operators would be public output with no use. Z's links that fix no `x` are reported as not carried (reason `noLinkReached`).
 
-The reader's own answers on Y and the derived ones are combined by `mergeCarriedInput` (below), which reports any conflict. The combined answers are then carried from Y into X. One step at a time, as the intake says.
+The reader's own answers on Y and the derived ones are combined by `mergeCarriedInput`. The combined answers are then carried from Y into X.
 
 ### Collisions
 
-- **Among the carried values themselves.** Two agreed links of one response may fix one claim to opposite values, or decide one operator both ways. Each such value is reported as a conflict, naming every link involved, and is not carried. This happens only in a response `checkResponseCoherent` calls incoherent (first item), and carrying does not require the response to be coherent.
-- **With the reader's own input.** `mergeCarriedInput` keeps the reader's own value and reports the carried one beside it. A collision is reported and never resolved in the carried value's favour.
-- **With the argument.** A carried value that the target's accepted steps contradict comes out `CONTESTED` through propagation (`propagation.ts:57-60`), and is reported in `contestedVariableIds` as today. A held premise that disagrees with its computed value is in `contestedPremiseIds`.
+- **Among one response's carried values.** Several agreed links may fix one variable to opposite values, decide one operator both ways, or derive both answers on one link of Y. **Every link involved carries nothing**, with reason `conflict` naming the others. A link that carried only the part that did not conflict would assert less than it says, which is the approximation Goal 2 forbids. This happens only in a response that `checkResponseCoherent` calls incoherent, and carrying does not require the response to be coherent.
+- **With the reader's own input.** `mergeCarriedInput` keeps the reader's value on every collision and reports the carried one beside it. A collision is reported and never resolved in the carried value's favour.
+  - **An explicit `null` is not a value.** "Not sure" yields to a carried value, without a collision.
+- **With the argument.** A carried value contradicted by the target's accepted steps comes out `CONTESTED` through propagation (`propagation.ts:57-60`) and is listed in `contestedVariableIds`, as today.
+
+### Defaults
+
+`own` in `mergeCarriedInput` is the reader's **explicit** input only. A default (`deriveDefaultAssignment`, `claim-variables.ts:215-242`) is not the reader's assertion.
+
+- If defaults were passed as `own`, the default `true` on a citation would silently beat a carried "the citation is false". Criterion 1's citation case exists to prevent that.
+- The supported order is: defaults, then carried values, then the reader's explicit values. So `evaluateWithDefaults(mergeCarriedInput(explicit, carried).variables, …)`.
+- `evaluateWithDefaults` (`argument-engine.ts:3271-3292`) today always passes `operatorAssignments: {}`, so carried operator decisions could not reach it. It gains an optional third parameter, `operatorAssignments`, passed through unchanged. Existing calls behave as before.
 
 ### Interface
 
-- `carryAnswers(response, targetSnapshot, linkAnswers): TCarryResult`, in `src/lib/core/response/carry.ts`.
-  - **Refuses with `status: "invalid"`** when the snapshot is not the argument and version `respondsTo` names, or `validateLinks` reports an error. This is the same precondition the checks use, so nothing is carried onto expression ids of the wrong version (first review, significant 3).
-  - **Otherwise** `status: "carried"`, with:
+- **`ArgumentEngine.carryAnswers(targetSnapshot, linkAnswers, targetClaims): TCarryResult`**, on the response's engine.
+  - `targetClaims` is a `TClaimLookup` (the type the engine's constructor already takes) that resolves the target's claims at the versions it binds. It is required: the response's own library is not guaranteed to hold them.
+  - It uses the checks' precondition, which answers the first item's review, significant 3. It returns `status: "invalid"`, with problems, when:
+    - the engine is not a response;
+    - the snapshot is not the argument and version `respondsTo` names;
+    - `validateLinks` reports an error.
+  - **Otherwise it returns `status: "carried"`**, with:
     - `into: TCoreArgumentReference`;
-    - `variables: Record<variableId, boolean>`;
-    - `operatorAssignments: Record<expressionId, "accepted" | "rejected">`;
-    - `heldPremises: Record<premiseId, boolean>`;
-    - `linkAnswers?: Record<premiseId, "agree" | "disagree">`, present only when the target is a response;
-    - `sources`: one entry per carried value, giving its kind (`variable`, `operator`, `heldPremise`, `linkAnswer`), its id and value, and the premise ids of every link it came from;
-    - `notCarried`: one entry per agreed link, or per part of one, that carried nothing. Each gives its premise id and reason: `axiom`, `notExpressible`, `impossible`, `vacuous`, `tooLarge`, `nestedOperator`, `derivationOperator`, `linkStep` or `conflict`.
-    - It never throws on an answer it cannot carry.
-- `mergeCarriedInput(own, carried)`:
-  - `own` is the reader's input for the target: an assignment, plus `linkAnswers` when the target is a response.
-  - It returns the combined input and a list of collisions. Each collision gives the kind, id, the reader's value, the carried value, and the carried value's source links.
-  - The reader's value is kept on every collision.
+    - for a standard target, `variables: Record<variableId, boolean>` and `operatorAssignments: Record<expressionId, "accepted" | "rejected">`;
+    - for a response target, `linkAnswers: Record<premiseId, "agree" | "disagree">`;
+    - `sources`: one entry per carried value, giving its kind (`variable`, `operator` or `linkAnswer`), id and value, and the premise ids of every link it came from;
+    - `notCarried`: one entry per agreed link that carried nothing, giving its premise id and reason. The reasons are `axiom`, `notExpressible`, `impossible`, `vacuous`, `tooLarge`, `nestedOperator`, `derivationOperator`, `linkStep`, `noLinkReached` and `conflict`.
+  - It never throws on an answer it cannot carry.
+  - **Departure:** the intake sketches `carryAnswers(pathSnapshots, answers)` over a whole path. One step, with the caller walking the path, keeps each step's inputs explicit and lets the reader's own answers on Y join at the right point. The intake itself says to carry one step at a time.
+  - It is an engine method, not a free function, for the reason the checks are (first item's `outcome.md`, Departures): it reads the response's links and grounding through the engine.
+- **`mergeCarriedInput(own, carried)`**, a free function.
+  - `own` is the reader's explicit input for the target: `{ variables, operatorAssignments }`, plus `linkAnswers` when the target is a response.
+  - It returns the combined input and a list of collisions. Each collision gives the kind, the id, the reader's value, the carried value and the carried value's source links.
   - The combined input never contains `CONTESTED`, which a reader may not assign.
-- **Exports:** both functions, and their types (`TLinkAnswer`, `TCarryResult`, `TCarriedSource`, `TNotCarriedReason`, `TCarryCollision`).
+  - It does not check that `own` is for `carried.into`: `own` names no argument. The caller pairs them.
+- **Exports:** both, and their types (`TLinkAnswer`, `TCarryResult`, `TCarriedSource`, `TNotCarriedReason`, `TCarryCollision`, `TMergedCarriedInput`).
 
 ### Attribution of carried values
 
-Carried variable values and operator decisions enter `variables` and `operatorAssignments` through `mergeCarriedInput`. Evaluation therefore treats them exactly as the reader's own:
+Carried values enter `variables` and `operatorAssignments` through `mergeCarriedInput`, so evaluation treats them exactly as the reader's own:
 
-- `isReaderAsserted` counts them;
-- every counterfactual withholds them;
+- `isReaderAsserted` counts them (`argument-evaluation.ts:446-448`);
+- the counterfactuals withhold them wherever they withhold a reader value;
 - `assertedByReader` and `claimAttribution` include them.
 
-This is deliberate. A reader who agrees with a link has asserted what it says, so a conclusion reached through a carried value is not reached without the reader's assertion. Which link a value came from lives in `sources`, not in evaluation. This answers the first review's blocking finding 2.
+A reader who agrees with a link has asserted what it says, so a conclusion reached through a carried value is not reached without the reader's assertion. Which link a value came from lives in `sources`, not in evaluation. This answers the first item's review, blocking 2.
+
+The counterfactual withholds only claim variables the conclusion names directly (`:469-480`). That limit is today's behaviour for a reader's own values, and carried values inherit it without making it worse.
+
+### Why no held statements
+
+The intake asks that an agreed link on a compound expression, such as contradict `Q ∧ R`, produce a "held statement". Two designs were weighed.
+
+- **A hold on any expression has to join into every evaluator that computes a value,** including propagation, which keeps no per-expression state (first item's review, blocking 1).
+- **A hold only on whole premises** was this spec's first draft. Its review found two problems:
+  - **An attribution leak.** When the conclusion names no claim variable directly, `reachedWithoutAssertion` is read straight from the conclusion's value (`argument-evaluation.ts:481`). With a hold joined into that value, it would report a held conclusion as reached without the reader's assertion.
+  - **A public interface that would ignore holds.** The join sat inside `TEvaluablePremise`, a public interface, so a consumer's own premise implementation would ignore holds.
+
+  Both are fixable. But either design adds a permanent public evaluation input to a major release, and a later nested hold would overlap a premise hold at premise roots.
+
+Adding an input later is cheap; removing one after 6.0.0 is not. So this item carries what reduces exactly to variable values and operator decisions, and reports the rest.
+
+**Departure:** the intake's criterion 10 says agreeing with contradict `Q ∧ R` "produces a held statement". Here it reports `notExpressible`. This needs the requester's answer before planning (Notes).
 
 ## Acceptance criteria
 
-Test files are new unless stated. `X`, `Y`, `Z` follow the intake's notation, with Y answering X and Z answering Y.
+Test file: `test/core/response-carry.test.ts` unless stated. Y answers X, and Z answers Y.
 
-1. **Decomposition** (`test/core/response-carry.test.ts`), for an agreed link of Y on an expression of X:
-   - contradict on claim C's variable expression: `variables` sets every variable of C in X false;
+1. **Decomposition.** For an agreed link of Y on an expression of X:
+   - contradict on claim C's variable expression: `variables` sets every variable of C that X's evaluated premises name to false. With C bound by two variables, both are set;
    - affirm `Q ∧ R`: Q and R true;
    - contradict `Q ∨ R`: Q and R false;
    - contradict a premise `P → Q`: P true and Q false;
-   - contradict `Q ∧ R` as a premise root: `heldPremises` holds that premise false;
-   - contradict `Q ∧ R` nested inside `(Q ∧ R) → C`: not carried, reason `notExpressible`;
-   - contradict an axiom-bound claim: not carried, reason `axiom`, and nothing throws;
-   - contradict a citation-bound claim: carried.
-2. **Inference links** (same file):
-   - undercut a freeform premise's root: `rejected`;
+   - contradict `Q ∧ R`: not carried, reason `notExpressible`;
+   - a link on a formula-wrapped expression decomposes as the unwrapped one;
+   - contradict an axiom-bound claim: reason `axiom`, and evaluating X with the merged input does not throw;
+   - affirm an axiom-bound claim: reason `axiom`, nothing carried;
+   - contradict a citation-bound claim: carried. Through `evaluateWithDefaults(merged.variables)` it is false in the result, not the default true.
+2. **Inference links:**
+   - undercut a freeform premise's root, including a `not` root and a root under a formula wrapper: `rejected`;
    - reinforce: `accepted`;
-   - undercut the conclusion root: `rejected`, and evaluating X with the merged input reports `conclusionInferenceRejected`;
-   - undercut a nested operator or a derivation premise operator: not carried, with the reason.
-3. **Only agreed links carry** (same file): an unanswered link, and a disagreed one, carry nothing. So does an affirm link that would evaluate true by propagation.
-4. **Provenance** (same file): two links fixing claim C to the same value give one `sources` entry naming both. Every carried value has a source.
-5. **Collisions** (same file):
-   - two agreed links fixing C to opposite values: both reported as `conflict`, C not carried;
-   - `mergeCarriedInput` with the reader holding C true and C carried false: the result keeps true and reports one collision naming the source link;
+   - undercut the conclusion's root: `rejected`, and evaluating X with the merged input reports `conclusionInferenceRejected`;
+   - undercut a nested operator, or a derivation premise's operator: not carried, with the reason.
+3. **Only agreed links carry.** An unanswered link and a disagreed link carry nothing. So does an affirm link the reader left unanswered that would evaluate true by propagation.
+4. **Provenance.** Two links fixing C to the same value give one `sources` entry naming both. Every carried value has a source, and every agreed link appears in `sources` or `notCarried`.
+5. **Collisions:**
+   - affirm `Q ∧ R` with contradict `Q` in one response: both links `conflict`, and neither Q nor R is carried;
+   - `mergeCarriedInput` with the reader holding C true and C carried false keeps true and reports one collision naming the source link;
+   - with the reader's explicit `null` on C, the carried false is kept and no collision is reported;
    - a carried value contradicted by an accepted step of X: X's evaluation lists the variable in `contestedVariableIds`.
-6. **Version guard** (same file): a snapshot of another version, or a response with a `validateLinks` error, gives `status: "invalid"`.
-7. **Carrying into a response** (same file):
+6. **Refusals.** `status: "invalid"` for a standard (non-response) engine, for a snapshot of another argument or version, and for a response with a `validateLinks` error.
+7. **Carrying into a response:**
    - Z affirms Y's contradict link L at L's root: `linkAnswers[L] = "agree"`;
    - Z contradicts it at L's root: `"disagree"`;
    - Z affirms the `x` inside `NOT(x)`: `"disagree"`;
-   - Z agrees and disagrees on L through two links: a conflict, and no derived answer for L;
+   - Z fixes `x` both ways through two links: both `conflict`, and no answer for L;
+   - a link of Z on a non-link premise of Y that fixes no `x`: reason `noLinkReached`;
+   - the result for a response target has no `variables` or `operatorAssignments`;
    - carrying Z → Y → X: the reader's agreement with Z's affirm of L makes L carry into X, with `sources` on X's values naming L. The reader's own "disagree" on L wins in `mergeCarriedInput`, with a collision reported.
-8. **Held premises** (`test/evaluation/held-premises.test.ts`):
-   - holding `A ∧ B` false where X asserts `A ∧ B`: `premiseSetSatisfiable` is unchanged; that premise's `rootValue` is false, or `CONTESTED` with its id in `contestedPremiseIds` when A and B are true;
-   - a variable bound to a held premise reads the held value;
-   - a held premise inside a struck premise is ignored;
-   - an unknown held premise id fails under `strictUnknownAssignmentKeys`;
-   - evaluating with `heldPremises` absent gives a result equal, field by field, to today's for the same input. This is checked over the existing evaluation fixtures.
-9. **Attribution** (same files):
-   - a conclusion `C` reached only through a carried value of C reports `assertedByReader: true` and `reachedWithoutAssertion: false`;
-   - a conclusion premise held true reports `assertedByReader: true`, and `reachedWithoutAssertion` is computed with the hold withheld;
-   - a plausible wrong implementation, carried values kept outside `variables` and not withheld, is tried and fails this test.
-10. **One meaning** (same file as 1): for every link in criterion 1 that carries, the carried values, substituted into the expanded expression, make it evaluate to the link's value, and a carried held premise is that link's own expression. For every link that does not carry, the reason holds.
-11. **Public surface:** `docs/api-surface.txt` gains only the names in Interface and `heldPremises`, `contestedPremiseIds`. No name refers to accounts, ownership, storage or user limits. `pnpm run check` passes.
+8. **Attribution** (`test/evaluation/attribution.test.ts`, extended): a conclusion `C` reached only through a carried value of C reports `assertedByReader: true` and `reachedWithoutAssertion: false`. A wrong implementation that seeds carried values into the closure without putting them in `variables` is tried and fails this test.
+9. **One meaning.** For every link in criterion 1 that carries, a test substitutes the carried values into E's expansion and checks it evaluates to the link's value under every value of the free columns. For every `notExpressible` link, the test checks that two rows giving E the link's value differ in a column whose value the link would have fixed.
+10. **`evaluateWithDefaults`** with an `operatorAssignments` argument applies the decisions. Every existing call's result is unchanged, checked by the existing suites.
+11. **Public surface.** `docs/api-surface.txt` gains only the names under Interface and the new `evaluateWithDefaults` parameter. No name refers to accounts, ownership, storage or user limits. `pnpm run check` passes.
+12. **Documentation:**
+    - `docs/api-reference.md`: a carrying section, and the defaults order;
+    - `skills/proposit-core`: carrying;
+    - the release notes and changelog;
+    - `README.md`'s response section: a pointer.
 
 ## Risks
 
-- **Decomposition cost.** It walks a truth table over one expression's columns, bounded by the ceiling, once per agreed statement link. This is cheap for the expressions links target. A timing note goes in the outcome.
-- **Fewer links carry than the intake imagined.** A nested non-decomposable compound does not carry. It is reported, never dropped silently, and a later item can add nested holds.
-- **"Every variable of a claim" can disagree with a single occurrence.** A claim bound by several variables gets the carried value on all of them, as the intake asks. If X's steps contest one of them, that variable alone is contested; the claim-level roll-up is the backlog item named in Non-goals.
-- **Held premises add one input to evaluation.** The join runs in one function, and the "absent means unchanged" criterion runs over every existing evaluation fixture.
+- **Fewer links carry than the intake imagined.** Contradicting a non-cube expression, such as a premise `Q ∧ R`, carries nothing until the requester answers the question in Notes. It is always reported.
+- **Decomposition cost.** A truth table over one expression's columns, bounded by the ceiling, once per agreed statement link. A timing note goes in the outcome.
+- **"Every variable of a claim" can split.** If X's steps contest one variable of a claim and not another, only that one is contested. The claim-level roll-up (Non-goals) is where that is reported, and carrying makes it more likely to matter. The combined 6.0.0 review should look at both together.
+- **The at-most-one operator**, batched into 6.0.0, needs its case in the combined set's evaluator (`combined-premise-set.ts:335` throws on an unknown operator). The cube walk uses that evaluator. Its propagation rule's effect on carried values is checked in the combined review.
 
 ## Notes
 
-### How the first review's findings that moved here are handled
+### Question for the requester, before planning
 
-- **Blocking 1 (held statements on compound expressions not representable):** resolved by not holding nested expressions. Each of its sub-points:
-  - Exact decomposition carries what is expressible as variable values.
-  - Held premises join only at premise roots, which propagation never reads, in the one function that computes a premise's value, so the resolver and the premise result agree.
-  - **"Does a held compound constrain its children":** a decomposable one carries its children's values. A held premise does not, which is stated.
-  - **Contested compounds:** reported in `contestedPremiseIds`.
-  - **Counterfactual:** withholds every held premise.
-  - **Internally premise-bound variables:** they expand into their bound premise's formula, as the checks do, so no hold lands on one.
-  - **Axioms:** reported as not carried.
-- **Blocking 2 (attribution status of carried values):** carried values are reader assertions, by entering `variables` and `operatorAssignments`. Criterion 9 pins attribution, not only values.
-- **Significant 2 (links that come out true, and the affirm/contradict asymmetry):** only agreed links carry.
-- **Significant 3 (no version guard):** `carryAnswers` uses the checks' precondition.
+Agreeing with a link whose content does not reduce to fixed claim values carries nothing and is reported `notExpressible`. Common shapes:
 
-### The intake's questions
+- contradicting a conjunction (`Q ∧ R`), whether it is a whole premise or nested;
+- affirming a conditional or a disjunction;
+- any link on a variable bound to such a premise;
+- contradicting `A ∧ Q` where A is axiomatic.
 
-- **Q3** (carrying an affirm across depth, and Z targeting the inner `x`): answered in "Carrying into a response".
-- The intake's criterion 6 (holding `A ∧ B` false leaves `premiseSetSatisfiable` unchanged) is criterion 8 here.
-- The intake's criterion 10 is criteria 1, 2 and 7 here, with "a held statement on `Q ∧ R`" read as a held premise when `Q ∧ R` is a premise root, per the Departure above.
+Does the consumer need any of these carried in 6.0.0? If so, they need a held input, and the cheapest is a hold on whole premises, `heldPremises`, applied by core outside the premise implementation. The review's two findings on it would be fixed as follows:
+
+- `reachedWithoutAssertion` computed without holds whenever any are present;
+- the hold applied in `evaluateArgument` and the premise-bound resolver, not in `TEvaluablePremise`.
+
+If the answer is yes, that design returns to this spec before planning. If no, the spec plans as written.
+
+### How this review's findings were handled
+
+- **Blocking 1 (held premises leak into `reachedWithoutAssertion` through the shortcut):** accepted, and verified at `argument-evaluation.ts:481`. It is resolved by deferring holds, and recorded in the question above as a condition on any hold design.
+- **Blocking 2 (no source for the target's claim types):** accepted, and verified: the snapshot type has no claims. `carryAnswers` is an engine method taking a required `TClaimLookup`. The axiom status is decided per variable at its own claim version, which answers the related question.
+- **Significant 3 (departure not confirmed by the requester):** accepted. It is the question above.
+- **Significant 4 (shapes wrongly reported `notExpressible`):**
+  - (a), a premise-bound variable: depends on holds, so it is in the question.
+  - (b), formula wrappers: accepted, through the "premise root" definition.
+  - (c), axiomatic columns: kept free, now stated as a choice. The case of affirming an axiom now has reason `axiom`.
+- **Significant 5 (defaults):** accepted and verified (`argument-engine.ts:3271-3292`, `claim-variables.ts:215-242`). See Design, "Defaults".
+- **Significant 6 (where the join lives):** no longer applies, since there is no join. Recorded in the question.
+- **Significant 7 (strict unknown keys):** confirmed by running. It was a defect in released code: every assignment giving values in two premises was refused. Fixed separately on this branch in `8cc1387d`, test first, and carried values meet the corrected check. Carrying places values only on variables that evaluated premises name, which answers the naked-Q part.
+- **Minor findings:**
+  - Response targets now return link answers only. Accepted.
+  - A conflict now drops every link involved. Accepted.
+  - The Z-to-contradict-link consequence is now stated. Accepted.
+  - Criteria 8 to 10 of the first draft were held-premise criteria and are gone. The "one meaning" criterion now names its test.
+  - Explicit `null` and the missing guard on `own` are now stated. Accepted.
+  - The changed signature is now marked as a Departure. Accepted.
+  - A `not` root and a formula-wrapped root now appear in the table. Accepted.
+- **Overlap:** the at-most-one operator and the roll-up are in Risks.
+- **Missing:** documentation is criterion 12.
+
+### How the first item's review's carrying findings are handled
+
+- **Blocking 1 (held statements):** deferred. See "Why no held statements" and the question above.
+- **Blocking 2 (attribution of carried values):** carried values are reader assertions (criterion 8).
+- **Significant 2 (links that come out true):** only agreed links carry.
+- **Significant 3 (version guard):** `carryAnswers` uses the checks' precondition.
 
 ### Release
 
-This ships in 6.0.0 with the first item and goes into the 6.0.0 release-candidate tarball. Development tarballs before then do not include it.
+This ships in 6.0.0 with the first item, and goes into the release-candidate tarball. Development tarballs before then do not include it.
