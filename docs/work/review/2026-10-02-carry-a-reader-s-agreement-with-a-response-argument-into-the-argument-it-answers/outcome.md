@@ -66,3 +66,19 @@ Implemented on `feat/response-arguments` against the approved spec (fifth revisi
 
 - The combined review of everything batched into 6.0.0, which should look at carrying together with the claim-level contested roll-up, and at the at-most-one operator's case in `evaluateCombinedNode`.
 - The backlog item `2026-10-02-decide-whether-accepting-a-non-conditional-conclusion-root-is-the-reader-s-assertion` stays blocked on the maintainer.
+
+## Fixes after the verify assessment (2026-10-02)
+
+The read-only verify assessment found every criterion met in substance, and two problems, both now fixed:
+
+- **`pnpm run check` failed at `df781419`**: the taxonomy files were not Prettier-formatted. Fixed in `ef8541c1`.
+- **A claim the lookup could not resolve was carried as an ordinary claim.** If it was in fact an axiom, `evaluate` then threw `AXIOM_VARIABLE_ASSIGNMENT_FORBIDDEN` deep in the caller's evaluation. That is easy to hit by passing the response's own library, which need not hold the target's claims. Such a link now carries nothing, with the new reason `unknownClaim`. Fixed in `4c87202c`, test first: the new test failed on the missing reason before the fix.
+- **Tests strengthened** (same commit):
+  - a snapshot of a different argument id is refused;
+  - the unanswered affirm link is now one that really comes out true by propagation;
+  - criterion 10's table has a cited-claim row.
+- **Documentation** (`f2bdb70c`):
+  - `unknownClaim`, and `noLinkReached` for a standard target, in the API reference;
+  - the public `TArgumentEvaluation` interface gaining `carryAnswers`, as a breaking change for anyone implementing it themselves, in the changelog and the release notes' migration notes.
+
+`pnpm run check` passes at `f2bdb70c`: 3031 tests passed, 13 skipped.
