@@ -137,6 +137,22 @@ function claimOfExpression(
 }
 
 /**
+ * The claims a snapshot uses: those of its claim-bound variables that some
+ * expression references.
+ */
+export function snapshotClaimIds(
+    snapshot: TArgumentEngineSnapshot
+): Set<string> {
+    const variables = snapshotVariables(snapshot)
+    const used = new Set<string>()
+    for (const expr of snapshotExpressions(snapshot).values()) {
+        const claimId = claimOfExpression(expr, variables)
+        if (claimId !== undefined) used.add(claimId)
+    }
+    return used
+}
+
+/**
  * Checks a response's expression bindings against the snapshot of the
  * argument it answers.
  *
@@ -153,11 +169,7 @@ export function validateLinks(
     const targetVariables = snapshotVariables(targetSnapshot)
     const violations: TLinkViolation[] = []
 
-    const usedClaims = new Set<string>()
-    for (const expr of targetExpressions.values()) {
-        const claimId = claimOfExpression(expr, targetVariables)
-        if (claimId !== undefined) usedClaims.add(claimId)
-    }
+    const usedClaims = snapshotClaimIds(targetSnapshot)
 
     const variables = response.getVariables()
     for (const variable of variables) {
