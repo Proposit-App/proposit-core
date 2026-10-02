@@ -295,19 +295,26 @@ function walkGroup(
             operatorAssignments: {},
         }
         const resolver = createPremiseBoundResolver(ctx, assignment)
-        const rootValues = premises.map(
-            (premise) =>
-                premise.evaluate(assignment, { resolver }).rootValue ?? null
-        )
-        if (rootValues.every((value) => value === true)) return variables
         // A row is settled either because one premise is outright false or
-        // because every premise resolved to something.
-        if (
-            !rootValues.includes(false) &&
-            rootValues.some((value) => value === null)
-        ) {
-            sawIndeterminateRow = true
+        // because every premise resolved to something. The first false
+        // premise settles it, so the rest are not evaluated: the answer is the
+        // same, and a search with no satisfying row stops early on most rows.
+        let settledFalse = false
+        let allTrue = true
+        let sawNull = false
+        for (const premise of premises) {
+            const value =
+                premise.evaluate(assignment, { resolver }).rootValue ?? null
+            if (value === false) {
+                settledFalse = true
+                break
+            }
+            if (value !== true) allTrue = false
+            if (value === null) sawNull = true
         }
+        if (settledFalse) continue
+        if (allTrue) return variables
+        if (sawNull) sawIndeterminateRow = true
     }
     return sawIndeterminateRow ? null : false
 }
