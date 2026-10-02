@@ -17,6 +17,11 @@ export function renderArgumentDisplay(
 ): string {
     const lines: string[] = []
     lines.push(`Argument: ${arg.id} (v${arg.version})`)
+    if (arg.respondsTo !== undefined) {
+        lines.push(
+            `Responds to: ${arg.respondsTo.argumentId} (v${arg.respondsTo.argumentVersion})`
+        )
+    }
     lines.push("")
 
     const supportingIds = new Set(supportingPremises.map((pe) => pe.getId()))

@@ -45,6 +45,12 @@ export { closeUnderAcceptedOperators, propagateOperatorConstraints }
 export interface TArgumentEvaluationContext {
     /** The argument's own ID. */
     argumentId: string
+    /**
+     * Whether the argument is a response. A response has no conclusion and is
+     * not evaluated against one, so evaluation and the validity check refuse
+     * it with `ARGUMENT_IS_RESPONSE`. Absent means a standard argument.
+     */
+    isResponse?: boolean
     /** Returns the conclusion PremiseEngine, or undefined. */
     getConclusionPremise(): TEvaluablePremise | undefined
     /** Returns supporting premises (inference premises minus conclusion). */
@@ -178,6 +184,26 @@ export function evaluateSubtree(
 }
 
 /**
+ * The refusal both evaluation and the validity check give a response: it has
+ * no conclusion to evaluate against.
+ */
+function responseRefusal(): {
+    ok: false
+    validation: TCoreValidationResult
+} {
+    return {
+        ok: false,
+        validation: makeValidationResult([
+            makeErrorIssue({
+                code: "ARGUMENT_IS_RESPONSE",
+                message:
+                    "A response argument has no conclusion and is not evaluated against one; check its links with checkLink and checkResponseCoherent.",
+            }),
+        ]),
+    }
+}
+
+/**
  * Evaluates an argument under a three-valued expression assignment.
  */
 export function evaluateArgument(
@@ -185,6 +211,7 @@ export function evaluateArgument(
     assignment: TCoreExpressionAssignment,
     options?: TCoreArgumentEvaluationOptions
 ): TCoreArgumentEvaluationResult {
+    if (ctx.isResponse === true) return responseRefusal()
     const validateFirst = options?.validateFirst ?? true
     if (validateFirst) {
         const validation = ctx.validateEvaluability()
@@ -564,6 +591,7 @@ export function checkArgumentValidity(
     ctx: TArgumentEvaluationContext,
     options?: TCoreValidityCheckOptions
 ): TCoreValidityCheckResult {
+    if (ctx.isResponse === true) return responseRefusal()
     const validateFirst = options?.validateFirst ?? true
     if (validateFirst) {
         const validation = ctx.validateEvaluability()

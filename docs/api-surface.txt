@@ -330,6 +330,7 @@ Method lib.ArgumentEngine.getVariablesBoundToPremise (1)
 Method lib.ArgumentEngine.hasExpression (1)
 Method lib.ArgumentEngine.hasPremise (1)
 Method lib.ArgumentEngine.hasVariable (1)
+Method lib.ArgumentEngine.isResponse (1)
 Method lib.ArgumentEngine.listPremiseIds (1)
 Method lib.ArgumentEngine.listPremises (1)
 Method lib.ArgumentEngine.listRootExpressions (1)
@@ -4750,6 +4751,7 @@ Property lib.TArgumentEvaluationContext.getVariable.id
 Property lib.TArgumentEvaluationContext.getVariable.id
 Property lib.TArgumentEvaluationContext.getVariable.symbol
 Property lib.TArgumentEvaluationContext.getVariable.symbol
+Property lib.TArgumentEvaluationContext.isResponse
 Property lib.TArgumentExpressionQueries.collectReferencedVariables.byId
 Property lib.TArgumentExpressionQueries.collectReferencedVariables.byId.premiseIds
 Property lib.TArgumentExpressionQueries.collectReferencedVariables.byId.symbol
@@ -5479,22 +5481,22 @@ Property lib.composeChangesets.TVar.id
 Property lib.composeChangesets.TVar.id
 Property lib.composeChangesets.TVar.symbol
 Property lib.composeChangesets.TVar.symbol
-Property lib.defaultCompareArgument._after.checksum
-Property lib.defaultCompareArgument._after.combinedChecksum
-Property lib.defaultCompareArgument._after.descendantChecksum
-Property lib.defaultCompareArgument._after.id
-Property lib.defaultCompareArgument._after.respondsTo
-Property lib.defaultCompareArgument._after.respondsTo.argumentId
-Property lib.defaultCompareArgument._after.respondsTo.argumentVersion
-Property lib.defaultCompareArgument._after.version
-Property lib.defaultCompareArgument._before.checksum
-Property lib.defaultCompareArgument._before.combinedChecksum
-Property lib.defaultCompareArgument._before.descendantChecksum
-Property lib.defaultCompareArgument._before.id
-Property lib.defaultCompareArgument._before.respondsTo
-Property lib.defaultCompareArgument._before.respondsTo.argumentId
-Property lib.defaultCompareArgument._before.respondsTo.argumentVersion
-Property lib.defaultCompareArgument._before.version
+Property lib.defaultCompareArgument.after.checksum
+Property lib.defaultCompareArgument.after.combinedChecksum
+Property lib.defaultCompareArgument.after.descendantChecksum
+Property lib.defaultCompareArgument.after.id
+Property lib.defaultCompareArgument.after.respondsTo
+Property lib.defaultCompareArgument.after.respondsTo.argumentId
+Property lib.defaultCompareArgument.after.respondsTo.argumentVersion
+Property lib.defaultCompareArgument.after.version
+Property lib.defaultCompareArgument.before.checksum
+Property lib.defaultCompareArgument.before.combinedChecksum
+Property lib.defaultCompareArgument.before.descendantChecksum
+Property lib.defaultCompareArgument.before.id
+Property lib.defaultCompareArgument.before.respondsTo
+Property lib.defaultCompareArgument.before.respondsTo.argumentId
+Property lib.defaultCompareArgument.before.respondsTo.argumentVersion
+Property lib.defaultCompareArgument.before.version
 Property lib.defaultComparePremise._after.argumentId
 Property lib.defaultComparePremise._after.argumentId
 Property lib.defaultComparePremise._after.argumentVersion
@@ -6401,6 +6403,7 @@ Variable lib.ARG_CLAIM_REF_NOT_FOUND
 Variable lib.ARG_CONCLUSION_NOT_FOUND
 Variable lib.ARG_OWNERSHIP_MISMATCH
 Variable lib.ARG_PREMISE_REF_NOT_FOUND
+Variable lib.ARG_RESPONDS_TO_ITSELF
 Variable lib.ARG_SCHEMA_INVALID
 Variable lib.AXIOM_CLAIM_NOT_NORMAL_TYPE
 Variable lib.AXIOM_CLAIM_REF_NOT_FOUND

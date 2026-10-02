@@ -75,6 +75,7 @@ export type TCoreValidationSeverity = "error" | "warning"
 /** Machine-readable codes for all validation issues. */
 export type TCoreValidationCode =
     | "ARGUMENT_NO_CONCLUSION"
+    | "ARGUMENT_IS_RESPONSE"
     | "ARGUMENT_CONCLUSION_NOT_FOUND"
     | "ARGUMENT_VARIABLE_ID_SYMBOL_MISMATCH"
     | "ARGUMENT_VARIABLE_SYMBOL_AMBIGUOUS"

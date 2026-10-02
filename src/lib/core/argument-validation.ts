@@ -18,6 +18,7 @@ import type {
     TInvariantViolation,
 } from "../types/validation.js"
 import {
+    ARG_RESPONDS_TO_ITSELF,
     ARG_SCHEMA_INVALID,
     ARG_OWNERSHIP_MISMATCH,
     ARG_CLAIM_REF_NOT_FOUND,
@@ -224,6 +225,17 @@ export function validateArgument(
         })
     }
 
+    // A response names the argument it answers; that argument is never itself.
+    const respondsTo = (arg as unknown as TCoreArgument).respondsTo
+    if (respondsTo?.argumentId === arg.id) {
+        violations.push({
+            code: ARG_RESPONDS_TO_ITSELF,
+            message: `Argument "${arg.id}" cannot respond to itself.`,
+            entityType: "argument",
+            entityId: arg.id,
+        })
+    }
+
     // 2. Delegate to VariableManager.validate()
     const varResult = ctx.validateVariables()
     violations.push(...varResult.violations)
@@ -398,14 +410,19 @@ export function validateArgumentEvaluability(
     ctx: TArgumentValidationContext
 ): TCoreValidationResult {
     const issues: TCoreValidationIssue[] = []
+    // A response has no conclusion, so its absence is not a fault there.
+    const isResponse =
+        (ctx.getArgument() as unknown as TCoreArgument).respondsTo !== undefined
 
     if (ctx.conclusionPremiseId === undefined) {
-        issues.push(
-            makeErrorIssue({
-                code: "ARGUMENT_NO_CONCLUSION",
-                message: "Argument has no designated conclusion premise.",
-            })
-        )
+        if (!isResponse) {
+            issues.push(
+                makeErrorIssue({
+                    code: "ARGUMENT_NO_CONCLUSION",
+                    message: "Argument has no designated conclusion premise.",
+                })
+            )
+        }
     } else if (!ctx.hasPremise(ctx.conclusionPremiseId)) {
         issues.push(
             makeErrorIssue({

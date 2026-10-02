@@ -17,12 +17,22 @@ import type {
 } from "../types/diff.js"
 import type { ArgumentEngine } from "./argument-engine.js"
 
-/** Compares two argument objects. Core argument only has identity fields (id, version), so no diffable fields. */
+/**
+ * Compares two argument objects. Apart from its identity fields (id,
+ * version), a core argument has one diffable field: a response's
+ * `respondsTo`, compared by value, so moving a response to another version of
+ * the argument it answers is reported.
+ */
 export function defaultCompareArgument(
-    _before: TCoreArgument,
-    _after: TCoreArgument
+    before: TCoreArgument,
+    after: TCoreArgument
 ): TCoreFieldChange[] {
-    return []
+    const a = before.respondsTo
+    const b = after.respondsTo
+    const same =
+        a?.argumentId === b?.argumentId &&
+        a?.argumentVersion === b?.argumentVersion
+    return same ? [] : [{ field: "respondsTo", before: a, after: b }]
 }
 
 /** Compares two variables and returns field-level changes for `symbol` and binding-specific fields. */

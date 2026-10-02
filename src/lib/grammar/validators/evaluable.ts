@@ -208,6 +208,8 @@ export function validateE6(ctx: TValidatorContext): readonly TViolation[] {
  */
 export function validateE7(ctx: TValidatorContext): readonly TViolation[] {
     if (ctx.premises.length === 0) return []
+    // A response has no conclusion; E-8 covers one that has.
+    if (ctx.argument.respondsTo !== undefined) return []
     const conclusionId = ctx.roleState.conclusionPremiseId
     if (conclusionId === undefined) {
         return [
@@ -234,6 +236,27 @@ export function validateE7(ctx: TValidatorContext): readonly TViolation[] {
     return []
 }
 
+/**
+ * E-8 — A response has no conclusion. A response answers another argument
+ * through its links and asserts no conclusion of its own, and the engine
+ * never designates one. A response stored with a conclusion still loads, so
+ * that the data can be repaired, and this rule reports it.
+ */
+export function validateE8(ctx: TValidatorContext): readonly TViolation[] {
+    if (ctx.argument.respondsTo === undefined) return []
+    const conclusionId = ctx.roleState.conclusionPremiseId
+    if (conclusionId === undefined) return []
+    return [
+        {
+            tier: "evaluable",
+            code: "E-8",
+            message: `response has a conclusion premise ${conclusionId}; a response has none`,
+            argumentId: ctx.argument.id,
+            premiseId: conclusionId,
+        },
+    ]
+}
+
 export function validateEvaluable(
     ctx: TValidatorContext
 ): readonly TViolation[] {
@@ -244,5 +267,6 @@ export function validateEvaluable(
         ...validateE5(ctx),
         ...validateE6(ctx),
         ...validateE7(ctx),
+        ...validateE8(ctx),
     ]
 }

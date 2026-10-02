@@ -4,6 +4,7 @@ import {
     type TClaimBoundVariable,
     type TPremiseBoundVariable,
     type TCoreArgument,
+    type TCoreArgumentReference,
     type TCoreClaim,
     type TCoreDerivationPremise,
     type TCorePremise,
@@ -236,6 +237,14 @@ export class ArgumentEngine<
         options?: TLogicEngineOptions
     ) {
         super()
+        const respondsTo = (argument as Record<string, unknown>).respondsTo as
+            | TCoreArgumentReference
+            | undefined
+        if (respondsTo?.argumentId === argument.id) {
+            throw new Error(
+                `Argument "${argument.id}" cannot respond to itself.`
+            )
+        }
         this.argument = { ...argument }
         this.claimLibrary = claimLibrary
         this.premises = new Map()
@@ -970,7 +979,9 @@ export class ArgumentEngine<
             collector.addedPremise(pm.toPremiseData())
             this.markDirty()
 
-            if (this.conclusionPremiseId === undefined) {
+            // A response has no conclusion, so its first premise is not made
+            // one.
+            if (this.conclusionPremiseId === undefined && !this.isResponse()) {
                 this.conclusionPremiseId = id
                 collector.setRoles(this.getRoleState())
             }
@@ -1085,7 +1096,8 @@ export class ArgumentEngine<
                 const remainingIds = Array.from(this.premises.keys()).sort(
                     (a, b) => a.localeCompare(b)
                 )
-                if (remainingIds.length > 0) {
+                // A response promotes nothing: it has no conclusion to keep.
+                if (remainingIds.length > 0 && !this.isResponse()) {
                     this.conclusionPremiseId = remainingIds[0]
                 } else {
                     this.conclusionPremiseId = undefined
@@ -1782,6 +1794,11 @@ export class ArgumentEngine<
         TArg
     > {
         return this.withValidation(() => {
+            if (this.isResponse()) {
+                throw new Error(
+                    `Argument "${this.argument.id}" is a response, and a response has no conclusion.`
+                )
+            }
             const premise = this.premises.get(premiseId)
             if (!premise) {
                 throw new Error(`Premise "${premiseId}" does not exist.`)
@@ -1858,9 +1875,33 @@ export class ArgumentEngine<
         TExpr,
         TVar
     >[] {
+        if (this.isResponse()) {
+            return this.listPremises().filter((pm) => !this.isLinkPremise(pm))
+        }
         return this.listPremises().filter(
             (pm) => pm.isInference() && pm.getId() !== this.conclusionPremiseId
         )
+    }
+
+    /**
+     * Whether this argument is a response: it carries `respondsTo`, the
+     * argument it answers pinned to one version, and has no conclusion.
+     */
+    public isResponse(): boolean {
+        return (
+            (this.argument as Record<string, unknown>).respondsTo !== undefined
+        )
+    }
+
+    /**
+     * Whether a premise of a response is a link: its whole content is one
+     * variable expression, or `NOT` over one, whose variable is bound to an
+     * expression of the argument the response answers.
+     */
+    private isLinkPremise(
+        _premise: PremiseEngine<TArg, TPremise, TExpr, TVar>
+    ): boolean {
+        return false
     }
 
     public snapshot(): TArgumentEngineSnapshot<TArg, TPremise, TExpr, TVar> {
@@ -2100,9 +2141,15 @@ export class ArgumentEngine<
             pe.loadExpressions(premiseExprs)
         }
 
-        // Set roles (override auto-assignment)
+        // Set roles (override auto-assignment). A response stored with a
+        // conclusion keeps it as stored, so that rule E-8 can report it;
+        // `setConclusionPremise` would refuse it.
         if (roles.conclusionPremiseId !== undefined) {
-            engine.setConclusionPremise(roles.conclusionPremiseId)
+            if (engine.isResponse()) {
+                engine.conclusionPremiseId = roles.conclusionPremiseId
+            } else {
+                engine.setConclusionPremise(roles.conclusionPremiseId)
+            }
         }
 
         engine.restoringFromSnapshot = false
@@ -2504,6 +2551,7 @@ export class ArgumentEngine<
         // this filter share one definition.
         return {
             argumentId: this.argument.id,
+            isResponse: this.isResponse(),
             conclusionPremiseId: this.conclusionPremiseId,
             getConclusionPremise: () => {
                 const c = this.getConclusionPremise()

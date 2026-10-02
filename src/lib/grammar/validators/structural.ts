@@ -587,6 +587,24 @@ export function validateS14(ctx: TValidatorContext): readonly TViolation[] {
     return violations
 }
 
+/**
+ * S-15 — A response is well formed. A response's `respondsTo` names an
+ * argument other than itself. Checked on every mutation and on load, as an
+ * invariant, so a response that names itself is never loaded.
+ */
+export function validateS15(ctx: TValidatorContext): readonly TViolation[] {
+    const respondsTo = ctx.argument.respondsTo
+    if (respondsTo?.argumentId !== ctx.argument.id) return []
+    return [
+        {
+            tier: "structural",
+            code: "S-15",
+            message: `argument ${ctx.argument.id} responds to itself`,
+            argumentId: ctx.argument.id,
+        },
+    ]
+}
+
 export function validateStructural(
     ctx: TValidatorContext
 ): readonly TViolation[] {
@@ -605,5 +623,6 @@ export function validateStructural(
         ...validateS12(ctx),
         ...validateS13(ctx),
         ...validateS14(ctx),
+        ...validateS15(ctx),
     ]
 }
