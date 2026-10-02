@@ -15,6 +15,7 @@ import {
     type TCorePropositionalVariable,
     type TOptionalChecksum,
 } from "../schemata/index.js"
+import { readLink } from "./response/links.js"
 import type {
     TCoreArgumentEvaluationOptions,
     TCoreArgumentEvaluationResult,
@@ -2009,9 +2010,18 @@ export class ArgumentEngine<
      * expression of the argument the response answers.
      */
     private isLinkPremise(
-        _premise: PremiseEngine<TArg, TPremise, TExpr, TVar>
+        premise: PremiseEngine<TArg, TPremise, TExpr, TVar>
     ): boolean {
-        return false
+        return (
+            readLink(
+                premise.getId(),
+                premise.getExpressions(),
+                (id) =>
+                    this.variables.getVariable(id) as unknown as
+                        | TCorePropositionalVariable
+                        | undefined
+            ) !== undefined
+        )
     }
 
     public snapshot(): TArgumentEngineSnapshot<TArg, TPremise, TExpr, TVar> {
