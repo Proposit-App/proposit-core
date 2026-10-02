@@ -1,0 +1,8 @@
+slug: 2026-10-02-citation-dates-that-came-through-json-crash-the-ieee-formatter
+title: Citation dates that came through JSON crash the IEEE formatter
+created: '2026-10-02'
+resolution: null
+effort: low
+complexity: low
+tags:
+- bug
