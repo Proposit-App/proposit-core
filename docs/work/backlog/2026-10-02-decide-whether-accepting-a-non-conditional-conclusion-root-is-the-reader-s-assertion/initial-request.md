@@ -28,4 +28,4 @@ This is blocked on that decision, which is the maintainer's: it changes an evalu
 
 ## Related
 
-The carrying item avoids the case by not carrying a reinforce of such a root (reason `conclusionStatement`). Deciding this item may let that reinforce be carried later.
+The carrying item avoids the case: it carries a reinforce only at a conditional root (`implies` or `iff`), for the conclusion and for every freeform premise, and reports any other root as `nonConditionalRoot`. That was decided by the requester on the maintainer's behalf (the carrying spec's Notes, decision (d)). Deciding this item may let those reinforces be carried later.

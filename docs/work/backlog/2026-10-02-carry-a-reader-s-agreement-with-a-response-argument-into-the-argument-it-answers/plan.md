@@ -49,7 +49,7 @@ Against the spec's fourth revision. "Criterion N" is the spec's acceptance crite
     - for an axiomatic variable, looked up through the claim lookup at its own claim version, `true` is skipped and `false` drops the whole link with reason `axiom`;
     - a link whose every value is skipped is also reported as `axiom`;
     - an external premise column goes onto its variable;
-  - **inference links:** maps each agreed inference link by the spec's Inference links table, using `positionClassOf` (which reads through formula nodes) and `isPremiseRootExpression` (`fingerprint.ts:128`). `positionClassOf` returns `inDerivation` for a derivation premise's root and its nested operators alike, so the root test is what separates `accepted` from `nestedReinforce` there. `positionClassOf` also returns `nested` for nested operators of both freeform premises and the conclusion, so a nested undercut needs the premise id compared with the target's conclusion premise id: `rejected` in a freeform premise, `ignoredInConclusion` in the conclusion. A reinforce carries `accepted` only on a premise root, and on the conclusion's root only when that operator is `implies` or `iff`; otherwise `conclusionStatement`. A nested one is reported `nestedReinforce`. A nested undercut in a freeform premise that is not the conclusion carries `rejected`;
+  - **inference links:** maps each agreed inference link by the spec's Inference links table, using `positionClassOf` (which reads through formula nodes) and `isPremiseRootExpression` (`fingerprint.ts:128`). `positionClassOf` returns `inDerivation` for a derivation premise's root and its nested operators alike, so the root test is what separates `accepted` from `nestedReinforce` there. `positionClassOf` also returns `nested` for nested operators of both freeform premises and the conclusion, so a nested undercut needs the premise id compared with the target's conclusion premise id: `rejected` in a freeform premise, `ignoredInConclusion` in the conclusion. A reinforce carries `accepted` only on a premise root whose operator, read through formula nodes, is `implies` or `iff`; any other root gives `nonConditionalRoot`. A nested one is reported `nestedReinforce`. A nested undercut in a freeform premise that is not the conclusion carries `rejected`;
   - **non-links:** an `agree` on a non-link premise gives `notALink`;
   - **conflicts:** finds every link that fixes a variable, or decides an operator, both ways. All of those links carry nothing, with reason `conflict`;
   - **sources:** builds `sources` with one entry per value, naming every link behind it;
@@ -92,7 +92,7 @@ Against the spec's fourth revision. "Criterion N" is the spec's acceptance crite
 
 ### Task 6. Attribution of carried values
 
-- **Modifies** `test/evaluation/attribution.test.ts` with criterion 9, both bullets. No source change is expected, because carried values arrive in `variables` and a non-conditional conclusion-root reinforce is not carried.
+- **Modifies** `test/evaluation/attribution.test.ts` with criterion 9, both bullets. No source change is expected, because carried values arrive in `variables` and a reinforce of a non-conditional root, of the conclusion or of a freeform premise, is not carried.
 - **Proves it:** the test passes. The two wrong implementations named in criterion 9 are built on scratch changes and each must fail its bullet; the outcome records the failure. Because this test is expected to pass on the tree as it is, the scratch failure is its proof.
 
 ### Task 7. Exports and the public surface
@@ -109,7 +109,7 @@ Evaluated against every documentation entry, over the finished diff:
 |---|---|---|
 | `README.md` (Public-CLI-API) | yes | the Response arguments section gains a short "Carrying a reader's answers" paragraph and a pointer |
 | `README.md#invalid-constructions` (Validation-Rules) | no | no rule, thrown error or code changes; `carryAnswers` refusals are results, not throws |
-| `docs/api-reference.md` (Public-API) | yes | a "Carrying a reader's answers" section: decomposition over the target expression alone and how that differs from `checkLink` when a response grounds a target claim, placement, the inference table (why a reinforce carries only at a premise root, and only at a conditional conclusion root), response targets, collisions, the defaults order, every `notCarried` reason; `evaluateWithDefaults` gains its parameter |
+| `docs/api-reference.md` (Public-API) | yes | a "Carrying a reader's answers" section: decomposition over the target expression alone and how that differs from `checkLink` when a response grounds a target claim, placement, the inference table (why a reinforce carries only at a conditional premise root), response targets, collisions, the defaults order, every `notCarried` reason; `evaluateWithDefaults` gains its parameter |
 | `AGENTS.md` (Routing) | yes, one entry | a new easy-to-violate invariant: carried values must enter `variables` / `operatorAssignments` and nowhere else, or attribution credits a value the reader supplied (the `forcedTrueVariableIds` trap) |
 | `CLI_EXAMPLES.md`, `scripts/smoke-test.sh`, `skills/proposit-core/docs/cli.md` (Public-CLI-API) | no | the CLI does not store responses |
 | `src/lib/core/interfaces/argument-engine.interfaces.ts` | done in Tasks 3 and 5 | re-read for the final wording |
@@ -143,7 +143,8 @@ What the suite cannot check:
   - 12: Task 7;
   - 13: Task 8.
 - **Trace of the third spec revision:** criterion 1's grounded-column case, Task 3 (and its second wrong implementation); criterion 2's root and nested reinforce bullets, Task 3 (third wrong implementation); criterion 8's inference `noLinkReached` bullet, Task 4; criterion 10's definition of free columns, Tasks 2 and 3, whose one-meaning test substitutes over every column of E the cube leaves unfixed.
-- **Trace of the fourth spec revision:** criterion 2's `conclusionStatement` bullet, Task 3; criterion 9's second bullet, Task 6; criterion 10 with a grounding response, Task 3; criterion 5's `notALink`, Task 3.
+- **Trace of the fourth spec revision:** criterion 2's `nonConditionalRoot` bullet, Task 3; criterion 9's second bullet, Task 6; criterion 10 with a grounding response, Task 3; criterion 5's `notALink`, Task 3.
+- **Trace of the fifth spec revision:** criterion 2's conditional-root and `nonConditionalRoot` bullets (freeform and conclusion), Task 3; criterion 9's freeform case, Task 6.
 - **The combined 6.0.0 review.** The at-most-one operator must add its case to `evaluateCombinedNode`; the decomposition then handles it with no other change. The combined review checks that, and carried values under that operator's propagation rule.
 
 ## Notes
