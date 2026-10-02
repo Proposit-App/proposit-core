@@ -354,9 +354,11 @@ export class ArgumentEngine<
                 !isPremiseBound(v as unknown as TCorePropositionalVariable)
             )
                 return false
-            const boundPremise = this.premises.get(
-                (v as TPremiseBoundVariable).boundPremiseId
-            )
+            const bound = v as TPremiseBoundVariable
+            // A premise in another argument is not held here, and a local
+            // premise that shares its id is a different premise.
+            if (bound.boundArgumentId !== this.argument.id) return false
+            const boundPremise = this.premises.get(bound.boundPremiseId)
             return !boundPremise?.getRootExpressionId()
         })
     }

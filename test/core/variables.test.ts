@@ -766,3 +766,40 @@ describe("a binding into another argument whose premise shares a local premise's
         ).not.toThrow()
     })
 })
+
+describe("the empty-bound-premise warning for a binding into another argument", () => {
+    const placeInLocalPremise = (boundPremiseId: string) => {
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
+        eng.createPremiseWithId("p1")
+        const { result: user } = eng.createPremiseWithId("p2")
+        eng.bindVariableToExternalPremise({
+            id: "v-ext",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            symbol: "Ext",
+            boundPremiseId,
+            boundArgumentId: "arg-other",
+            boundArgumentVersion: 0,
+        })
+        user.addExpression(
+            makeVarExpr("e-ext", "v-ext", {
+                parentId: null,
+                position: 1,
+                premiseId: "p2",
+            })
+        )
+        return user
+    }
+    const emptyBoundWarnings = (user: ReturnType<typeof placeInLocalPremise>) =>
+        user
+            .validateEvaluability()
+            .issues.filter((i) => i.code === "EXPR_BOUND_PREMISE_EMPTY")
+
+    it("is not raised when no local premise has the bound premise's id", () => {
+        expect(emptyBoundWarnings(placeInLocalPremise("p-remote"))).toEqual([])
+    })
+
+    it("is not raised when an empty local premise shares the bound premise's id", () => {
+        expect(emptyBoundWarnings(placeInLocalPremise("p1"))).toEqual([])
+    })
+})
