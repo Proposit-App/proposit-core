@@ -223,8 +223,9 @@ function resolveErrorCap(policy: TRetryPolicy): number {
  * `userMessage` overrides the prompt's user message (the loop / launch
  * pass the retry-suffixed message on attempt 2+); it defaults to
  * `buildPrompt(ctx).user`. The returned `req` carries NO `onResponseCreated`
- * — the in-process loop attaches its own emitter; the launch path uses the
- * submit return value instead. Package-internal.
+ * or `onTextDelta` — the in-process loop attaches its own per-attempt
+ * emitters; the launch path uses the submit return value instead and never
+ * holds the stream. Package-internal.
  */
 export function buildLlmRequest<TOutput>(
     cfg: TLlmStageConfig<TOutput>,
@@ -526,6 +527,20 @@ async function runLlmStageAttempt<TOutput>(
     // the launch path uses the submit return value instead).
     const { req } = buildLlmRequest(cfg, ctx, userMessage)
     req.onResponseCreated = emitResponseCreated
+    // Each chunk of streamed text becomes an event labelled with this
+    // attempt, so a consumer accumulating text knows to start over on a
+    // retry. A chunk a provider delivers after the caller aborted is
+    // dropped: the stage is being skipped and nothing should follow.
+    req.onTextDelta = (delta: string): void => {
+        if (ctx.signal.aborted) return
+        ctx.emit({
+            kind: "stage:llm-text-delta",
+            stageId: cfg.id,
+            attempt,
+            delta,
+            at: now(),
+        })
+    }
 
     // Emit the pre-call stage-input event. Fires inside the retry loop
     // after `attempt` is incremented and after the request is built,

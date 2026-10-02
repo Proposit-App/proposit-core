@@ -34,6 +34,7 @@ import {
 import { createScribePipeline } from "../../src/extensions/pipelines/ingestion/scribe/index.js"
 import { basicsExtension } from "../../src/extensions/pipelines/base/index.js"
 import type { TExecuteTurnDeps } from "../../src/lib/conversation/turn.js"
+import type { TPipelineEvent } from "../../src/lib/pipelines/types.js"
 import { createMockLlmProvider, type TMockResponse } from "../mocks/llm.js"
 import { ParsedArgumentResponseSchema } from "../../src/lib/parsing/schemata.js"
 import { Value } from "typebox/value"
@@ -167,6 +168,99 @@ describe("executeTurn", () => {
 
         // Token usage is 0 for deterministic stages (no LLM call)
         expect(result.tokenUsage).toEqual({ input: 0, output: 0 })
+    })
+    function streamingStage() {
+        return llmStage({
+            id: "stream-stage",
+            dependsOn: [],
+            outputSchema: ParsedArgumentResponseSchema,
+            model: "mock",
+            buildPrompt: () => ({
+                system: "<!--stage-id: stream-stage--> system",
+                user: "user",
+            }),
+        })
+    }
+
+    it("passes the stage's text deltas to onEvent as they stream", async () => {
+        const events: TPipelineEvent[] = []
+        const result = await executeTurn(
+            streamingStage(),
+            { userMessage: "hello" },
+            {
+                ...mockDeps({
+                    "stream-stage": [
+                        {
+                            kind: "ok",
+                            output: mockOutput(),
+                            deltas: ["{", '"argument":'],
+                        },
+                    ],
+                }),
+                onEvent: (e) => events.push(e),
+            }
+        )
+        expect(result.output).toEqual(mockOutput())
+        const kinds = events.map((e) => e.kind)
+        expect(
+            events.flatMap((e) =>
+                e.kind === "stage:llm-text-delta"
+                    ? [[e.stageId, e.attempt, e.delta]]
+                    : []
+            )
+        ).toEqual([
+            ["stream-stage", 1, "{"],
+            ["stream-stage", 1, '"argument":'],
+        ])
+        expect(kinds.indexOf("stage:llm-text-delta")).toBeGreaterThan(
+            kinds.indexOf("stage:llm-request")
+        )
+        expect(kinds.lastIndexOf("stage:llm-text-delta")).toBeLessThan(
+            kinds.indexOf("stage:llm-call")
+        )
+    })
+
+    it("emits no text delta once the turn is aborted, and the stage is skipped", async () => {
+        const events: TPipelineEvent[] = []
+        const controller = new AbortController()
+        const pending = executeTurn(
+            streamingStage(),
+            { userMessage: "hello" },
+            {
+                llm: createMockLlmProvider({
+                    responses: {
+                        "stream-stage": [
+                            {
+                                kind: "ok",
+                                output: mockOutput(),
+                                deltas: ["before"],
+                                lateDeltas: ["after"],
+                            },
+                        ],
+                    },
+                    responseDelayMs: 50,
+                }),
+                signal: controller.signal,
+                onEvent: (e) => events.push(e),
+            }
+        )
+        await new Promise((resolve) => setTimeout(resolve, 10))
+        controller.abort()
+        const result = await pending
+
+        expect(result.output).toBeNull()
+        expect(
+            events.flatMap((e) =>
+                e.kind === "stage:llm-text-delta" ? [e.delta] : []
+            )
+        ).toEqual(["before"])
+        expect(events).toContainEqual(
+            expect.objectContaining({
+                kind: "stage:end",
+                stageId: "stream-stage",
+                status: "skipped",
+            })
+        )
     })
 })
 

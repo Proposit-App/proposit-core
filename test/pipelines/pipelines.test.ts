@@ -58,6 +58,7 @@ import {
     makeQuotaError,
     makeRateLimitError,
     makeTransientError,
+    type TMockResponse,
 } from "../mocks/llm.js"
 
 // ---------------- helpers ----------------
@@ -1226,6 +1227,61 @@ describe("subPipelineStage", () => {
         )
         expect(innerStageEvent).toBeTruthy()
     })
+    it("prefixes a nested stage's text deltas like its other events", async () => {
+        const events: TPipelineEvent[] = []
+        const innerStage = llmStage<{ value: number }>({
+            id: "inner-llm",
+            dependsOn: [],
+            outputSchema: Type.Object({ value: Type.Number() }),
+            model: "mock",
+            buildPrompt: () => ({
+                system: "<!--stage-id: inner-llm--> system",
+                user: "user",
+            }),
+        })
+        const innerPipeline: TPipeline<unknown, number> = {
+            id: "inner-pipeline",
+            version: "0",
+            inputSchema: emptyInputSchema(),
+            outputSchema: Type.Number(),
+            stages: [innerStage],
+            finalize: {
+                dependsOn: ["inner-llm"],
+                run: (ctx) =>
+                    ctx.get<{ value: number }>("inner-llm")?.value ?? -1,
+            },
+        }
+        const outer = buildPipeline<number>({
+            stages: [
+                subPipelineStage<number>({
+                    id: "wrap",
+                    dependsOn: [],
+                    pipeline: innerPipeline,
+                }),
+            ],
+            finalize: {
+                dependsOn: ["wrap"],
+                run: (ctx) => ctx.get<number>("wrap") ?? 0,
+            },
+        })
+        const llm = createMockLlmProvider({
+            responses: {
+                "inner-llm": [
+                    { kind: "ok", output: { value: 3 }, deltas: ["chunk"] },
+                ],
+            },
+        })
+        await executePipeline(
+            outer,
+            {},
+            { llm, onEvent: (e) => events.push(e) }
+        )
+        expect(
+            events.flatMap((e) =>
+                e.kind === "stage:llm-text-delta" ? [[e.stageId, e.delta]] : []
+            )
+        ).toEqual([["wrap::inner-llm", "chunk"]])
+    })
 })
 
 // ---------------- bonus: ctx.get strictness ----------------
@@ -1838,6 +1894,104 @@ describe("llmStage — stage:llm-call event", () => {
 // retried attempt firing a second `stage:llm-request`. Deterministic
 // stages emit none. This lets a consumer surface a stage's input the
 // instant the stage starts its call, before the response lands.
+
+describe("llmStage — stage:llm-text-delta event", () => {
+    const outputSchema = Type.Object({ value: Type.Number() })
+
+    function deltaPipeline(responses: TMockResponse[], retry?: boolean) {
+        const stage = llmStage<{ value: number }>({
+            id: "d1",
+            dependsOn: [],
+            outputSchema,
+            model: "mock",
+            buildPrompt: () => ({
+                system: "<!--stage-id: d1--> system",
+                user: "user",
+            }),
+            ...(retry ? { retry: { backoffMs: 0 } } : {}),
+        })
+        return {
+            llm: createMockLlmProvider({ responses: { d1: responses } }),
+            pipeline: buildPipeline<{ value: number }>({
+                stages: [stage],
+                finalize: {
+                    dependsOn: ["d1"],
+                    run: (ctx) =>
+                        ctx.get<{ value: number }>("d1") ?? { value: -1 },
+                },
+            }),
+        }
+    }
+
+    it("reaches an executePipeline caller, one event per chunk, between stage:llm-request and stage:llm-call", async () => {
+        const events: TPipelineEvent[] = []
+        const { llm, pipeline } = deltaPipeline([
+            { kind: "ok", output: { value: 7 }, deltas: ['{"value"', ":7}"] },
+        ])
+        const result = await executePipeline(
+            pipeline,
+            {},
+            { llm, onEvent: (e) => events.push(e) }
+        )
+        expect(result.output).toEqual({ value: 7 })
+
+        const deltas = events.filter((e) => e.kind === "stage:llm-text-delta")
+        expect(deltas).toEqual([
+            {
+                kind: "stage:llm-text-delta",
+                stageId: "d1",
+                attempt: 1,
+                delta: '{"value"',
+                at: expect.any(Number) as number,
+            },
+            {
+                kind: "stage:llm-text-delta",
+                stageId: "d1",
+                attempt: 1,
+                delta: ":7}",
+                at: expect.any(Number) as number,
+            },
+        ])
+        const kinds = events
+            .filter((e) => "stageId" in e && e.stageId === "d1")
+            .map((e) => e.kind)
+        expect(kinds).toEqual([
+            "stage:start",
+            "stage:llm-request",
+            "stage:llm-text-delta",
+            "stage:llm-text-delta",
+            "stage:llm-call",
+            "stage:end",
+        ])
+    })
+
+    it("labels each attempt's chunks with that attempt, so a retry can be told apart", async () => {
+        const events: TPipelineEvent[] = []
+        const { llm, pipeline } = deltaPipeline(
+            [
+                {
+                    kind: "schema-invalid",
+                    output: { value: "nope" },
+                    deltas: ['{"value":"nope"}'],
+                },
+                { kind: "ok", output: { value: 1 }, deltas: ['{"value":1}'] },
+            ],
+            true
+        )
+        await executePipeline(
+            pipeline,
+            {},
+            { llm, onEvent: (e) => events.push(e) }
+        )
+        const deltas = events.flatMap((e) =>
+            e.kind === "stage:llm-text-delta" ? [[e.attempt, e.delta]] : []
+        )
+        expect(deltas).toEqual([
+            [1, '{"value":"nope"}'],
+            [2, '{"value":1}'],
+        ])
+    })
+})
 
 describe("llmStage — stage:llm-request event", () => {
     const outputSchema = Type.Object({ value: Type.Number() })

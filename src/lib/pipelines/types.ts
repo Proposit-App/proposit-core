@@ -181,6 +181,17 @@ export type TPipelineEvent =
           at: number
       }
     | {
+          kind: "stage:llm-text-delta"
+          stageId: string
+          /** 1, 2, ... — the attempt this chunk belongs to. A retried
+           *  attempt streams its text again from the beginning. */
+          attempt: number
+          /** One chunk of assistant output text, as the provider emitted
+           *  it. Never accumulated. */
+          delta: string
+          at: number
+      }
+    | {
           kind: "stage:llm-call"
           stageId: string
           /** 1, 2, ... — one event per LLM-call attempt. */
