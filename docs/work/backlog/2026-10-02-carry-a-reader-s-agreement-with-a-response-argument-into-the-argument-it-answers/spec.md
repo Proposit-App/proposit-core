@@ -8,7 +8,7 @@ Sources referred to:
 - **"The first item's review"**: the adversarial review of the first spec. Its carrying findings moved here.
 - **"This review"**: the review of this spec's first draft.
 
-Every departure from the intake is marked **Departure**. `## Notes` says how each finding was handled, and lists one question for the requester that must be answered before planning.
+Every departure from the intake is marked **Departure**. `## Notes` says how each finding was handled, and records the requester's answer to the one question asked before planning.
 
 ## Capability changes
 
@@ -275,6 +275,8 @@ Does the consumer need any of these carried in 6.0.0? If so, they need a held in
 - the hold applied in `evaluateArgument` and the premise-bound resolver, not in `TEvaluablePremise`.
 
 If the answer is yes, that design returns to this spec before planning. If no, the spec plans as written.
+
+**Answered 2026-10-02 (maintainer, relayed by the requester): not in 6.0.0.** The spec plans as written, with these shapes reported as `notExpressible`. Held premises are the backlog item `2026-10-02-let-a-reader-hold-a-whole-premise-true-or-false-during-evaluation`, which records the two defects and their fixes, to ship later as an additive release.
 
 ### How this review's findings were handled
 
