@@ -1,6 +1,6 @@
 # Plan: carry a reader's agreement with a response argument into the argument it answers
 
-Against `spec.md` at `379e3946`. "Criterion N" is the spec's acceptance criterion N. Work happens on `feat/response-arguments`, after the response item it is blocked by (already recorded as `blocked_by`), and ships with it in 6.0.0.
+Against `spec.md` at `f62b25fe`. "Criterion N" is the spec's acceptance criterion N. Work happens on `feat/response-arguments`, after the response item it is blocked by (already recorded as `blocked_by`), and ships with it in 6.0.0.
 
 **Rule for every task:** the task's tests are written first and run against the tree before the code changes. A new test that already passes must say in its own name that it pins behaviour meant to stay the same, or be strengthened until it fails. `pnpm run check` passes at the end of every task, and each task is one commit, or two when a behaviour-preserving step is split from a behaviour change.
 
@@ -19,6 +19,7 @@ Against `spec.md` at `379e3946`. "Criterion N" is the spec's acceptance criterio
   - move the closure that expands a target expression (`expandTarget`, starting at `:156`) and its column helpers (`:105-139`) into an exported factory, `createTargetExpander(target)`. It returns `{ expand(expressionId): TCombinedNode, columns: Map<string, TColumnReference> }`;
   - `buildCombinedSet` uses the factory, so the column keys and expansions it produces are unchanged;
   - export the evaluator `evaluateNode` (`:316`) as `evaluateCombinedNode`.
+- **Why the factory covers the target only.** The spec finds the cube over E's expansion alone, with every column free. The response's grounded columns (`forcedTrueColumns`) are recorded only while the response's own premises are expanded (`expandResponse`, `:230`, adding at `:248-254`); expanding a target expression never records one. So a cube walk that uses the factory, and never `buildCombinedSet`, leaves a column the response grounds free by construction. That is the spec's deliberate departure from `checkLink` for a response that grounds a target claim, and Task 3 pins it.
 - **Proves it:** the existing `test/core/response-check.test.ts`, `response-links.test.ts` and `response-rebase.test.ts` pass unchanged. No new test is added, since nothing changes. The factory is internal and not exported from `src/lib/index.ts`.
 
 ### Task 2. Exact decomposition of a statement
@@ -48,7 +49,7 @@ Against `spec.md` at `379e3946`. "Criterion N" is the spec's acceptance criterio
     - for an axiomatic variable, looked up through the claim lookup at its own claim version, `true` is skipped and `false` drops the whole link with reason `axiom`;
     - a link whose every value is skipped is also reported as `axiom`;
     - an external premise column goes onto its variable;
-  - **inference links:** maps each agreed inference link by the spec's Inference links table, using `positionClassOf` (which reads through formula nodes) and the premise type;
+  - **inference links:** maps each agreed inference link by the spec's Inference links table, using `positionClassOf` (which reads through formula nodes) and the premise type. A reinforce carries `accepted` only on a premise root; a nested one is reported `nestedReinforce`. A nested undercut in a freeform premise that is not the conclusion carries `rejected`;
   - **conflicts:** finds every link that fixes a variable, or decides an operator, both ways. All of those links carry nothing, with reason `conflict`;
   - **sources:** builds `sources` with one entry per value, naming every link behind it;
   - **non-links:** reports `notALink` (decision 1).
@@ -61,12 +62,15 @@ Against `spec.md` at `379e3946`. "Criterion N" is the spec's acceptance criterio
   - criterion 7;
   - decision 1.
   - Every bullet that evaluates X with the carried values merges them by hand until Task 5 lands, and is switched to `mergeCarriedInput` there.
-- **Proves it:** those tests. A wrong implementation is tried and reverted, and recorded in the outcome: placing a claim value on the first variable of a claim only (`getVariableIdForClaim`). The two-variable case must fail.
+- **Proves it:** those tests. Three wrong implementations are tried and reverted, and each failure is recorded in the outcome:
+  - placing a claim value on the first variable of a claim only (`getVariableIdForClaim`). The two-variable case must fail;
+  - finding the cube with the response's grounded columns held true, as `buildCombinedSet` does. Criterion 1's grounded-column case (Y cites S, contradicts X's `S ∧ Q`) must fail, because it then carries "Q false";
+  - carrying `accepted` for a nested reinforce. Criterion 2's `nestedReinforce` bullets must fail, including the one that checks the nested operator's children keep their values.
 
 ### Task 4. Carrying into a response
 
-- **Modifies** `src/lib/core/response/carry.ts`. When the target is a response, each fixed expression column (statement or inference aspect) answers every link of the target on the variable with that referent, by the rule in the spec's "Carrying into a response". Inference links of Z on a link's `NOT` give `linkStep`. Cubes that fix no such column give `noLinkReached`. An `x` fixed both ways is a `conflict` for every link involved.
-- **Tests** in `test/core/response-carry.test.ts`: criterion 8, except its last bullet (Task 5), and decision 2.
+- **Modifies** `src/lib/core/response/carry.ts`. When the target is a response, each fixed expression column (statement or inference aspect) answers every link of the target on the variable with that referent, by the rule in the spec's "Carrying into a response". Inference links of Z on a link's `NOT` give `linkStep`. Inference links of Z on any operator of a non-link premise of Y, and cubes that fix no such column, give `noLinkReached`. An `x` fixed both ways is a `conflict` for every link involved.
+- **Tests** in `test/core/response-carry.test.ts`: criterion 8, except its last bullet (Task 5), and decision 2. Both `noLinkReached` bullets, statement and inference, are covered.
 - **Proves it:** those tests. A wrong implementation is tried: answering a contradict link `NOT(x)` as agreed when `x` is fixed true. The `"disagree"` bullets must fail.
 
 ### Task 5. Merging, and operator decisions through defaults
@@ -105,7 +109,7 @@ Evaluated against every documentation entry, over the finished diff:
 |---|---|---|
 | `README.md` (Public-CLI-API) | yes | the Response arguments section gains a short "Carrying a reader's answers" paragraph and a pointer |
 | `README.md#invalid-constructions` (Validation-Rules) | no | no rule, thrown error or code changes; `carryAnswers` refusals are results, not throws |
-| `docs/api-reference.md` (Public-API) | yes | a "Carrying a reader's answers" section: decomposition, placement, the inference table, response targets, collisions, the defaults order, every `notCarried` reason; `evaluateWithDefaults` gains its parameter |
+| `docs/api-reference.md` (Public-API) | yes | a "Carrying a reader's answers" section: decomposition over the target expression alone and how that differs from `checkLink` when a response grounds a target claim, placement, the inference table (why a reinforce carries only at a premise root), response targets, collisions, the defaults order, every `notCarried` reason; `evaluateWithDefaults` gains its parameter |
 | `AGENTS.md` (Routing) | yes, one entry | a new easy-to-violate invariant: carried values must enter `variables` / `operatorAssignments` and nowhere else, or attribution credits a value the reader supplied (the `forcedTrueVariableIds` trap) |
 | `CLI_EXAMPLES.md`, `scripts/smoke-test.sh`, `skills/proposit-core/docs/cli.md` (Public-CLI-API) | no | the CLI does not store responses |
 | `src/lib/core/interfaces/argument-engine.interfaces.ts` | done in Tasks 3 and 5 | re-read for the final wording |
@@ -138,6 +142,7 @@ What the suite cannot check:
   - 11: Task 5;
   - 12: Task 7;
   - 13: Task 8.
+- **Trace of the third spec revision:** criterion 1's grounded-column case, Task 3 (and its second wrong implementation); criterion 2's root and nested reinforce bullets, Task 3 (third wrong implementation); criterion 8's inference `noLinkReached` bullet, Task 4; criterion 10's definition of free columns, Task 2, whose one-meaning test substitutes over every column of E the cube leaves unfixed.
 - **The combined 6.0.0 review.** The at-most-one operator must add its case to `evaluateCombinedNode`; the decomposition then handles it with no other change. The combined review checks that, and carried values under that operator's propagation rule.
 
 ## Notes
