@@ -143,3 +143,17 @@ export type TResponseCoherenceResult =
       }
     | { status: "checked"; coherent: null; reason: TUndeterminedReason }
     | { status: "invalid"; problems: TLinkViolation[] }
+
+/** A link, named from outside the response that holds it. */
+export interface TLinkReference {
+    /** The response. */
+    argumentId: string
+    argumentVersion: number
+    /** The link premise within it. */
+    premiseId: string
+}
+
+/** Something in the argument answered that a link may be about. */
+export type TLinkElement =
+    | { kind: "claim"; claimId: string }
+    | { kind: "expression"; expressionId: string }
