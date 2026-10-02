@@ -500,14 +500,15 @@ async function runLlmStageAttempt<TOutput>(
     }
 
     // Emit the `stage:llm-response-created` event the moment the provider
-    // surfaces a response id. In background-stream mode this fires
-    // MID-FLIGHT — before `respond()` resolves — from the provider's
-    // `onResponseCreated` callback (the first `response.created` SSE
-    // event). That early emit is load-bearing: a consumer persists the id
-    // before a possible crash, so a call interrupted mid-generation can be
-    // recovered from the upstream's stored copy rather than blindly
-    // re-run. In synchronous mode the callback never fires; the id is
-    // surfaced only at completion (below). The `responseIdEmitted` flag
+    // surfaces a response id. On a streaming call that makes a single
+    // request this fires MID-FLIGHT — before `respond()` resolves — from
+    // the provider's `onResponseCreated` callback (the first
+    // `response.created` SSE event). In background-stream mode that early
+    // emit is load-bearing: a consumer persists the id before a possible
+    // crash, so a call interrupted mid-generation can be recovered from
+    // the upstream's stored copy rather than blindly re-run. Where the
+    // callback does not fire (synchronous, poll-only, a function-tool
+    // loop), the id is surfaced at completion (below). The `responseIdEmitted` flag
     // dedupes so the event fires at most once per attempt.
     let responseIdEmitted = false
     const emitResponseCreated = (responseId: string): void => {

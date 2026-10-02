@@ -164,13 +164,15 @@ export type TPipelineEvent =
     | {
           /**
            * Emitted by `llmStage` as soon as a response id is known.
-           * In background+stream mode the id is available from the
-           * initial submit POST response before any SSE bytes, making
-           * this event the earliest durable persistence point.
-           * In synchronous mode the id is only known at completion, so
-           * this event fires immediately before `stage:llm-call` on
-           * the same attempt; early-persistence is a background-mode-
-           * only guarantee.
+           * On a streaming call that makes a single request (either
+           * streaming mode, with no function tools) the id arrives with
+           * the first SSE event, while the call is still running. Only a
+           * background-stream response keeps generating after the caller
+           * disconnects, so only there is this the point to persist the
+           * id for recovery. Otherwise (synchronous, poll-only, or a
+           * function-tool loop) the id is known at completion, and this
+           * event fires immediately before `stage:llm-call` on the same
+           * attempt, with the same id that event carries.
            */
           kind: "stage:llm-response-created"
           stageId: string

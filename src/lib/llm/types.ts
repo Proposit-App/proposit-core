@@ -71,7 +71,9 @@ export type TLlmRequest<T> = {
      *
      * Only providers that can surface an id mid-flight invoke it (the
      * OpenAI provider in either streaming mode, from the first
-     * `response.created` SSE event). Recovery after an interruption is
+     * `response.created` SSE event, when the call makes a single request:
+     * with function tools it makes one per round, and the id it returns is
+     * the last round's, so it leaves this uncalled). Recovery after an interruption is
      * guaranteed only in background-stream mode, where the response keeps
      * generating upstream after the caller disconnects. Synchronous and
      * poll-only providers leave it
@@ -93,7 +95,9 @@ export type TLlmRequest<T> = {
      * synchronous path, or by the chat-completions provider. Each call to
      * `respond()` streams from the beginning, so a pipeline retry streams
      * its text again: a caller accumulating text must start over per
-     * attempt.
+     * attempt. With function tools, one call makes a request per round and
+     * every round's text is passed on, so text a model wrote before calling
+     * a tool precedes the final answer.
      */
     onTextDelta?: (text: string) => void
     /**

@@ -2229,6 +2229,93 @@ describe("llmStage — stage:llm-response-created event and rawResponseId propag
         expect(llmCallEvent.rawResponseId).toBe("resp_test_event")
     })
 
+    it("reports the final round's id for a tool-using stage on the default stream", async () => {
+        // With function tools one respond() makes a request per round, each
+        // with its own response id. The id the stage reports must be the one
+        // it returns, never an earlier round's.
+        const { executePipeline, llmStage } =
+            await import("../../../src/lib/pipelines/index.js")
+        const outputSchema = Type.Object({ value: Type.Number() })
+        const round = (id: string, output: unknown[]): Response =>
+            sseResponse([
+                {
+                    type: "response.created",
+                    response: { id, status: "in_progress" },
+                },
+                {
+                    type: "response.completed",
+                    response: {
+                        id,
+                        status: "completed",
+                        output,
+                        usage: { input_tokens: 1, output_tokens: 1 },
+                    },
+                },
+            ])
+        const rounds = [
+            round("resp_round1", [
+                {
+                    type: "function_call",
+                    call_id: "c1",
+                    name: "lookup",
+                    arguments: "{}",
+                },
+            ]),
+            round("resp_round2", [
+                {
+                    type: "message",
+                    content: [{ type: "output_text", text: '{"value":1}' }],
+                },
+            ]),
+        ]
+        const llm = createOpenAiResponsesProvider({
+            apiKey: "k",
+            fetch: () => Promise.resolve(rounds.shift()!),
+        })
+        const stage = llmStage<{ value: number }>({
+            id: "tools",
+            dependsOn: [],
+            outputSchema,
+            model: "gpt-5.4",
+            buildPrompt: () => ({ system: "sys", user: "usr" }),
+            tools: [
+                {
+                    kind: "function",
+                    name: "lookup",
+                    description: "Looks something up.",
+                    parameters: Type.Object({}),
+                    handler: () => Promise.resolve("found"),
+                },
+            ],
+        })
+        const events: import("../../../src/lib/pipelines/types.js").TPipelineEvent[] =
+            []
+        await executePipeline(
+            {
+                id: "tools-pipeline",
+                version: "1.0.0",
+                inputSchema: Type.Object({}),
+                outputSchema,
+                stages: [stage],
+                finalize: {
+                    dependsOn: ["tools"],
+                    run: (ctx) =>
+                        ctx.get<{ value: number }>("tools") ?? { value: -1 },
+                },
+            },
+            {},
+            { llm, onEvent: (e) => events.push(e) }
+        )
+        const ids = events.flatMap((e) =>
+            e.kind === "stage:llm-response-created"
+                ? [e.responseId]
+                : e.kind === "stage:llm-call"
+                  ? [e.rawResponseId]
+                  : []
+        )
+        expect(ids).toEqual(["resp_round2", "resp_round2"])
+    })
+
     it("does not emit stage:llm-response-created when provider returns no rawResponseId", async () => {
         const { executePipeline, llmStage } =
             await import("../../../src/lib/pipelines/index.js")
