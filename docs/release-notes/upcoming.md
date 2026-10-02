@@ -36,3 +36,20 @@ change.
 When the analysis file does not exist, these two commands now say
 `Analysis file "…" does not exist.`, the same as the other analysis commands.
 `reset` reports the missing file before complaining about its `--value`.
+
+### Forking an argument bound into another argument
+
+An argument holding a variable bound to a premise of another argument (made
+with `bindVariableToExternalPremise` or `bindVariableToArgument`) could not be
+forked: `forkArgumentEngine` and `PropositCore.forkArgument` threw
+`Bound premise "undefined" does not exist in this argument`. Forking now works,
+and the copied variable keeps its binding into the other argument unchanged.
+
+Three other places mistook such a binding for one into this argument when the
+other argument's premise had the same id as one of this argument's premises.
+Removing that local premise also removed the binding; placing the variable in
+that premise was refused as a circular binding; and `orderChangeset` held the
+variable's update back until after that premise was inserted. Each now looks
+only at bindings into this argument. Premise ids generated with
+`crypto.randomUUID` never coincide this way, so only ids you choose yourself
+were affected.

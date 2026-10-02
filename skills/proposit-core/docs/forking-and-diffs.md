@@ -17,7 +17,7 @@ console.log(diff.premises.removed.length) // 1
 `PropositCore.forkArgument(argumentId, newArgumentId?, options?)`:
 
 - calls `canFork()` on the source engine first; override it in a subclass to restrict forking, for example to published versions;
-- gives every premise, expression and variable a new id, and keeps every reference between them intact;
+- gives every premise, expression and variable a new id, and keeps every reference between them intact; a variable bound into another argument keeps its binding unchanged;
 - copies every claim the argument reaches through its variables, following citation and axiom connections, and copies those connections too;
 - registers the new engine in `core.arguments` at version 0, with the source's `behavior`;
 - writes a fork record for the argument and for every premise, expression, variable and claim into `core.forks`.
