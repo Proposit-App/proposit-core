@@ -144,7 +144,13 @@ export function forkArgumentEngine<
             argumentVersion: 0,
         }
 
-        if (isPremiseBound(remapped as unknown as TCorePropositionalVariable)) {
+        // Only a binding into this argument follows the fork. One into another
+        // argument names a premise this fork does not copy, so it is kept as is.
+        if (
+            isPremiseBound(remapped as unknown as TCorePropositionalVariable) &&
+            (remapped as unknown as TPremiseBoundVariable).boundArgumentId ===
+                originalArgumentId
+        ) {
             const premiseBound =
                 remapped as unknown as TPremiseBoundVariable & {
                     boundPremiseId: string
