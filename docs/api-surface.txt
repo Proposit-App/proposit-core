@@ -758,6 +758,9 @@ Property extensions/basics.BasicsArgumentParser.build.id
 Property extensions/basics.BasicsArgumentParser.build.id
 Property extensions/basics.BasicsArgumentParser.build.id
 Property extensions/basics.BasicsArgumentParser.build.id
+Property extensions/basics.BasicsArgumentParser.build.respondsTo
+Property extensions/basics.BasicsArgumentParser.build.respondsTo.argumentId
+Property extensions/basics.BasicsArgumentParser.build.respondsTo.argumentVersion
 Property extensions/basics.BasicsArgumentParser.build.response.argument
 Property extensions/basics.BasicsArgumentParser.build.response.argument.claims
 Property extensions/basics.BasicsArgumentParser.build.response.argument.claims.miniId
@@ -859,6 +862,9 @@ Property extensions/basics.BasicsArgumentSchema.checksum
 Property extensions/basics.BasicsArgumentSchema.combinedChecksum
 Property extensions/basics.BasicsArgumentSchema.descendantChecksum
 Property extensions/basics.BasicsArgumentSchema.id
+Property extensions/basics.BasicsArgumentSchema.respondsTo
+Property extensions/basics.BasicsArgumentSchema.respondsTo.argumentId
+Property extensions/basics.BasicsArgumentSchema.respondsTo.argumentVersion
 Property extensions/basics.BasicsArgumentSchema.title
 Property extensions/basics.BasicsArgumentSchema.version
 Property extensions/basics.BasicsClaimSchema.axiom
@@ -3474,6 +3480,9 @@ Property lib.ArgumentEngine.constructor.TArg.checksum
 Property lib.ArgumentEngine.constructor.TArg.combinedChecksum
 Property lib.ArgumentEngine.constructor.TArg.descendantChecksum
 Property lib.ArgumentEngine.constructor.TArg.id
+Property lib.ArgumentEngine.constructor.TArg.respondsTo
+Property lib.ArgumentEngine.constructor.TArg.respondsTo.argumentId
+Property lib.ArgumentEngine.constructor.TArg.respondsTo.argumentVersion
 Property lib.ArgumentEngine.constructor.TArg.version
 Property lib.ArgumentEngine.constructor.TClaim.checksum
 Property lib.ArgumentEngine.constructor.TClaim.frozen
@@ -3537,6 +3546,9 @@ Property lib.ArgumentEngine.fromData.TArg.checksum
 Property lib.ArgumentEngine.fromData.TArg.combinedChecksum
 Property lib.ArgumentEngine.fromData.TArg.descendantChecksum
 Property lib.ArgumentEngine.fromData.TArg.id
+Property lib.ArgumentEngine.fromData.TArg.respondsTo
+Property lib.ArgumentEngine.fromData.TArg.respondsTo.argumentId
+Property lib.ArgumentEngine.fromData.TArg.respondsTo.argumentVersion
 Property lib.ArgumentEngine.fromData.TArg.version
 Property lib.ArgumentEngine.fromData.TClaim.checksum
 Property lib.ArgumentEngine.fromData.TClaim.frozen
@@ -3578,6 +3590,9 @@ Property lib.ArgumentEngine.fromSnapshot.TArg.checksum
 Property lib.ArgumentEngine.fromSnapshot.TArg.combinedChecksum
 Property lib.ArgumentEngine.fromSnapshot.TArg.descendantChecksum
 Property lib.ArgumentEngine.fromSnapshot.TArg.id
+Property lib.ArgumentEngine.fromSnapshot.TArg.respondsTo
+Property lib.ArgumentEngine.fromSnapshot.TArg.respondsTo.argumentId
+Property lib.ArgumentEngine.fromSnapshot.TArg.respondsTo.argumentVersion
 Property lib.ArgumentEngine.fromSnapshot.TArg.version
 Property lib.ArgumentEngine.fromSnapshot.TClaim.checksum
 Property lib.ArgumentEngine.fromSnapshot.TClaim.frozen
@@ -3664,6 +3679,9 @@ Property lib.ArgumentLibrary.constructor.TArg.checksum
 Property lib.ArgumentLibrary.constructor.TArg.combinedChecksum
 Property lib.ArgumentLibrary.constructor.TArg.descendantChecksum
 Property lib.ArgumentLibrary.constructor.TArg.id
+Property lib.ArgumentLibrary.constructor.TArg.respondsTo
+Property lib.ArgumentLibrary.constructor.TArg.respondsTo.argumentId
+Property lib.ArgumentLibrary.constructor.TArg.respondsTo.argumentVersion
 Property lib.ArgumentLibrary.constructor.TArg.version
 Property lib.ArgumentLibrary.constructor.TClaim.checksum
 Property lib.ArgumentLibrary.constructor.TClaim.frozen
@@ -3704,6 +3722,9 @@ Property lib.ArgumentLibrary.fromSnapshot.TArg.checksum
 Property lib.ArgumentLibrary.fromSnapshot.TArg.combinedChecksum
 Property lib.ArgumentLibrary.fromSnapshot.TArg.descendantChecksum
 Property lib.ArgumentLibrary.fromSnapshot.TArg.id
+Property lib.ArgumentLibrary.fromSnapshot.TArg.respondsTo
+Property lib.ArgumentLibrary.fromSnapshot.TArg.respondsTo.argumentId
+Property lib.ArgumentLibrary.fromSnapshot.TArg.respondsTo.argumentVersion
 Property lib.ArgumentLibrary.fromSnapshot.TArg.version
 Property lib.ArgumentLibrary.fromSnapshot.TClaim.checksum
 Property lib.ArgumentLibrary.fromSnapshot.TClaim.frozen
@@ -3763,6 +3784,9 @@ Property lib.ArgumentParser.constructor.TArg.checksum
 Property lib.ArgumentParser.constructor.TArg.combinedChecksum
 Property lib.ArgumentParser.constructor.TArg.descendantChecksum
 Property lib.ArgumentParser.constructor.TArg.id
+Property lib.ArgumentParser.constructor.TArg.respondsTo
+Property lib.ArgumentParser.constructor.TArg.respondsTo.argumentId
+Property lib.ArgumentParser.constructor.TArg.respondsTo.argumentVersion
 Property lib.ArgumentParser.constructor.TArg.version
 Property lib.ArgumentParser.constructor.TAxiom.checksum
 Property lib.ArgumentParser.constructor.TAxiom.claimId
@@ -3942,6 +3966,9 @@ Property lib.CoreArgumentSchema.checksum
 Property lib.CoreArgumentSchema.combinedChecksum
 Property lib.CoreArgumentSchema.descendantChecksum
 Property lib.CoreArgumentSchema.id
+Property lib.CoreArgumentSchema.respondsTo
+Property lib.CoreArgumentSchema.respondsTo.argumentId
+Property lib.CoreArgumentSchema.respondsTo.argumentVersion
 Property lib.CoreArgumentSchema.version
 Property lib.CoreClaimBoundVariableSchema.argumentId
 Property lib.CoreClaimBoundVariableSchema.argumentVersion
@@ -4360,6 +4387,9 @@ Property lib.PremiseEngine.constructor.TArg.checksum
 Property lib.PremiseEngine.constructor.TArg.combinedChecksum
 Property lib.PremiseEngine.constructor.TArg.descendantChecksum
 Property lib.PremiseEngine.constructor.TArg.id
+Property lib.PremiseEngine.constructor.TArg.respondsTo
+Property lib.PremiseEngine.constructor.TArg.respondsTo.argumentId
+Property lib.PremiseEngine.constructor.TArg.respondsTo.argumentVersion
 Property lib.PremiseEngine.constructor.TArg.version
 Property lib.PremiseEngine.constructor.TPremise.argumentId
 Property lib.PremiseEngine.constructor.TPremise.argumentId
@@ -4402,6 +4432,9 @@ Property lib.PremiseEngine.fromSnapshot.TArg.checksum
 Property lib.PremiseEngine.fromSnapshot.TArg.combinedChecksum
 Property lib.PremiseEngine.fromSnapshot.TArg.descendantChecksum
 Property lib.PremiseEngine.fromSnapshot.TArg.id
+Property lib.PremiseEngine.fromSnapshot.TArg.respondsTo
+Property lib.PremiseEngine.fromSnapshot.TArg.respondsTo.argumentId
+Property lib.PremiseEngine.fromSnapshot.TArg.respondsTo.argumentVersion
 Property lib.PremiseEngine.fromSnapshot.TArg.version
 Property lib.PremiseEngine.fromSnapshot.TPremise.argumentId
 Property lib.PremiseEngine.fromSnapshot.TPremise.argumentId
@@ -4449,6 +4482,9 @@ Property lib.PropositCore.constructor.TArg.checksum
 Property lib.PropositCore.constructor.TArg.combinedChecksum
 Property lib.PropositCore.constructor.TArg.descendantChecksum
 Property lib.PropositCore.constructor.TArg.id
+Property lib.PropositCore.constructor.TArg.respondsTo
+Property lib.PropositCore.constructor.TArg.respondsTo.argumentId
+Property lib.PropositCore.constructor.TArg.respondsTo.argumentVersion
 Property lib.PropositCore.constructor.TArg.version
 Property lib.PropositCore.constructor.TArgFork.entityId
 Property lib.PropositCore.constructor.TArgFork.forkId
@@ -4565,6 +4601,9 @@ Property lib.PropositCore.fromSnapshot.TArg.checksum
 Property lib.PropositCore.fromSnapshot.TArg.combinedChecksum
 Property lib.PropositCore.fromSnapshot.TArg.descendantChecksum
 Property lib.PropositCore.fromSnapshot.TArg.id
+Property lib.PropositCore.fromSnapshot.TArg.respondsTo
+Property lib.PropositCore.fromSnapshot.TArg.respondsTo.argumentId
+Property lib.PropositCore.fromSnapshot.TArg.respondsTo.argumentVersion
 Property lib.PropositCore.fromSnapshot.TArg.version
 Property lib.PropositCore.fromSnapshot.TArgFork.entityId
 Property lib.PropositCore.fromSnapshot.TArgFork.forkId
@@ -4748,6 +4787,9 @@ Property lib.TArgumentValidationContext.getArgument.checksum
 Property lib.TArgumentValidationContext.getArgument.combinedChecksum
 Property lib.TArgumentValidationContext.getArgument.descendantChecksum
 Property lib.TArgumentValidationContext.getArgument.id
+Property lib.TArgumentValidationContext.getArgument.respondsTo
+Property lib.TArgumentValidationContext.getArgument.respondsTo.argumentId
+Property lib.TArgumentValidationContext.getArgument.respondsTo.argumentVersion
 Property lib.TArgumentValidationContext.getArgument.version
 Property lib.TArgumentValidationContext.getVariables.argumentId
 Property lib.TArgumentValidationContext.getVariables.argumentId
@@ -4799,6 +4841,7 @@ Property lib.TCoreArgumentEvaluationResult.assignment
 Property lib.TCoreArgumentEvaluationResult.claimAttribution
 Property lib.TCoreArgumentEvaluationResult.conclusion
 Property lib.TCoreArgumentEvaluationResult.conclusionAttribution
+Property lib.TCoreArgumentEvaluationResult.conclusionInferenceRejected
 Property lib.TCoreArgumentEvaluationResult.conclusionTrue
 Property lib.TCoreArgumentEvaluationResult.constraintPremises
 Property lib.TCoreArgumentEvaluationResult.contestedVariableIds
@@ -5397,6 +5440,9 @@ Property lib.composeChangesets.TArg.checksum
 Property lib.composeChangesets.TArg.combinedChecksum
 Property lib.composeChangesets.TArg.descendantChecksum
 Property lib.composeChangesets.TArg.id
+Property lib.composeChangesets.TArg.respondsTo
+Property lib.composeChangesets.TArg.respondsTo.argumentId
+Property lib.composeChangesets.TArg.respondsTo.argumentVersion
 Property lib.composeChangesets.TArg.version
 Property lib.composeChangesets.TPremise.argumentId
 Property lib.composeChangesets.TPremise.argumentId
@@ -5432,11 +5478,17 @@ Property lib.defaultCompareArgument._after.checksum
 Property lib.defaultCompareArgument._after.combinedChecksum
 Property lib.defaultCompareArgument._after.descendantChecksum
 Property lib.defaultCompareArgument._after.id
+Property lib.defaultCompareArgument._after.respondsTo
+Property lib.defaultCompareArgument._after.respondsTo.argumentId
+Property lib.defaultCompareArgument._after.respondsTo.argumentVersion
 Property lib.defaultCompareArgument._after.version
 Property lib.defaultCompareArgument._before.checksum
 Property lib.defaultCompareArgument._before.combinedChecksum
 Property lib.defaultCompareArgument._before.descendantChecksum
 Property lib.defaultCompareArgument._before.id
+Property lib.defaultCompareArgument._before.respondsTo
+Property lib.defaultCompareArgument._before.respondsTo.argumentId
+Property lib.defaultCompareArgument._before.respondsTo.argumentVersion
 Property lib.defaultCompareArgument._before.version
 Property lib.defaultComparePremise._after.argumentId
 Property lib.defaultComparePremise._after.argumentId
@@ -5491,6 +5543,9 @@ Property lib.diffArguments.TArg.checksum
 Property lib.diffArguments.TArg.combinedChecksum
 Property lib.diffArguments.TArg.descendantChecksum
 Property lib.diffArguments.TArg.id
+Property lib.diffArguments.TArg.respondsTo
+Property lib.diffArguments.TArg.respondsTo.argumentId
+Property lib.diffArguments.TArg.respondsTo.argumentVersion
 Property lib.diffArguments.TArg.version
 Property lib.diffArguments.TPremise.argumentId
 Property lib.diffArguments.TPremise.argumentId
@@ -5532,6 +5587,9 @@ Property lib.forkArgumentEngine.TArg.checksum
 Property lib.forkArgumentEngine.TArg.combinedChecksum
 Property lib.forkArgumentEngine.TArg.descendantChecksum
 Property lib.forkArgumentEngine.TArg.id
+Property lib.forkArgumentEngine.TArg.respondsTo
+Property lib.forkArgumentEngine.TArg.respondsTo.argumentId
+Property lib.forkArgumentEngine.TArg.respondsTo.argumentVersion
 Property lib.forkArgumentEngine.TArg.version
 Property lib.forkArgumentEngine.TClaim.checksum
 Property lib.forkArgumentEngine.TClaim.frozen
@@ -5605,6 +5663,9 @@ Property lib.isNakedQDerivationPremise.TArg.checksum
 Property lib.isNakedQDerivationPremise.TArg.combinedChecksum
 Property lib.isNakedQDerivationPremise.TArg.descendantChecksum
 Property lib.isNakedQDerivationPremise.TArg.id
+Property lib.isNakedQDerivationPremise.TArg.respondsTo
+Property lib.isNakedQDerivationPremise.TArg.respondsTo.argumentId
+Property lib.isNakedQDerivationPremise.TArg.respondsTo.argumentVersion
 Property lib.isNakedQDerivationPremise.TArg.version
 Property lib.isNakedQDerivationPremise.TPremise.argumentId
 Property lib.isNakedQDerivationPremise.TPremise.argumentId
@@ -5640,6 +5701,9 @@ Property lib.isNakedQTree.TArg.checksum
 Property lib.isNakedQTree.TArg.combinedChecksum
 Property lib.isNakedQTree.TArg.descendantChecksum
 Property lib.isNakedQTree.TArg.id
+Property lib.isNakedQTree.TArg.respondsTo
+Property lib.isNakedQTree.TArg.respondsTo.argumentId
+Property lib.isNakedQTree.TArg.respondsTo.argumentVersion
 Property lib.isNakedQTree.TArg.version
 Property lib.isNakedQTree.TPremise.argumentId
 Property lib.isNakedQTree.TPremise.argumentId
@@ -5710,6 +5774,9 @@ Property lib.mergeChangesets.TArg.checksum
 Property lib.mergeChangesets.TArg.combinedChecksum
 Property lib.mergeChangesets.TArg.descendantChecksum
 Property lib.mergeChangesets.TArg.id
+Property lib.mergeChangesets.TArg.respondsTo
+Property lib.mergeChangesets.TArg.respondsTo.argumentId
+Property lib.mergeChangesets.TArg.respondsTo.argumentVersion
 Property lib.mergeChangesets.TArg.version
 Property lib.mergeChangesets.TPremise.argumentId
 Property lib.mergeChangesets.TPremise.argumentId
@@ -5745,6 +5812,9 @@ Property lib.orderChangeset.TArg.checksum
 Property lib.orderChangeset.TArg.combinedChecksum
 Property lib.orderChangeset.TArg.descendantChecksum
 Property lib.orderChangeset.TArg.id
+Property lib.orderChangeset.TArg.respondsTo
+Property lib.orderChangeset.TArg.respondsTo.argumentId
+Property lib.orderChangeset.TArg.respondsTo.argumentVersion
 Property lib.orderChangeset.TArg.version
 Property lib.orderChangeset.TPremise.argumentId
 Property lib.orderChangeset.TPremise.argumentId
@@ -5962,6 +6032,7 @@ TypeAlias lib.TConversation
 TypeAlias lib.TCoreAnalysisFile
 TypeAlias lib.TCoreArgument
 TypeAlias lib.TCoreArgumentForkRecord
+TypeAlias lib.TCoreArgumentReference
 TypeAlias lib.TCoreArgumentRoleState
 TypeAlias lib.TCoreClaim
 TypeAlias lib.TCoreClaimAxiomaticType

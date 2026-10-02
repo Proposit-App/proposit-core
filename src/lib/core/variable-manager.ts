@@ -1,7 +1,7 @@
 import type { TCorePropositionalVariable } from "../schemata/index.js"
 import { CorePropositionalVariableSchema } from "../schemata/index.js"
 import {
-    DEFAULT_CHECKSUM_CONFIG,
+    resolveChecksumFields,
     serializeChecksumConfig,
 } from "../checksum-config.js"
 import type { TLogicEngineOptions } from "./argument-engine.js"
@@ -172,9 +172,10 @@ export class VariableManager<
         const seenIds = new Set<string>()
         const seenSymbols = new Set<string>()
 
-        const fields =
-            this.config?.checksumConfig?.variableFields ??
-            DEFAULT_CHECKSUM_CONFIG.variableFields!
+        const fields = resolveChecksumFields(
+            this.config?.checksumConfig,
+            "variableFields"
+        )
 
         for (const variable of this.toArray()) {
             const id = variable.id

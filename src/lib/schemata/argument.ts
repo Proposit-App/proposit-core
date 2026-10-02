@@ -16,6 +16,19 @@ export const CoreArgumentSchema = Type.Object(
             description:
                 "Hash of checksum + descendantChecksum. Equals checksum when descendantChecksum is null.",
         }),
+        respondsTo: Type.Optional(
+            Type.Object(
+                {
+                    argumentId: UUID,
+                    argumentVersion: Type.Number(),
+                },
+                {
+                    additionalProperties: false,
+                    description:
+                        "Present only on a response argument: the argument it answers, pinned to one version. Absent on a standard argument, never null.",
+                }
+            )
+        ),
     },
     {
         additionalProperties: true,
@@ -23,6 +36,9 @@ export const CoreArgumentSchema = Type.Object(
     }
 )
 export type TCoreArgument = Static<typeof CoreArgumentSchema>
+
+/** The argument a response answers, pinned to one version. */
+export type TCoreArgumentReference = NonNullable<TCoreArgument["respondsTo"]>
 
 export const CoreArgumentRoleStateSchema = Type.Object(
     {

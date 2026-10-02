@@ -34,6 +34,7 @@ import { withoutUndefinedValues } from "../utils/collections.js"
 import {
     DEFAULT_CHECKSUM_CONFIG,
     normalizeChecksumConfig,
+    resolveChecksumFields,
     serializeChecksumConfig,
 } from "../checksum-config.js"
 import type { TCoreMutationResult, TCoreChangeset } from "../types/mutation.js"
@@ -719,6 +720,7 @@ export class ArgumentEngine<
             checksum: _checksum,
             descendantChecksum: _descendantChecksum,
             combinedChecksum: _combinedChecksum,
+            respondsTo: _respondsTo,
             ...extras
         } = this.argument as Record<string, unknown>
         return { ...extras }
@@ -733,12 +735,28 @@ export class ArgumentEngine<
         TPremise,
         TArg
     > {
-        const { id, version, checksum, descendantChecksum, combinedChecksum } =
-            this.argument as Record<string, unknown>
+        // `respondsTo` is the engine's, like the id and version: an extras
+        // update must neither drop it, which would turn a response into a
+        // standard argument, nor add it, which would skip every guard a
+        // response is built under.
+        if ("respondsTo" in extras) {
+            throw new Error(
+                "respondsTo cannot be set through extras; it is fixed when the engine is built and changed only by rebasing a response."
+            )
+        }
+        const {
+            id,
+            version,
+            checksum,
+            descendantChecksum,
+            combinedChecksum,
+            respondsTo,
+        } = this.argument as Record<string, unknown>
         this.argument = {
             ...withoutUndefinedValues(extras),
             id,
             version,
+            ...(respondsTo !== undefined ? { respondsTo } : {}),
             ...(checksum !== undefined ? { checksum } : {}),
             ...(descendantChecksum !== undefined ? { descendantChecksum } : {}),
             ...(combinedChecksum !== undefined ? { combinedChecksum } : {}),
@@ -2178,8 +2196,7 @@ export class ArgumentEngine<
         }
 
         // 2. Compute argument meta checksum (entity fields + role state MERGED)
-        const argumentFields =
-            config?.argumentFields ?? DEFAULT_CHECKSUM_CONFIG.argumentFields!
+        const argumentFields = resolveChecksumFields(config, "argumentFields")
         const roleFields =
             config?.roleFields ?? DEFAULT_CHECKSUM_CONFIG.roleFields!
         const mergedFields = new Set([...argumentFields, ...roleFields])
@@ -2257,9 +2274,10 @@ export class ArgumentEngine<
     }
 
     private attachVariableChecksum(v: TOptionalChecksum<TVar>): TVar {
-        const fields =
-            this.checksumConfig?.variableFields ??
-            DEFAULT_CHECKSUM_CONFIG.variableFields!
+        const fields = resolveChecksumFields(
+            this.checksumConfig,
+            "variableFields"
+        )
         return {
             ...v,
             checksum: entityChecksum(
