@@ -6,5 +6,4 @@ effort: high
 complexity: very-high
 tags:
 - product
-blocked_by:
-- slug: 2026-10-02-add-response-arguments-that-answer-a-pinned-version-of-another-argument-through-links
+blocked_by: []
