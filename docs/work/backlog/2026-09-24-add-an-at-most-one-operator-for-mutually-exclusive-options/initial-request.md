@@ -112,3 +112,15 @@ Asked again while scoping 6.0.0. The requester relayed:
 - **Editor support in the consuming application in 6.0.0:** no. The application would add it later either way. (Requester's answer.)
 - **Reference material:** asked; none provided.
 - **Whether it must ship in 6.0.0** is an open scope question with the maintainer. The spec has to say whether the operator needs a major version on its own, because that decides whether leaving it out of 6.0.0 costs a 7.0.0.
+
+## Added 2026-10-02: what it would cost to ship outside a major release
+
+This records a survey of the code made to answer the scope question. It is not a spec.
+
+- **It needs a major version on its own.** The operator union is public: `CoreLogicalOperatorType` and `TCoreLogicalOperatorType` (`src/lib/schemata/propositional.ts:75-84`), `TFormulaAST` (`src/lib/core/parser/formula.ts:5-11`), and `TFormulaTreeVisitor.operator` (`src/lib/core/interfaces/premise-engine.interfaces.ts:17`). A consumer that switches over operators exhaustively stops compiling, and data validated by an older schema rejects the new value. `xor` shipped as 5.0.0 for the same reason. So leaving it out of 6.0.0 means it arrives in 7.0.0.
+- **One classifier carries most of the risk, and the spec must split it.** `isVariadicOperator` (`src/lib/core/expression-manager/checks.ts:17-30`, `["and","or","xor"]`) decides the arity floor (E-1), formula buffers (P-3), P-4, the swap group, and same-operator absorption (P-5, AN-4). "At most one" takes many operands, but it is neither associative nor transparent with one operand: `atMostOne(x)` is always true, not `x`. Added to that list as it stands, it would let three paths change what a formula means:
+  - AN-4 absorption (`src/lib/grammar/an-rules.ts:339-350`);
+  - the merge in `changeOperator` (`src/lib/core/premise-engine.ts:1012-1033`, `:1076`);
+  - AN-3's promotion of a single child (`an-rules.ts:227`).
+- **Every evaluator folds a binary function over the children** (`src/lib/core/premise/evaluation.ts:113-158`, `src/lib/core/evaluation/argument-evaluation.ts:154-183`, `propagation.ts:137-174`, `src/lib/core/response/combined-premise-set.ts:356-378`). "At most one" cannot be written as such a fold, so it needs an n-ary four-valued function. The accepted-operator switch in `propagation.ts:280-424` has no default, so without a rule the operator would silently propagate nothing.
+- **Found in passing, unrelated to this item:** the formula-syntax list given to the language model (`src/lib/parsing/prompt-builder.ts:34-48`) has no `xor`.
