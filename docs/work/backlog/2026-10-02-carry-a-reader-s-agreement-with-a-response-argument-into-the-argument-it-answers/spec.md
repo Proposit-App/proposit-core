@@ -1,6 +1,6 @@
 # Spec: carry a reader's agreement with a response argument into the argument it answers
 
-Third revision. The second revised the first draft after its adversarial review (verdict NOT DONE) and for two maintainer decisions of 2026-10-02: a response may use the target's claims, and an undercut may target any operator at any depth. The third applies a bounded review of the second (verdict NOT DONE): the cube is found over the target expression alone, and a nested reinforce is not carried. Line numbers are against `1eac5758` on `feat/response-arguments`, where response arguments are implemented.
+Fourth revision. The second revised the first draft after its adversarial review (verdict NOT DONE) and for two maintainer decisions of 2026-10-02: a response may use the target's claims, and an undercut may target any operator at any depth. The third applied a bounded review of the second (verdict NOT DONE): the cube is found over the target expression alone, and a nested reinforce is not carried. The maintainer accepted both choices. The fourth applies a review of the third (verdict NOT DONE): a reinforce of a conclusion whose root is not a conditional is not carried. Line numbers are against `1eac5758` on `feat/response-arguments`, where response arguments are implemented.
 
 Sources referred to:
 - **"The intake"**: the first item's `intake.md`, section C5.
@@ -8,6 +8,7 @@ Sources referred to:
 - **"The first item's review"**: the adversarial review of the first spec. Its carrying findings moved here.
 - **"This review"**: the review of this spec's first draft.
 - **"The bounded review"**: the review of the second revision's changes.
+- **"The fourth review"**: the review of the third revision's changes.
 
 Every departure from the intake is marked **Departure**. `## Notes` says how each finding was handled, and records the maintainer's answer to the one question asked before planning.
 
@@ -32,7 +33,7 @@ What makes carrying harder than copying values:
 ## Goals
 
 1. **Carry one step.** Given a response, the snapshot of the argument it answers, that argument's claims, and the reader's answers on the response's links, produce the input those answers imply for the argument answered. A path is carried one step at a time.
-2. **Carry only what is exact.** A carried value means exactly what the agreed link says about the target expression, expanded the way the checks expand it, so a check and a carry never give one link two meanings. What cannot be carried exactly is reported with its reason, never approximated, and never dropped silently.
+2. **Carry only what is exact.** A carried value means exactly what the agreed link says about the target expression. The expression is expanded the way the checks expand it, and read with every column free (Design, "Statement links"). What cannot be carried exactly is reported with its reason, never approximated, and never dropped silently. The one coarse reading is a nested undercut, which strikes its whole premise (Design, "Inference links"). It is allowed because a struck premise asserts nothing, so it can never assert more than the link.
 3. **Carried values are the reader's assertions.** They enter evaluation as the reader's own input, so attribution counts them.
 4. **Provenance.** Every carried value names every link it came from.
 5. **No silent resolution.** Disagreements among carried values, or with the reader's own input, are reported. A carried value that the argument's accepted steps contradict comes out `CONTESTED`, as any reader value does today.
@@ -109,7 +110,7 @@ If the expansion has more columns than `SATISFIABILITY_VARIABLE_CEILING` (`src/l
 - **An externally premise-bound column** goes onto that variable.
 - **An expression-bound column** (the target is a response) becomes link answers, as described in "Carrying into a response".
 
-Because the decomposition is exact, the check and the carry give a link one meaning. That resolves the "two meanings" part of the first item's review, blocking 1.
+The carry and the checks share one expansion, so they agree on what E is. They do not always read it the same way: the carry reads it with every column free, and `checkLink` reads it with the response's grounded columns held true. They cannot report contradictory values, because `checkLink` reports a verdict (`follows`, `asserted` or `incoherent`, `src/lib/core/response/check.ts:303-349`) and never a value. That resolves the "two meanings" part of the first item's review, blocking 1.
 
 ### Inference links
 
@@ -119,14 +120,19 @@ An agreed inference link carries an operator decision: reinforce gives `accepted
 |---|---|---|
 | root of a freeform premise that is not the conclusion | `accepted` | `rejected`; evaluation strikes the whole premise (`argument-evaluation.ts:297-316`) |
 | nested in a freeform premise that is not the conclusion | nothing (reason `nestedReinforce`) | `rejected`; evaluation strikes the whole premise, as for any rejection inside it |
-| root of the conclusion premise | `accepted` | `rejected`; sets `conclusionInferenceRejected` |
+| root of the conclusion premise, a conditional (`implies` or `iff`) | `accepted` | `rejected`; sets `conclusionInferenceRejected` |
+| root of the conclusion premise, any other operator | nothing (reason `conclusionStatement`) | `rejected`; sets `conclusionInferenceRejected` |
 | nested in the conclusion premise | nothing (reason `nestedReinforce`) | nothing (reason `ignoredInConclusion`): evaluation ignores that rejection |
 | root of a derivation premise | `accepted` | nothing (reason `derivationOperator`): evaluation ignores that rejection |
 | nested in a derivation premise | nothing (reason `nestedReinforce`) | nothing (reason `derivationOperator`) |
 
 **Why a nested reinforce is not carried.** Evaluation reads an accepted operator as "this subexpression is true": an accepted `and` forces its children true, an accepted `not` forces its child false (`propagation.ts:256-300`). At a premise root that is what reinforcing the step means: the premise's step holds, so the premise holds. On a nested operator it is not. "The step `Q ∧ R` inside `(Q ∧ R) → S` holds" does not say `Q ∧ R` is true, yet carrying `accepted` would make evaluation force Q and R true. `checkLink` gives no guidance either way, because it treats an inference link as one opaque column (`combined-premise-set.ts:132`). This is the conservative choice: carrying nested reinforces later, once their meaning is settled, adds output without changing any value carried today.
 
-**Departure:** the intake carries nothing for a nested operator, and nothing for a derivation premise's operator. Here a nested undercut in a freeform premise is carried, because evaluation's reading of it, striking the premise, is what "this step does not hold" means anywhere in a premise. A reinforce at the root of a derivation premise is carried, because evaluation honours it. Everything else on those rows is reported with its reason.
+**Why a reinforce of a non-conditional conclusion root is not carried.** When the conclusion's root is `and`, `not`, `or` or `xor`, accepting that operator asserts the conclusion itself: an accepted `and` conclusion forces both conjuncts true. Attribution counts only variable values as the reader's assertions (`argument-evaluation.ts:455-457`), and its counterfactual keeps operator decisions while it withholds the conclusion's variables (`:477-500`). So the accepted operator forces them back, and evaluation reports `assertedByReader: false` and `reachedWithoutAssertion: true`. That was confirmed by running it on `and(Q, R)` and on `not(C)`. A carried reinforce would then tell a reader who only agreed with "X's conclusion holds" that X reached its conclusion without their assertion, which Goal 3 rules out. A conditional root (`P → Q`) does not leak, because the counterfactual withholds P and Q. Carrying such a reinforce later, for example as the statement "E true" in `variables`, adds output without changing what carries now. A reader who accepts such a root by hand gets the same report today; that is a separate item (Notes).
+
+**Why a nested undercut is carried although a nested reinforce is not.** An operator decision is never a truth value: a rejection strikes the premise it lives in, and a struck premise asserts nothing. So a carried rejection can withdraw more than the link disputes. Striking `(Q ∧ R) → S` over an undercut of the nested `Q ∧ R` withdraws the whole premise. But it can never assert anything the link does not say. This is the one deliberate coarse reading in Goal 2, chosen because it errs towards asserting less. A nested reinforce would err the other way.
+
+**Departure:** the intake carries nothing for a nested operator, and nothing for a derivation premise's operator. Here a nested undercut in a freeform premise is carried, for the reason above. A reinforce at the root of a derivation premise is carried, because evaluation honours it and the premise is a conditional. Everything else on those rows is reported with its reason.
 
 An inference link of Z on an operator of Y is a different case: see "Carrying into a response".
 
@@ -177,7 +183,8 @@ The reader's own answers on Y and the derived ones are combined by `mergeCarried
     - for a standard target, `variables: Record<variableId, boolean>` and `operatorAssignments: Record<expressionId, "accepted" | "rejected">`;
     - for a response target, `linkAnswers: Record<premiseId, "agree" | "disagree">`;
     - `sources`: one entry per carried value, giving its kind (`variable`, `operator` or `linkAnswer`), id and value, and the premise ids of every link it came from;
-    - `notCarried`: one entry per agreed link that carried nothing, giving its premise id and reason. The reasons are `axiom`, `notExpressible`, `impossible`, `vacuous`, `tooLarge`, `nestedReinforce`, `ignoredInConclusion`, `derivationOperator`, `linkStep`, `noLinkReached` and `conflict`.
+    - `notCarried`: one entry per `agree` answer that carried nothing, giving its premise id and reason. The reasons are `axiom`, `notExpressible`, `impossible`, `vacuous`, `tooLarge`, `nestedReinforce`, `conclusionStatement`, `ignoredInConclusion`, `derivationOperator`, `linkStep`, `noLinkReached`, `conflict` and `notALink`.
+    - `notALink`: an `agree` on a premise of the response that is not a link. A `disagree` there carries nothing and is not reported, as for any disagreed link.
   - It never throws on an answer it cannot carry.
   - **Departure:** the intake sketches `carryAnswers(pathSnapshots, answers)` over a whole path. One step, with the caller walking the path, keeps each step's inputs explicit and lets the reader's own answers on Y join at the right point. The intake itself says to carry one step at a time.
   - It is an engine method, not a free function, for the reason the checks are (first item's `outcome.md`, Departures): it reads the response's links and grounding through the engine.
@@ -229,17 +236,18 @@ Test file: `test/core/response-carry.test.ts` unless stated. Y answers X, and Z 
    - contradict an axiom-bound claim: reason `axiom`, and evaluating X with the merged input does not throw;
    - affirm an axiom-bound claim: reason `axiom`, nothing carried;
    - contradict a citation-bound claim: carried. Through `evaluateWithDefaults(merged.variables)` it is false in the result, not the default true.
-   - a column the response grounds is free: Y cites S, which X also uses, and Y contradicts X's `S ∧ Q`. Not carried, reason `notExpressible`, although `checkLink` reads the same link as "Q false".
+   - a column the response grounds is free: Y cites S, which X also uses, and Y contradicts X's `S ∧ Q`. Not carried, reason `notExpressible`, The test checks the `notCarried` entry and that nothing is carried for S or Q.
 2. **Inference links:**
    - undercut a freeform premise's root, including a `not` root, a root under a formula wrapper, and an `and` root: `rejected`, and evaluating X with the merged input lists the premise in `struckPremiseIds`;
    - undercut a nested operator of a freeform premise: `rejected`, and the premise is struck;
-   - reinforce the root of a freeform premise, the conclusion and a derivation premise, including a root under a formula wrapper: `accepted`. For a freeform `and` root, evaluating X with the merged input propagates the acceptance: both conjuncts come out true where the reader gave no value;
+   - reinforce the root of a freeform premise, a conditional conclusion root and a derivation premise, including a root under a formula wrapper: `accepted`;
+   - reinforce a conclusion rooted at `and`, and one rooted at `not`: not carried, reason `conclusionStatement`; For a freeform `and` root, evaluating X with the merged input propagates the acceptance: both conjuncts come out true where the reader gave no value;
    - reinforce a nested operator of a freeform premise, of the conclusion and of a derivation premise: not carried, reason `nestedReinforce`. Evaluating X with the merged input gives the nested operator's children the same values as without the link;
    - undercut the conclusion's root: `rejected`, and evaluating X with the merged input reports `conclusionInferenceRejected`;
    - undercut a nested operator of the conclusion, or a derivation premise's operator: not carried, with reason `ignoredInConclusion` or `derivationOperator`.
 3. **A response using the target's claims.** X is `P → Q`, `Q → R` with P derived from cited S; Y holds a copy of that derivation premise, `P → NOT(r)` and the link `NOT(r)`. Agreeing with the link carries R false onto X and nothing onto P or S; `sources` names the link.
 4. **Only agreed links carry.** An unanswered link and a disagreed link carry nothing. So does an affirm link the reader left unanswered that would evaluate true by propagation.
-5. **Provenance.** Two links fixing C to the same value give one `sources` entry naming both. Every carried value has a source, and every agreed link appears in `sources` or `notCarried`.
+5. **Provenance.** Two links fixing C to the same value give one `sources` entry naming both. Every carried value has a source, and every `agree` answer appears in `sources` or `notCarried`. An `agree` on a non-link premise gives `notALink`, and a `disagree` there is not reported.
 6. **Collisions:**
    - affirm `Q ∧ R` with contradict `Q` in one response: both links `conflict`, and neither Q nor R is carried;
    - `mergeCarriedInput` with the reader holding C true and C carried false keeps true and reports one collision naming the source link;
@@ -255,8 +263,10 @@ Test file: `test/core/response-carry.test.ts` unless stated. Y answers X, and Z 
    - an inference link of Z on an operator of a non-link premise of Y: reason `noLinkReached`;
    - the result for a response target has no `variables` or `operatorAssignments`;
    - carrying Z → Y → X: the reader's agreement with Z's affirm of L makes L carry into X, with `sources` on X's values naming L. The reader's own "disagree" on L wins in `mergeCarriedInput`, with a collision reported.
-9. **Attribution** (`test/evaluation/attribution.test.ts`, extended): a conclusion `C` reached only through a carried value of C reports `assertedByReader: true` and `reachedWithoutAssertion: false`. A wrong implementation that seeds carried values into the closure without putting them in `variables` is tried and fails this test.
-10. **One meaning.** For every link in criterion 1 that carries, a test substitutes the carried values into E's expansion and checks it evaluates to the link's value under every value of the free columns. The free columns are all of E's columns that the link does not fix, including any the response grounds and any axiomatic ones. For every `notExpressible` link, the test checks that two rows giving E the link's value differ in a column whose value the link would have fixed.
+9. **Attribution** (`test/evaluation/attribution.test.ts`, extended):
+   - a conclusion `C` reached only through a carried value of C reports `assertedByReader: true` and `reachedWithoutAssertion: false`. A wrong implementation that seeds carried values into the closure without putting them in `variables` is tried and fails this test;
+   - a reinforce of an `and`-rooted conclusion, carried and merged, never yields `reachedWithoutAssertion: true`. A wrong implementation that carries it as `accepted` is tried and fails this test.
+10. **One meaning.** For every link in criterion 1 that carries, including the case with a response that grounds a target claim, a test substitutes the carried values into E's expansion and checks it evaluates to the link's value under every value of the free columns. The free columns are all of E's columns that the link does not fix, including any the response grounds and any axiomatic ones. For every `notExpressible` link, the test checks that two rows giving E the link's value differ in a column whose value the link would have fixed.
 11. **`evaluateWithDefaults`** with an `operatorAssignments` argument applies the decisions. Every existing call's result is unchanged, checked by the existing suites.
 12. **Public surface.** `docs/api-surface.txt` gains only the names under Interface and the new `evaluateWithDefaults` parameter. No name refers to accounts, ownership, storage or user limits. `pnpm run check` passes.
 13. **Documentation:**
@@ -267,7 +277,7 @@ Test file: `test/core/response-carry.test.ts` unless stated. Y answers X, and Z 
 
 ## Risks
 
-- **Fewer links carry than the intake imagined.** Contradicting a non-cube expression, such as a premise `Q ∧ R`, carries nothing in 6.0.0, nor does a nested reinforce. Both are always reported, and both can be carried later without changing what carries now.
+- **Fewer links carry than the intake imagined.** Contradicting a non-cube expression, such as a premise `Q ∧ R`, carries nothing in 6.0.0, nor does a nested reinforce or a reinforce of a non-conditional conclusion root. All are always reported, and both can be carried later without changing what carries now.
 - **Decomposition cost.** A truth table over one expression's columns, bounded by the ceiling, once per agreed statement link. A timing note goes in the outcome.
 - **"Every variable of a claim" can split.** If X's steps contest one variable of a claim and not another, only that one is contested. The claim-level roll-up (Non-goals) is where that is reported, and carrying makes it more likely to matter. The combined 6.0.0 review should look at both together.
 - **The at-most-one operator**, batched into 6.0.0, needs its case in the combined set's evaluator (`combined-premise-set.ts:335` throws on an unknown operator). The cube walk uses that evaluator. Its propagation rule's effect on carried values is checked in the combined review.
@@ -294,14 +304,14 @@ If the answer is yes, that design returns to this spec before planning. If no, t
 
 ### How this review's findings were handled
 
-- **Blocking 1 (held premises leak into `reachedWithoutAssertion` through the shortcut):** accepted, and verified at `argument-evaluation.ts:481`. It is resolved by deferring holds, and recorded in the question above as a condition on any hold design.
+- **Blocking 1 (held premises leak into `reachedWithoutAssertion` through the shortcut):** accepted, and verified at `argument-evaluation.ts:481` (now `:490`). It is resolved by deferring holds, and recorded in the question above as a condition on any hold design.
 - **Blocking 2 (no source for the target's claim types):** accepted, and verified: the snapshot type has no claims. `carryAnswers` is an engine method taking a required `TClaimLookup`. The axiom status is decided per variable at its own claim version, which answers the related question.
 - **Significant 3 (departure not confirmed by the requester):** accepted. It is the question above.
 - **Significant 4 (shapes wrongly reported `notExpressible`):**
   - (a), a premise-bound variable: depends on holds, so it is in the question.
   - (b), formula wrappers: accepted, through the "premise root" definition.
   - (c), axiomatic columns: kept free, now stated as a choice. The case of affirming an axiom now has reason `axiom`.
-- **Significant 5 (defaults):** accepted and verified (`argument-engine.ts:3271-3292`, `claim-variables.ts:215-242`). See Design, "Defaults".
+- **Significant 5 (defaults):** accepted and verified (`argument-engine.ts:3271-3292`, now `:3194-3218`, `claim-variables.ts:215-242`). See Design, "Defaults".
 - **Significant 6 (where the join lives):** no longer applies, since there is no join. Recorded in the question.
 - **Significant 7 (strict unknown keys):** confirmed by running. It was a defect in released code: every assignment giving values in two premises was refused. Fixed separately on this branch in `8cc1387d`, test first, and carried values meet the corrected check. Carrying places values only on variables that evaluated premises name, which answers the naked-Q part.
 - **Minor findings:**
@@ -322,6 +332,21 @@ If the answer is yes, that design returns to this spec before planning. If no, t
 - **An inference link of Z on a non-link premise of Y:** now stated as `noLinkReached`, with a criterion-8 case.
 - **Conclusion step under a formula root:** a defect in the response item's evaluation, fixed there in `1eac5758`, test first.
 - **Stale text:** the open-question wording, the table cross-reference, the criterion number and the line numbers are corrected, and the base commit is now `1eac5758`.
+
+### Maintainer decisions on the third revision
+
+**Accepted 2026-10-02 (maintainer, relayed by the requester):** (a) the cube is found over the target expression alone, every column free, so a link whose meaning depends on the response's own grounded claims reports `notExpressible`; (b) a reinforce carries only at a premise root, and a nested one reports `nestedReinforce`. The fourth revision narrows (b) further at the conclusion (`conclusionStatement`), which needs the maintainer's approval with the spec.
+
+### How the fourth review's findings were handled
+
+- **A reinforce of a non-conditional conclusion root leaks past attribution (blocking):** accepted. Reproduced on `and(Q, R)` and `not(C)`: `assertedByReader: false`, `reachedWithoutAssertion: true`. Not carried, reason `conclusionStatement`, with cases in criteria 2 and 9.
+- **The same report for a reader's own acceptance of such a root:** existing behaviour, not caused by carrying. It is a separate item, `2026-10-02-decide-whether-accepting-a-non-conditional-conclusion-root-is-the-reader-s-assertion`, blocked on the maintainer deciding what accepting such a step means.
+- **Goal 2 and the "one meaning" sentence overstated the agreement with `checkLink`:** accepted. Both now say the expansion is shared and read with every column free. Criterion 1's grounded case no longer describes a `checkLink` output.
+- **The reason given for carrying a nested undercut:** accepted. It now rests on "an operator decision is never a truth value", and is named as the one coarse reading Goal 2 allows.
+- **Criterion 10 never exercised a grounding response:** accepted. It now includes that case; the plan runs it over Task 3's links.
+- **`notALink` was in the plan only:** accepted, now in Interface and criterion 5.
+- **Stale line references in these Notes:** corrected beside the original numbers.
+- **Plan findings** (collecting E's columns, the factory's column helpers, `isPremiseRootExpression`): applied in the plan.
 
 ### How the first item's review's carrying findings are handled
 
