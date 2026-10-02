@@ -49,6 +49,7 @@ export async function fetchResponseEnvelope(args: {
     backgroundStream: boolean
     pollIntervalMs: number
     onResponseId?: (responseId: string) => void
+    onTextDelta?: (text: string) => void
 }): Promise<TOpenAiResponsesEnvelope> {
     if (args.backgroundStream) {
         return runBackgroundStream({
@@ -58,6 +59,7 @@ export async function fetchResponseEnvelope(args: {
             fetchImpl: args.fetchImpl,
             signal: args.signal,
             onResponseId: args.onResponseId,
+            onTextDelta: args.onTextDelta,
         })
     }
     if (args.background) {
@@ -78,7 +80,7 @@ export async function fetchResponseEnvelope(args: {
             fetchImpl: args.fetchImpl,
             signal: args.signal,
         })
-        return readSseEnvelope(response, args.onResponseId)
+        return readSseEnvelope(response, args.onResponseId, args.onTextDelta)
     }
     const response = await callOnce({
         url: args.url,
@@ -244,6 +246,7 @@ async function runBackgroundStream(args: {
     fetchImpl: TOpenAiFetch
     signal?: AbortSignal
     onResponseId?: (responseId: string) => void
+    onTextDelta?: (text: string) => void
 }): Promise<TOpenAiResponsesEnvelope> {
     if (args.signal?.aborted) throw abortError()
 
@@ -255,7 +258,7 @@ async function runBackgroundStream(args: {
         signal: args.signal,
     })
 
-    return readSseEnvelope(httpResponse, args.onResponseId)
+    return readSseEnvelope(httpResponse, args.onResponseId, args.onTextDelta)
 }
 
 async function runBackground(args: {

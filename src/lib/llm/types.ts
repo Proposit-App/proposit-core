@@ -82,6 +82,21 @@ export type TLlmRequest<T> = {
      */
     onResponseCreated?: (responseId: string) => void
     /**
+     * Optional callback a provider invokes **once per chunk of assistant
+     * output text, as it arrives**, before the call resolves. Lets a caller
+     * show a reply as it is generated.
+     *
+     * Chunks are passed as received and never accumulated. For a
+     * structured-output request they are pieces of the JSON envelope, not
+     * readable prose. The OpenAI provider invokes it in either streaming
+     * mode; it is never invoked on the poll-only background path, the
+     * synchronous path, or by the chat-completions provider. Each call to
+     * `respond()` streams from the beginning, so a pipeline retry streams
+     * its text again: a caller accumulating text must start over per
+     * attempt.
+     */
+    onTextDelta?: (text: string) => void
+    /**
      * The provider response id to chain this request against. When set,
      * the provider should continue from the specified prior response
      * rather than starting a fresh conversation. Only meaningful for

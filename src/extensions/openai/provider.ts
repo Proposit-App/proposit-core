@@ -250,9 +250,10 @@ export function createOpenAiResponsesProvider(
                 backgroundStream: useBackgroundStream,
                 pollIntervalMs: backgroundPollIntervalMs,
                 onResponseId: notifyResponseId,
+                onTextDelta: req.onTextDelta,
             })
 
-            // The mid-flight callback (background-stream mode) already set
+            // The mid-flight callback (either streaming mode) already set
             // `lastResponseId`; fall back to the terminal envelope id for
             // the synchronous / poll paths where no mid-flight id fires.
             lastResponseId = envelope.id ?? lastResponseId

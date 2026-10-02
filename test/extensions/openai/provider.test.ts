@@ -1728,6 +1728,95 @@ describe("OpenAI provider — foreground streaming callbacks", () => {
         await pending
         expect(observedIds).toEqual(["resp_fg"])
     })
+    const delta = (text: string, sequenceNumber: number): TSseFrame => ({
+        type: "response.output_text.delta",
+        item_id: "msg_1",
+        output_index: 0,
+        content_index: 0,
+        delta: text,
+        sequence_number: sequenceNumber,
+        logprobs: [],
+    })
+
+    it("passes each text delta to onTextDelta, in order, before respond() resolves", async () => {
+        const { response, release } = gatedSseResponse(
+            [delta('{"answer":', 1), delta('"streamed"}', 2)],
+            [completed("resp_d")]
+        )
+        const provider = createOpenAiResponsesProvider({
+            apiKey: "k",
+            fetch: () => Promise.resolve(response),
+        })
+        const deltas: string[] = []
+        let resolved = false
+        const pending = provider
+            .respond({
+                model: "gpt-5.4",
+                systemPrompt: "s",
+                userMessage: "u",
+                outputSchema: simpleSchema,
+                onTextDelta: (text) => deltas.push(text),
+            })
+            .then((r) => {
+                resolved = true
+                return r
+            })
+
+        await letStreamRun()
+        expect(resolved).toBe(false)
+        expect(deltas).toEqual(['{"answer":', '"streamed"}'])
+
+        release()
+        expect((await pending).output).toEqual({ answer: "streamed" })
+        expect(deltas).toHaveLength(2)
+    })
+
+    it("returns the same response without onTextDelta as for a stream with no deltas", async () => {
+        const respond = (frames: TSseFrame[]) =>
+            createOpenAiResponsesProvider({
+                apiKey: "k",
+                fetch: () => Promise.resolve(sseResponse(frames)),
+            }).respond({
+                model: "gpt-5.4",
+                systemPrompt: "s",
+                userMessage: "u",
+                outputSchema: simpleSchema,
+            })
+        const withDeltas = await respond([
+            delta('{"answer":', 1),
+            delta('"streamed"}', 2),
+            completed("resp_same"),
+        ])
+        const withoutDeltas = await respond([completed("resp_same")])
+        expect(withDeltas).toEqual(withoutDeltas)
+    })
+
+    it("passes deltas to onTextDelta in background-stream mode too", async () => {
+        const provider = createOpenAiResponsesProvider({
+            apiKey: "k",
+            backgroundStreamMode: true,
+            fetch: () =>
+                Promise.resolve(
+                    sseResponse([
+                        {
+                            type: "response.created",
+                            response: { id: "resp_bg", status: "in_progress" },
+                        },
+                        delta('{"answer":"streamed"}', 1),
+                        completed("resp_bg"),
+                    ])
+                ),
+        })
+        const deltas: string[] = []
+        await provider.respond({
+            model: "gpt-5.4",
+            systemPrompt: "s",
+            userMessage: "u",
+            outputSchema: simpleSchema,
+            onTextDelta: (text) => deltas.push(text),
+        })
+        expect(deltas).toEqual(['{"answer":"streamed"}'])
+    })
 })
 
 describe("OpenAI provider — backgroundStreamMode (background + live SSE)", () => {
