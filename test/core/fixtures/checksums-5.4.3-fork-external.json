@@ -1,0 +1,368 @@
+{
+    "capturedFrom": "@proposit/proposit-core@5.4.3",
+    "cases": {
+        "default/forkWithExternalBinding": {
+            "argument": {
+                "checksum": "f5c10f09",
+                "descendantChecksum": "9aa0a1c3",
+                "combinedChecksum": "d640459e"
+            },
+            "roleState": {
+                "conclusionPremiseId": "00000000-0000-4000-8000-000000000029"
+            },
+            "collections": {
+                "premises": "edfca4e9",
+                "variables": "7e4723fb"
+            },
+            "premises": {
+                "00000000-0000-4000-8000-000000000029": {
+                    "checksum": "e8b06c76",
+                    "descendantChecksum": "22b3d771",
+                    "combinedChecksum": "82e330ae"
+                },
+                "00000000-0000-4000-8000-00000000002b": {
+                    "checksum": "e8b06c76",
+                    "descendantChecksum": "6b623ba7",
+                    "combinedChecksum": "4edd7425"
+                },
+                "00000000-0000-4000-8000-000000000030": {
+                    "checksum": "e8b06c76",
+                    "descendantChecksum": "9703b6f4",
+                    "combinedChecksum": "61181cd3"
+                },
+                "00000000-0000-4000-8000-000000000037": {
+                    "checksum": "7de83363",
+                    "descendantChecksum": "dec69b63",
+                    "combinedChecksum": "e4e6c068"
+                }
+            },
+            "expressions": {
+                "00000000-0000-4000-8000-00000000002a": {
+                    "checksum": "22b3d771",
+                    "descendantChecksum": null,
+                    "combinedChecksum": "22b3d771"
+                },
+                "00000000-0000-4000-8000-00000000002c": {
+                    "checksum": "5e80fa50",
+                    "descendantChecksum": "004d7d34",
+                    "combinedChecksum": "6b623ba7"
+                },
+                "00000000-0000-4000-8000-00000000002d": {
+                    "checksum": "02d3e3a9",
+                    "descendantChecksum": null,
+                    "combinedChecksum": "02d3e3a9"
+                },
+                "00000000-0000-4000-8000-00000000002e": {
+                    "checksum": "8efdba0a",
+                    "descendantChecksum": "f2eb37d6",
+                    "combinedChecksum": "b044a639"
+                },
+                "00000000-0000-4000-8000-00000000002f": {
+                    "checksum": "ff5055e5",
+                    "descendantChecksum": null,
+                    "combinedChecksum": "ff5055e5"
+                },
+                "00000000-0000-4000-8000-000000000031": {
+                    "checksum": "e626e7b5",
+                    "descendantChecksum": "5850fe5e",
+                    "combinedChecksum": "9703b6f4"
+                },
+                "00000000-0000-4000-8000-000000000032": {
+                    "checksum": "23a320a6",
+                    "descendantChecksum": "081fc904",
+                    "combinedChecksum": "9ce7276c"
+                },
+                "00000000-0000-4000-8000-000000000033": {
+                    "checksum": "9896de7c",
+                    "descendantChecksum": null,
+                    "combinedChecksum": "9896de7c"
+                },
+                "00000000-0000-4000-8000-000000000034": {
+                    "checksum": "17377499",
+                    "descendantChecksum": null,
+                    "combinedChecksum": "17377499"
+                },
+                "00000000-0000-4000-8000-000000000035": {
+                    "checksum": "c4281534",
+                    "descendantChecksum": null,
+                    "combinedChecksum": "c4281534"
+                },
+                "00000000-0000-4000-8000-000000000036": {
+                    "checksum": "f80a524c",
+                    "descendantChecksum": null,
+                    "combinedChecksum": "f80a524c"
+                },
+                "00000000-0000-4000-8000-000000000038": {
+                    "checksum": "b24f5f30",
+                    "descendantChecksum": "1be1a14a",
+                    "combinedChecksum": "dec69b63"
+                },
+                "00000000-0000-4000-8000-000000000039": {
+                    "checksum": "3318e173",
+                    "descendantChecksum": null,
+                    "combinedChecksum": "3318e173"
+                },
+                "00000000-0000-4000-8000-00000000003a": {
+                    "checksum": "50d29d0f",
+                    "descendantChecksum": null,
+                    "combinedChecksum": "50d29d0f"
+                }
+            },
+            "variables": {
+                "00000000-0000-4000-8000-00000000003b": "65f29fa8",
+                "00000000-0000-4000-8000-00000000003c": "7ae63bd1",
+                "00000000-0000-4000-8000-00000000003d": "1901d1aa",
+                "00000000-0000-4000-8000-00000000003e": "59178f22",
+                "00000000-0000-4000-8000-00000000003f": "3c649744",
+                "00000000-0000-4000-8000-000000000040": "1823a77b",
+                "00000000-0000-4000-8000-000000000041": "c2361a51",
+                "00000000-0000-4000-8000-000000000042": "37d322a2",
+                "00000000-0000-4000-8000-000000000043": "a8d96250",
+                "00000000-0000-4000-8000-000000000044": "09df1347",
+                "00000000-0000-4000-8000-000000000045": "17ecb73d"
+            }
+        },
+        "consumer/forkWithExternalBinding": {
+            "argument": {
+                "checksum": "d4aa6f81",
+                "descendantChecksum": "b8e0684e",
+                "combinedChecksum": "e1151d6a"
+            },
+            "roleState": {
+                "conclusionPremiseId": "00000000-0000-4000-8000-000000000029"
+            },
+            "collections": {
+                "premises": "87a79e08",
+                "variables": "f4fc3a8d"
+            },
+            "premises": {
+                "00000000-0000-4000-8000-000000000029": {
+                    "checksum": "daea2a8b",
+                    "descendantChecksum": "22b3d771",
+                    "combinedChecksum": "e4a89625"
+                },
+                "00000000-0000-4000-8000-00000000002b": {
+                    "checksum": "2addbc0e",
+                    "descendantChecksum": "6b623ba7",
+                    "combinedChecksum": "7dcd1d11"
+                },
+                "00000000-0000-4000-8000-000000000030": {
+                    "checksum": "3b55c7e9",
+                    "descendantChecksum": "9703b6f4",
+                    "combinedChecksum": "4a0b31a1"
+                },
+                "00000000-0000-4000-8000-000000000037": {
+                    "checksum": "7de83363",
+                    "descendantChecksum": "dec69b63",
+                    "combinedChecksum": "e4e6c068"
+                }
+            },
+            "expressions": {
+                "00000000-0000-4000-8000-00000000002a": {
+                    "checksum": "22b3d771",
+                    "descendantChecksum": null,
+                    "combinedChecksum": "22b3d771"
+                },
+                "00000000-0000-4000-8000-00000000002c": {
+                    "checksum": "5e80fa50",
+                    "descendantChecksum": "004d7d34",
+                    "combinedChecksum": "6b623ba7"
+                },
+                "00000000-0000-4000-8000-00000000002d": {
+                    "checksum": "02d3e3a9",
+                    "descendantChecksum": null,
+                    "combinedChecksum": "02d3e3a9"
+                },
+                "00000000-0000-4000-8000-00000000002e": {
+                    "checksum": "8efdba0a",
+                    "descendantChecksum": "f2eb37d6",
+                    "combinedChecksum": "b044a639"
+                },
+                "00000000-0000-4000-8000-00000000002f": {
+                    "checksum": "ff5055e5",
+                    "descendantChecksum": null,
+                    "combinedChecksum": "ff5055e5"
+                },
+                "00000000-0000-4000-8000-000000000031": {
+                    "checksum": "e626e7b5",
+                    "descendantChecksum": "5850fe5e",
+                    "combinedChecksum": "9703b6f4"
+                },
+                "00000000-0000-4000-8000-000000000032": {
+                    "checksum": "23a320a6",
+                    "descendantChecksum": "081fc904",
+                    "combinedChecksum": "9ce7276c"
+                },
+                "00000000-0000-4000-8000-000000000033": {
+                    "checksum": "9896de7c",
+                    "descendantChecksum": null,
+                    "combinedChecksum": "9896de7c"
+                },
+                "00000000-0000-4000-8000-000000000034": {
+                    "checksum": "17377499",
+                    "descendantChecksum": null,
+                    "combinedChecksum": "17377499"
+                },
+                "00000000-0000-4000-8000-000000000035": {
+                    "checksum": "c4281534",
+                    "descendantChecksum": null,
+                    "combinedChecksum": "c4281534"
+                },
+                "00000000-0000-4000-8000-000000000036": {
+                    "checksum": "f80a524c",
+                    "descendantChecksum": null,
+                    "combinedChecksum": "f80a524c"
+                },
+                "00000000-0000-4000-8000-000000000038": {
+                    "checksum": "b24f5f30",
+                    "descendantChecksum": "1be1a14a",
+                    "combinedChecksum": "dec69b63"
+                },
+                "00000000-0000-4000-8000-000000000039": {
+                    "checksum": "3318e173",
+                    "descendantChecksum": null,
+                    "combinedChecksum": "3318e173"
+                },
+                "00000000-0000-4000-8000-00000000003a": {
+                    "checksum": "50d29d0f",
+                    "descendantChecksum": null,
+                    "combinedChecksum": "50d29d0f"
+                }
+            },
+            "variables": {
+                "00000000-0000-4000-8000-00000000003b": "208e570d",
+                "00000000-0000-4000-8000-00000000003c": "1f08b6bc",
+                "00000000-0000-4000-8000-00000000003d": "17c12d23",
+                "00000000-0000-4000-8000-00000000003e": "59178f22",
+                "00000000-0000-4000-8000-00000000003f": "3c649744",
+                "00000000-0000-4000-8000-000000000040": "91cb1c81",
+                "00000000-0000-4000-8000-000000000041": "c1e5e6d6",
+                "00000000-0000-4000-8000-000000000042": "37d322a2",
+                "00000000-0000-4000-8000-000000000043": "a8d96250",
+                "00000000-0000-4000-8000-000000000044": "09df1347",
+                "00000000-0000-4000-8000-000000000045": "17ecb73d"
+            }
+        },
+        "partial/forkWithExternalBinding": {
+            "argument": {
+                "checksum": "f5c10f09",
+                "descendantChecksum": "9aa0a1c3",
+                "combinedChecksum": "d640459e"
+            },
+            "roleState": {
+                "conclusionPremiseId": "00000000-0000-4000-8000-000000000029"
+            },
+            "collections": {
+                "premises": "edfca4e9",
+                "variables": "7e4723fb"
+            },
+            "premises": {
+                "00000000-0000-4000-8000-000000000029": {
+                    "checksum": "e8b06c76",
+                    "descendantChecksum": "22b3d771",
+                    "combinedChecksum": "82e330ae"
+                },
+                "00000000-0000-4000-8000-00000000002b": {
+                    "checksum": "e8b06c76",
+                    "descendantChecksum": "6b623ba7",
+                    "combinedChecksum": "4edd7425"
+                },
+                "00000000-0000-4000-8000-000000000030": {
+                    "checksum": "e8b06c76",
+                    "descendantChecksum": "9703b6f4",
+                    "combinedChecksum": "61181cd3"
+                },
+                "00000000-0000-4000-8000-000000000037": {
+                    "checksum": "7de83363",
+                    "descendantChecksum": "dec69b63",
+                    "combinedChecksum": "e4e6c068"
+                }
+            },
+            "expressions": {
+                "00000000-0000-4000-8000-00000000002a": {
+                    "checksum": "22b3d771",
+                    "descendantChecksum": null,
+                    "combinedChecksum": "22b3d771"
+                },
+                "00000000-0000-4000-8000-00000000002c": {
+                    "checksum": "5e80fa50",
+                    "descendantChecksum": "004d7d34",
+                    "combinedChecksum": "6b623ba7"
+                },
+                "00000000-0000-4000-8000-00000000002d": {
+                    "checksum": "02d3e3a9",
+                    "descendantChecksum": null,
+                    "combinedChecksum": "02d3e3a9"
+                },
+                "00000000-0000-4000-8000-00000000002e": {
+                    "checksum": "8efdba0a",
+                    "descendantChecksum": "f2eb37d6",
+                    "combinedChecksum": "b044a639"
+                },
+                "00000000-0000-4000-8000-00000000002f": {
+                    "checksum": "ff5055e5",
+                    "descendantChecksum": null,
+                    "combinedChecksum": "ff5055e5"
+                },
+                "00000000-0000-4000-8000-000000000031": {
+                    "checksum": "e626e7b5",
+                    "descendantChecksum": "5850fe5e",
+                    "combinedChecksum": "9703b6f4"
+                },
+                "00000000-0000-4000-8000-000000000032": {
+                    "checksum": "23a320a6",
+                    "descendantChecksum": "081fc904",
+                    "combinedChecksum": "9ce7276c"
+                },
+                "00000000-0000-4000-8000-000000000033": {
+                    "checksum": "9896de7c",
+                    "descendantChecksum": null,
+                    "combinedChecksum": "9896de7c"
+                },
+                "00000000-0000-4000-8000-000000000034": {
+                    "checksum": "17377499",
+                    "descendantChecksum": null,
+                    "combinedChecksum": "17377499"
+                },
+                "00000000-0000-4000-8000-000000000035": {
+                    "checksum": "c4281534",
+                    "descendantChecksum": null,
+                    "combinedChecksum": "c4281534"
+                },
+                "00000000-0000-4000-8000-000000000036": {
+                    "checksum": "f80a524c",
+                    "descendantChecksum": null,
+                    "combinedChecksum": "f80a524c"
+                },
+                "00000000-0000-4000-8000-000000000038": {
+                    "checksum": "b24f5f30",
+                    "descendantChecksum": "1be1a14a",
+                    "combinedChecksum": "dec69b63"
+                },
+                "00000000-0000-4000-8000-000000000039": {
+                    "checksum": "3318e173",
+                    "descendantChecksum": null,
+                    "combinedChecksum": "3318e173"
+                },
+                "00000000-0000-4000-8000-00000000003a": {
+                    "checksum": "50d29d0f",
+                    "descendantChecksum": null,
+                    "combinedChecksum": "50d29d0f"
+                }
+            },
+            "variables": {
+                "00000000-0000-4000-8000-00000000003b": "65f29fa8",
+                "00000000-0000-4000-8000-00000000003c": "7ae63bd1",
+                "00000000-0000-4000-8000-00000000003d": "1901d1aa",
+                "00000000-0000-4000-8000-00000000003e": "59178f22",
+                "00000000-0000-4000-8000-00000000003f": "3c649744",
+                "00000000-0000-4000-8000-000000000040": "1823a77b",
+                "00000000-0000-4000-8000-000000000041": "c2361a51",
+                "00000000-0000-4000-8000-000000000042": "37d322a2",
+                "00000000-0000-4000-8000-000000000043": "a8d96250",
+                "00000000-0000-4000-8000-000000000044": "09df1347",
+                "00000000-0000-4000-8000-000000000045": "17ecb73d"
+            }
+        }
+    }
+}
