@@ -2,7 +2,6 @@ import { isPremiseBound } from "../../schemata/index.js"
 import type {
     TCoreExpressionAssignment,
     TCoreTrivalentValue,
-    TCoreVariableAssignment,
 } from "../../types/evaluation.js"
 import type {
     TArgumentEvaluationContext,
@@ -133,9 +132,46 @@ export function isPremiseSetSatisfiable(
     ctx: TArgumentEvaluationContext,
     input: TPremiseSetSatisfiabilityInput
 ): TCoreTrivalentValue {
-    if (input.premises.length === 0) return true
+    return findSatisfyingAssignment(ctx, input).satisfiable
+}
 
+/**
+ * The answer of `findSatisfyingAssignment`: satisfiable with one witness,
+ * unsatisfiable, or not determined.
+ */
+export type TSatisfyingAssignmentResult =
+    | { satisfiable: true; assignment: Record<string, boolean> }
+    | { satisfiable: false }
+    | { satisfiable: null }
+
+/**
+ * The same search as `isPremiseSetSatisfiable`, answering with one satisfying
+ * assignment when there is one.
+ *
+ * The witness merges the first satisfying row of each group of interacting
+ * variables. It holds a value for every variable the walk varied — every free
+ * variable some premise reaches — and `true` for every forced-true variable. A
+ * free variable no premise reaches is absent: no premise reads it, so any
+ * value satisfies.
+ *
+ * The answer is `{ satisfiable: null }` exactly where `isPremiseSetSatisfiable`
+ * returns `null`, including when a group exceeds
+ * `SATISFIABILITY_VARIABLE_CEILING` — no witness is offered for a set the
+ * search could not finish.
+ */
+export function findSatisfyingAssignment(
+    ctx: TArgumentEvaluationContext,
+    input: TPremiseSetSatisfiabilityInput
+): TSatisfyingAssignmentResult {
     const forcedTrueVariableIds = input.forcedTrueVariableIds
+    const witness: Record<string, boolean> = {}
+    for (const variableId of forcedTrueVariableIds ?? []) {
+        witness[variableId] = true
+    }
+    if (input.premises.length === 0) {
+        return { satisfiable: true, assignment: witness }
+    }
+
     const freeVariableIds = input.freeVariableIds.filter(
         (variableId) => forcedTrueVariableIds?.has(variableId) !== true
     )
@@ -154,10 +190,13 @@ export function isPremiseSetSatisfiable(
         )
         // A group that cannot hold makes the whole set unable to hold, whatever
         // the others do — including a group too large to have been walked.
-        if (answer === false) return false
+        if (answer === false) return { satisfiable: false }
         if (answer === null) sawUndeterminedGroup = true
+        else Object.assign(witness, answer)
     }
-    return sawUndeterminedGroup ? null : true
+    return sawUndeterminedGroup
+        ? { satisfiable: null }
+        : { satisfiable: true, assignment: witness }
 }
 
 /**
@@ -224,7 +263,9 @@ function partitionIntoGroups(
 
 /**
  * The truth-table walk over one group: is there an assignment of `columns`
- * under which all of `premises` come out true?
+ * under which all of `premises` come out true? Answers with the first such
+ * row (forced-true variables included), `false` when every row settles
+ * against it, or `null` when that is not determined.
  *
  * `forcedTrueVariableIds` are written into every row of every group, including
  * a group with no columns at all. They are not columns, but a premise that
@@ -236,13 +277,13 @@ function walkGroup(
     premises: TEvaluablePremise[],
     columns: string[],
     forcedTrueVariableIds: ReadonlySet<string> | undefined
-): TCoreTrivalentValue {
+): Record<string, boolean> | false | null {
     if (columns.length > SATISFIABILITY_VARIABLE_CEILING) return null
 
     const totalAssignments = 2 ** columns.length
     let sawIndeterminateRow = false
     for (let mask = 0; mask < totalAssignments; mask++) {
-        const variables: TCoreVariableAssignment = {}
+        const variables: Record<string, boolean> = {}
         for (let index = 0; index < columns.length; index++) {
             variables[columns[index]] = Boolean(mask & (1 << index))
         }
@@ -258,7 +299,7 @@ function walkGroup(
             (premise) =>
                 premise.evaluate(assignment, { resolver }).rootValue ?? null
         )
-        if (rootValues.every((value) => value === true)) return true
+        if (rootValues.every((value) => value === true)) return variables
         // A row is settled either because one premise is outright false or
         // because every premise resolved to something.
         if (

@@ -144,6 +144,7 @@ Function lib.executeFinalize (1)
 Function lib.executePipeline (1)
 Function lib.executeStage (1)
 Function lib.executeTurn (1)
+Function lib.findSatisfyingAssignment (1)
 Function lib.forkArgumentEngine (1)
 Function lib.getParsingResponseSchema (1)
 Function lib.isClaimBound (1)
@@ -5277,6 +5278,10 @@ Property lib.TRetryPolicy.backoffMs
 Property lib.TRetryPolicy.maxAppendedErrorBytes
 Property lib.TRetryPolicy.maxAttempts
 Property lib.TRetryPolicy.retryOn
+Property lib.TSatisfyingAssignmentResult.assignment
+Property lib.TSatisfyingAssignmentResult.satisfiable
+Property lib.TSatisfyingAssignmentResult.satisfiable
+Property lib.TSatisfyingAssignmentResult.satisfiable
 Property lib.TStage.dependsOn
 Property lib.TStage.id
 Property lib.TStage.outputSchema
@@ -6145,6 +6150,7 @@ TypeAlias lib.TResponseStatus
 TypeAlias lib.TRetrievedResponse
 TypeAlias lib.TRetryPolicy
 TypeAlias lib.TRetryReason
+TypeAlias lib.TSatisfyingAssignmentResult
 TypeAlias lib.TStage
 TypeAlias lib.TStageContext
 TypeAlias lib.TStageOutcomeRecord
