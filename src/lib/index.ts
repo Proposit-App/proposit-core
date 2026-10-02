@@ -117,6 +117,7 @@ export {
 export { classifyBindings } from "./core/response/rebase.js"
 export type { TClassifyBindingsOptions } from "./core/response/rebase.js"
 export { linkTargetsElement } from "./core/response/link-reference.js"
+export { mergeCarriedInput } from "./core/response/carry.js"
 
 export { collectArgumentReferencedClaims } from "./core/review-helpers.js"
 export type { TCollectArgumentReferencedClaimsResult } from "./core/review-helpers.js"

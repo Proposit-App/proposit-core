@@ -162,6 +162,7 @@ Function lib.launchStage (1)
 Function lib.linkTargetsElement (1)
 Function lib.listLinks (1)
 Function lib.llmStage (1)
+Function lib.mergeCarriedInput (1)
 Function lib.mergeChangesets (1)
 Function lib.midpoint (1)
 Function lib.normalizeChecksumConfig (1)
@@ -256,6 +257,8 @@ Interface lib.THierarchicalChecksummable
 Interface lib.TLinkReference
 Interface lib.TLinkValidationResult
 Interface lib.TLinkViolation
+Interface lib.TMergedCarriedInput
+Interface lib.TNotCarried
 Interface lib.TOriginLibraryManagement
 Interface lib.TOriginLookup
 Interface lib.TPremiseClassification
@@ -311,6 +314,7 @@ Method lib.ArgumentEngine.buildReactiveSnapshot (1)
 Method lib.ArgumentEngine.buildVariableIndex (1)
 Method lib.ArgumentEngine.canBind (1)
 Method lib.ArgumentEngine.canFork (1)
+Method lib.ArgumentEngine.carryAnswers (1)
 Method lib.ArgumentEngine.checkLink (1)
 Method lib.ArgumentEngine.checkResponseCoherent (1)
 Method lib.ArgumentEngine.checkValidity (1)
@@ -527,6 +531,7 @@ Method lib.StageAbortedError.captureStackTrace (1)
 Method lib.StageAbortedError.prepareStackTrace (1)
 Method lib.SubPipelineFailedError.captureStackTrace (1)
 Method lib.SubPipelineFailedError.prepareStackTrace (1)
+Method lib.TArgumentEvaluation.carryAnswers (1)
 Method lib.TArgumentEvaluation.checkLink (1)
 Method lib.TArgumentEvaluation.checkResponseCoherent (1)
 Method lib.TArgumentEvaluation.checkValidity (1)
@@ -5016,6 +5021,40 @@ Property lib.TBindingPremiseUse.isLink
 Property lib.TBindingPremiseUse.premiseId
 Property lib.TCanonicalizeOperatorAssignmentsInput.expressionOverrides
 Property lib.TCanonicalizeOperatorAssignmentsInput.premiseScope
+Property lib.TCarriedSource.id
+Property lib.TCarriedSource.id
+Property lib.TCarriedSource.id
+Property lib.TCarriedSource.kind
+Property lib.TCarriedSource.kind
+Property lib.TCarriedSource.kind
+Property lib.TCarriedSource.linkPremiseIds
+Property lib.TCarriedSource.value
+Property lib.TCarriedSource.value
+Property lib.TCarriedSource.value
+Property lib.TCarryCollision.carried
+Property lib.TCarryCollision.carried
+Property lib.TCarryCollision.carried
+Property lib.TCarryCollision.id
+Property lib.TCarryCollision.id
+Property lib.TCarryCollision.id
+Property lib.TCarryCollision.kind
+Property lib.TCarryCollision.kind
+Property lib.TCarryCollision.kind
+Property lib.TCarryCollision.linkPremiseIds
+Property lib.TCarryCollision.own
+Property lib.TCarryCollision.own
+Property lib.TCarryCollision.own
+Property lib.TCarryResult.into
+Property lib.TCarryResult.intoResponse
+Property lib.TCarryResult.intoResponse
+Property lib.TCarryResult.linkAnswers
+Property lib.TCarryResult.notCarried
+Property lib.TCarryResult.operatorAssignments
+Property lib.TCarryResult.problems
+Property lib.TCarryResult.sources
+Property lib.TCarryResult.status
+Property lib.TCarryResult.status
+Property lib.TCarryResult.variables
 Property lib.TClaimConnectionLibrarySnapshot.connections
 Property lib.TClaimCreateInput.id
 Property lib.TClaimLibraryManagement.create.claim.id
@@ -5364,8 +5403,15 @@ Property lib.TLogicEngineOptions.behavior
 Property lib.TLogicEngineOptions.checksumConfig
 Property lib.TLogicEngineOptions.generateId
 Property lib.TLogicEngineOptions.positionConfig
+Property lib.TMergedCarriedInput.collisions
+Property lib.TMergedCarriedInput.linkAnswers
+Property lib.TMergedCarriedInput.operatorAssignments
+Property lib.TMergedCarriedInput.variables
 Property lib.TMultiTurnInput.previousResponseId
 Property lib.TMultiTurnOutput.responseId
+Property lib.TNotCarried.conflictsWith
+Property lib.TNotCarried.premiseId
+Property lib.TNotCarried.reason
 Property lib.TOptionalChecksum.T.checksum
 Property lib.TOptionalDep.__optional
 Property lib.TOptionalDep.id
@@ -6199,6 +6245,20 @@ Property lib.llmStage.config.outputSchema
 Property lib.llmStage.config.reasoningEffort
 Property lib.llmStage.config.retry
 Property lib.llmStage.config.tools
+Property lib.mergeCarriedInput.carried.into
+Property lib.mergeCarriedInput.carried.into.argumentId
+Property lib.mergeCarriedInput.carried.into.argumentVersion
+Property lib.mergeCarriedInput.carried.intoResponse
+Property lib.mergeCarriedInput.carried.intoResponse
+Property lib.mergeCarriedInput.carried.linkAnswers
+Property lib.mergeCarriedInput.carried.notCarried
+Property lib.mergeCarriedInput.carried.operatorAssignments
+Property lib.mergeCarriedInput.carried.sources
+Property lib.mergeCarriedInput.carried.status
+Property lib.mergeCarriedInput.carried.variables
+Property lib.mergeCarriedInput.own.linkAnswers
+Property lib.mergeCarriedInput.own.operatorAssignments
+Property lib.mergeCarriedInput.own.variables
 Property lib.mergeChangesets.TArg.checksum
 Property lib.mergeChangesets.TArg.combinedChecksum
 Property lib.mergeChangesets.TArg.descendantChecksum
@@ -6483,6 +6543,9 @@ TypeAlias lib.TBindingChangeReason
 TypeAlias lib.TBindingClassification
 TypeAlias lib.TBindingDecision
 TypeAlias lib.TBoundAspect
+TypeAlias lib.TCarriedSource
+TypeAlias lib.TCarryCollision
+TypeAlias lib.TCarryResult
 TypeAlias lib.TClaimBoundVariable
 TypeAlias lib.TClaimConnectionLibrarySnapshot
 TypeAlias lib.TClaimCreateInput
@@ -6560,6 +6623,7 @@ TypeAlias lib.TJsonObject
 TypeAlias lib.TJsonPrimitive
 TypeAlias lib.TJsonValue
 TypeAlias lib.TLaunchStageResult
+TypeAlias lib.TLinkAnswer
 TypeAlias lib.TLinkCheckResult
 TypeAlias lib.TLinkElement
 TypeAlias lib.TLinkMove
@@ -6573,6 +6637,7 @@ TypeAlias lib.TLlmTokenUsage
 TypeAlias lib.TLogicEngineOptions
 TypeAlias lib.TMultiTurnInput
 TypeAlias lib.TMultiTurnOutput
+TypeAlias lib.TNotCarriedReason
 TypeAlias lib.TNotOperatorNotDecidableReason
 TypeAlias lib.TOptionalChecksum
 TypeAlias lib.TOptionalDep
