@@ -1144,3 +1144,53 @@ describe("PropositCore.forkArgument transitive closure across axioms", () => {
         expect(claimRemap.get(axiomForA.id)).toBeDefined()
     })
 })
+
+describe("forking an argument bound into another argument", () => {
+    const externalBinding = {
+        id: "v-ext",
+        argumentId: ARG.id,
+        argumentVersion: ARG.version,
+        symbol: "Ext",
+        boundPremiseId: "p-in-other-arg",
+        boundArgumentId: "arg-other",
+        boundArgumentVersion: 2,
+    }
+
+    it("forkArgumentEngine keeps the binding pointing into the other argument", () => {
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
+        eng.bindVariableToExternalPremise(externalBinding)
+
+        const { engine: forked, remapTable } = forkArgumentEngine(
+            eng,
+            "forked-arg",
+            { claimLibrary: aLib() }
+        )
+
+        const variable = forked.getVariable(
+            remapTable.variables.get("v-ext")!
+        ) as unknown as TPremiseBoundVariable
+        expect(variable.boundPremiseId).toBe("p-in-other-arg")
+        expect(variable.boundArgumentId).toBe("arg-other")
+        expect(variable.boundArgumentVersion).toBe(2)
+    })
+
+    it("PropositCore.forkArgument succeeds on an argument holding the binding", () => {
+        const core = new PropositCore()
+        const arg = { id: crypto.randomUUID(), version: 0 }
+        core.arguments.create(arg)
+        core.arguments.get(arg.id)!.bindVariableToExternalPremise({
+            ...externalBinding,
+            argumentId: arg.id,
+            argumentVersion: arg.version,
+        })
+
+        const { engine } = core.forkArgument(arg.id, crypto.randomUUID())
+        const [variable] = engine
+            .snapshot()
+            .variables.variables.filter((v) =>
+                isPremiseBound(v)
+            ) as unknown as TPremiseBoundVariable[]
+        expect(variable.boundArgumentId).toBe("arg-other")
+        expect(variable.boundPremiseId).toBe("p-in-other-arg")
+    })
+})

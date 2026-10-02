@@ -1491,7 +1491,11 @@ export class ArgumentEngine<
     public getVariablesBoundToPremise(premiseId: string): TVar[] {
         return this.variables.toArray().filter((v) => {
             const base = v as unknown as TCorePropositionalVariable
-            return isPremiseBound(base) && base.boundPremiseId === premiseId
+            return (
+                isPremiseBound(base) &&
+                base.boundArgumentId === this.argument.id &&
+                base.boundPremiseId === premiseId
+            )
         })
     }
 

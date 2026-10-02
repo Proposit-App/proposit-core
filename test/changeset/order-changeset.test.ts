@@ -591,4 +591,44 @@ describe("orderChangeset", () => {
         expect(insertVar).toBeLessThan(updateArg)
         expect(insertVar).toBeLessThan(updateRoles)
     })
+
+    it("does not hold back an update to a binding into another argument whose premise id matches an inserted premise", () => {
+        const changeset: TCoreChangeset = {
+            premises: {
+                added: [
+                    {
+                        id: "p1",
+                        argumentId: "a",
+                        argumentVersion: 0,
+                        checksum: "c",
+                        descendantChecksum: null,
+                        combinedChecksum: "c",
+                        type: "freeform" as const,
+                    },
+                ],
+                modified: [],
+                removed: [],
+            },
+            variables: {
+                added: [],
+                modified: [
+                    {
+                        id: "v-ext",
+                        symbol: "Ext",
+                        argumentId: "a",
+                        argumentVersion: 0,
+                        boundPremiseId: "p1",
+                        boundArgumentId: "other",
+                        boundArgumentVersion: 0,
+                        checksum: "c",
+                    },
+                ],
+                removed: [],
+            },
+        }
+        const ops = opSummary(orderChangeset(changeset))
+        expect(ops.indexOf("update:variable")).toBeLessThan(
+            ops.indexOf("insert:premise")
+        )
+    })
 })

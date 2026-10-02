@@ -45,6 +45,9 @@ export function wouldCreateCycle<
     if (!isPremiseBound(variable)) return false
 
     const bound = variable as unknown as TPremiseBoundVariable
+    // A binding into another argument names a premise there, not here, so it
+    // cannot close a cycle through this argument's premises.
+    if (bound.boundArgumentId !== bound.argumentId) return false
     if (bound.boundPremiseId === targetPremiseId) return true
 
     if (visited.size >= ctx.premises.size) {

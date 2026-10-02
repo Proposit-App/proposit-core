@@ -134,7 +134,7 @@ Returns whether this engine allows binding to the specified external argument ve
 
 ### `getVariablesBoundToPremise(premiseId)` → `TPropositionalVariable[]`
 
-Returns all premise-bound variables whose `boundPremiseId` matches the given premise ID. This is a linear scan over all variables.
+Returns the premise-bound variables bound to the given premise of this argument. A variable bound into another argument is never included, even when that argument's premise has the same ID. This is a linear scan over all variables.
 
 ---
 
@@ -770,7 +770,7 @@ Validates all records against the namespace schema.
 
 ## `forkArgumentEngine(engine, newArgumentId, libraries, options?)` → `{ engine, remapTable }`
 
-Standalone low-level function for argument forking without fork record management or claim cloning. Creates an independent copy of the source engine with new UUIDs for all entities. Internal references (expression `parentId`, `premiseId`, `variableId`, premise-bound variable `boundPremiseId`, conclusion role) are remapped to the new IDs. Does NOT set `forkedFrom*` fields on entities (those fields were removed from entity schemas) and does NOT create fork records — use `PropositCore.forkArgument()` for full orchestration. The forked engine starts at version `0`.
+Standalone low-level function for argument forking without fork record management or claim cloning. Creates an independent copy of the source engine with new UUIDs for all entities. Internal references (expression `parentId`, `premiseId`, `variableId`, premise-bound variable `boundPremiseId`, conclusion role) are remapped to the new IDs. A variable bound into another argument (`bindVariableToExternalPremise`) is copied with its binding unchanged, since the premise it names is not part of the fork. Does NOT set `forkedFrom*` fields on entities (those fields were removed from entity schemas) and does NOT create fork records — use `PropositCore.forkArgument()` for full orchestration. The forked engine starts at version `0`.
 
 - `engine` — the source `ArgumentEngine`
 - `newArgumentId` — ID for the new argument

@@ -723,3 +723,46 @@ describe("ensureClaimBoundVariable", () => {
         ).toThrow(/CLAIM_NOT_FOUND/)
     })
 })
+
+describe("a binding into another argument whose premise shares a local premise's id", () => {
+    const setup = () => {
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
+        const { result: local } = eng.createPremiseWithId("p1")
+        eng.bindVariableToExternalPremise({
+            id: "v-ext",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            symbol: "Ext",
+            boundPremiseId: "p1",
+            boundArgumentId: "arg-other",
+            boundArgumentVersion: 0,
+        })
+        return { eng, local }
+    }
+
+    it("is not one of the variables bound to the local premise", () => {
+        const { eng } = setup()
+        expect(
+            eng.getVariablesBoundToPremise("p1").map((v) => v.id)
+        ).not.toContain("v-ext")
+    })
+
+    it("survives removing the local premise", () => {
+        const { eng } = setup()
+        eng.removePremise("p1")
+        expect(eng.getVariable("v-ext")).toBeDefined()
+    })
+
+    it("can be placed in the local premise without a circularity error", () => {
+        const { local } = setup()
+        expect(() =>
+            local.addExpression(
+                makeVarExpr("e-ext", "v-ext", {
+                    parentId: null,
+                    position: 1,
+                    premiseId: "p1",
+                })
+            )
+        ).not.toThrow()
+    })
+})
