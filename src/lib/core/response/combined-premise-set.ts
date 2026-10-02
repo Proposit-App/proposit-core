@@ -98,11 +98,37 @@ function childrenByParent(
     return byParent
 }
 
-export function buildCombinedSet(input: TCombinedSetInput): TCombinedSet {
-    const { target } = input
+/**
+ * Expands expressions of the argument a response answers into formulas over
+ * columns, the way every check reads them. Every column it creates is
+ * recorded in `columns`, shared by all expansions it makes.
+ *
+ * It records nothing about the response: a column one of the response's own
+ * grounded variables also names is a plain column here, free to take either
+ * value.
+ */
+export interface TTargetExpander {
+    /** The formula an expression of the target stands for. */
+    expand: (expressionId: string) => TCombinedNode
+    columns: Map<string, TColumnReference>
+    claimColumn: (claimId: string) => TCombinedNode
+    premiseColumn: (
+        argumentId: string,
+        argumentVersion: number,
+        premiseId: string
+    ) => TCombinedNode
+    expressionColumn: (
+        argumentId: string,
+        expressionId: string,
+        aspect: "statement" | "inference"
+    ) => TCombinedNode
+}
+
+export function createTargetExpander(
+    target: TArgumentEngineSnapshot
+): TTargetExpander {
     const targetId = target.argument.id
     const columns = new Map<string, TColumnReference>()
-    const forcedTrueColumns = new Set<string>()
 
     const column = (
         key: string,
@@ -222,6 +248,20 @@ export function buildCombinedSet(input: TCombinedSetInput): TCombinedSet {
         return node
     }
 
+    return {
+        expand: (expressionId) => expandTarget(expressionId, []),
+        columns,
+        claimColumn,
+        premiseColumn,
+        expressionColumn,
+    }
+}
+
+export function buildCombinedSet(input: TCombinedSetInput): TCombinedSet {
+    const expander = createTargetExpander(input.target)
+    const { columns, claimColumn, premiseColumn, expressionColumn } = expander
+    const forcedTrueColumns = new Set<string>()
+
     // The response's own premises.
     const sourceById = new Map(input.premises.map((pm) => [pm.id, pm]))
     const responseChildren = new Map(
@@ -255,7 +295,7 @@ export function buildCombinedSet(input: TCombinedSetInput): TCombinedSet {
         }
         if (isExpressionBound(variable)) {
             return variable.boundAspect === "statement"
-                ? expandTarget(variable.boundExpressionId, [])
+                ? expander.expand(variable.boundExpressionId)
                 : expressionColumn(
                       variable.boundArgumentId,
                       variable.boundExpressionId,
@@ -313,12 +353,12 @@ export function buildCombinedSet(input: TCombinedSetInput): TCombinedSet {
 }
 
 /** Evaluates a formula of the combined set with the library's own operator rules. */
-function evaluateNode(
+export function evaluateCombinedNode(
     node: TCombinedNode,
     read: (key: string) => TCoreQuadrivalentValue
 ): TCoreQuadrivalentValue {
     if (node.kind === "column") return read(node.key)
-    const values = node.kids.map((kid) => evaluateNode(kid, read))
+    const values = node.kids.map((kid) => evaluateCombinedNode(kid, read))
     switch (node.operator) {
         case "not":
             return belnapNot(values[0])
@@ -415,7 +455,7 @@ export class CombinedPremise implements TEvaluablePremise {
     ): TCorePremiseEvaluationResult {
         const read = (key: string): TCoreQuadrivalentValue =>
             options?.resolver?.(key) ?? assignment.variables[key] ?? null
-        const rootValue = evaluateNode(this.tree, read)
+        const rootValue = evaluateCombinedNode(this.tree, read)
         const isInference =
             this.tree.kind === "op" &&
             (this.tree.operator === "implies" || this.tree.operator === "iff")
