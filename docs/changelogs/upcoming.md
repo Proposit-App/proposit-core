@@ -22,7 +22,10 @@
 - The OpenAI provider's default foreground stream dropped the
   `response.created` id instead of passing it to `onResponseCreated`, so
   `stage:llm-response-created` fired only at completion. It now fires
-  mid-flight in both streaming modes.
+  mid-flight in both streaming modes for a call that makes a single request.
+  A function-tool loop still reports its id at completion, since a
+  mid-flight id would be the first round's rather than the last round's that
+  `stage:llm-call` carries.
 
 ## Tests
 

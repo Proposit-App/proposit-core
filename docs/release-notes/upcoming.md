@@ -34,6 +34,9 @@ Things to know:
 - **It is the raw text.** For a stage with an output schema the chunks are
   pieces of JSON, not prose; pulling readable text out of a partial JSON
   document is up to you.
+- **Tool rounds.** A stage with function tools makes one request per round,
+  and any text the model writes before calling a tool streams too, ahead of
+  the final answer and under the same `attempt`.
 - **Where it does not fire:** the poll-only background mode, `stream: false`,
   the chat-completions provider, and `launchStage`, none of which hold a live
   stream.
@@ -47,7 +50,10 @@ Providers get the same signal directly through the new optional
 
 `onResponseCreated`, and so the `stage:llm-response-created` event, now fires
 as soon as the default foreground stream reports the id, instead of only when
-the call completes. Background-stream mode already did this. Only a
+the call completes, for a call that makes a single request. Background-stream
+mode already did this. A call with function tools makes a request per round
+and still reports its id at completion, so the id event and
+`stage:llm-call` always carry the same id. Only a
 background response keeps generating after you disconnect, so recovering an
 interrupted call is still a background-stream guarantee.
 
