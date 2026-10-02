@@ -11,4 +11,5 @@ reference through `Value.Decode` first. It now formats them exactly as it
 formats the decoded `Date`, and `formatDate` accepts either form.
 
 A date field holding something that is not a date at all now fails with a
-`TypeError` that names the field.
+`TypeError` that names the field. That includes an invalid `Date`, which used
+to print as "undefined NaN, NaN".

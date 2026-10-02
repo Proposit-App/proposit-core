@@ -8,4 +8,5 @@
   `date` source kind and `formatDate` now read such a string the way
   `EncodableDate` decodes one. `formatDate` accepts `Date | string`; a value
   that is neither a valid date nor a date string throws a `TypeError`, and
-  the citation formatter names the field.
+  the citation formatter names the field. An invalid `Date` used to print as
+  "undefined NaN, NaN" and now throws the same error.
