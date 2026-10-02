@@ -335,7 +335,7 @@ If the answer is yes, that design returns to this spec before planning. If no, t
 
 ### Maintainer decisions on the third revision
 
-**Accepted 2026-10-02 (maintainer, relayed by the requester):** (a) the cube is found over the target expression alone, every column free, so a link whose meaning depends on the response's own grounded claims reports `notExpressible`; (b) a reinforce carries only at a premise root, and a nested one reports `nestedReinforce`. The fourth revision narrows (b) further at the conclusion (`conclusionStatement`), which needs the maintainer's approval with the spec.
+**Accepted 2026-10-02 (maintainer, relayed by the requester):** (a) the cube is found over the target expression alone, every column free, so a link whose meaning depends on the response's own grounded claims reports `notExpressible`; (b) a reinforce carries only at a premise root, and a nested one reports `nestedReinforce`. **Accepted 2026-10-02 (maintainer, relayed by the requester):** (c) the fourth revision's narrowing of (b) at the conclusion: a reinforce of the conclusion's root carries only when that root is `implies` or `iff`, and any other root reports `conclusionStatement`.
 
 ### How the fourth review's findings were handled
 
