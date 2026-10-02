@@ -58,6 +58,10 @@ and returns an assignment under which every premise holds, when there is one.
 - A stored variable with two kinds of reference now fails to load with an
   error that says so, instead of one about a duplicate symbol.
 
+- `strictUnknownAssignmentKeys` now accepts an assignment with values for
+  variables in several premises; it rejected nearly every real assignment
+  before. Its refusal now has the code `ASSIGNMENT_UNKNOWN_VARIABLE`.
+
 ## Migrating
 
 - **The variable union has a third member.** If you switch on

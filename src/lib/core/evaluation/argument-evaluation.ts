@@ -262,6 +262,27 @@ export function evaluateArgument(
         ),
     ].sort()
 
+    // A key is unknown only when no evaluated premise names it. Checking each
+    // premise against its own variables instead would reject every reader who
+    // assigns variables in two different premises.
+    if (options?.strictUnknownAssignmentKeys === true) {
+        const knownVariableIds = new Set(allVariableIds)
+        const unknownKeys = Object.keys(assignment.variables)
+            .filter((variableId) => !knownVariableIds.has(variableId))
+            .sort()
+        if (unknownKeys.length > 0) {
+            return {
+                ok: false,
+                validation: makeValidationResult([
+                    makeErrorIssue({
+                        code: "ASSIGNMENT_UNKNOWN_VARIABLE",
+                        message: `Assignment contains variable IDs no evaluated premise references: ${unknownKeys.join(", ")}`,
+                    }),
+                ]),
+            }
+        }
+    }
+
     // Claim-bound and externally-bound premise variables get truth-table columns;
     // internally-bound premise variables are resolved lazily.
     const referencedVariableIds = allVariableIds.filter((vid) => {
@@ -341,7 +362,7 @@ export function evaluateArgument(
         const resolver = createPremiseBoundResolver(ctx, propagatedAssignment)
 
         const evalOpts = {
-            strictUnknownKeys: options?.strictUnknownAssignmentKeys ?? false,
+            strictUnknownKeys: false,
             resolver,
         }
         const conclusionEvaluation = conclusion.evaluate(

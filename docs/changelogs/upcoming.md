@@ -87,6 +87,13 @@
   It now fails naming the problem, `VAR_BINDING_AMBIGUOUS`. Pinned by
   `test/core/response-links.test.ts`.
 
+- `strictUnknownAssignmentKeys: true` rejected every assignment that gave
+  values to variables in two different premises, because each premise was
+  checked against its own variables. A key is now unknown only when no
+  evaluated premise names it, and the refusal uses the code
+  `ASSIGNMENT_UNKNOWN_VARIABLE` (it was `ASSIGNMENT_MISSING_VARIABLE`). Pinned
+  by `test/evaluation/strict-unknown-keys.test.ts`.
+
 ## Tests
 
 - Every checksum is pinned to values captured from the published 5.4.2 (and,
