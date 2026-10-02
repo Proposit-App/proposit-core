@@ -938,19 +938,19 @@ Naked-Q (a derivation premise whose tree is a single variable bound to `derivedC
 
 A response carries `respondsTo` and answers that argument through links (see `docs/api-reference.md`).
 
-| Invalid construction                                                                                                  | What happens / code                                                                  |
-| --------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
-| `respondsTo` naming the argument itself                                                                               | Throws on construction; fails to load — S-15 (`ARG_RESPONDS_TO_ITSELF`)              |
-| Expression-bound variable in a standard argument, or bound into another argument                                      | Throws; fails to load — S-15 (`ARG_EXPRESSION_BINDING_OUTSIDE_RESPONSE`)             |
-| `bindVariableToExpression` outside a response, on another version, or refused by `canBind()`                          | Throws                                                                               |
-| `setConclusionPremise` on a response                                                                                  | Throws                                                                               |
-| `setExtras` given `respondsTo`                                                                                        | Throws                                                                               |
-| `evaluate` / `checkValidity` on a response                                                                            | `ok: false` — `ARGUMENT_IS_RESPONSE`                                                 |
-| Response stored with a conclusion                                                                                     | Loads; `E-8` (Evaluable). `clearConclusionPremise()` clears it                       |
-| Two variables binding the same expression in the same aspect                                                          | Loads; `E-9` (Evaluable)                                                             |
-| Binding on another version of the argument answered                                                                   | Loads; `E-10` (Evaluable); `validateLinks` reports `LINK_VERSION_MISMATCH`           |
-| Bound expression absent from the target snapshot; inference binding on a non-operator; response claim the target uses | `validateLinks` reports it; `checkLink` and `checkResponseCoherent` answer `invalid` |
-| `rebaseResponse` missing a decision, or with one it cannot carry out                                                  | Throws; the response is unchanged                                                    |
+| Invalid construction                                                                         | What happens / code                                                                  |
+| -------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| `respondsTo` naming the argument itself                                                      | Throws on construction; fails to load — S-15 (`ARG_RESPONDS_TO_ITSELF`)              |
+| Expression-bound variable in a standard argument, or bound into another argument             | Throws; fails to load — S-15 (`ARG_EXPRESSION_BINDING_OUTSIDE_RESPONSE`)             |
+| `bindVariableToExpression` outside a response, on another version, or refused by `canBind()` | Throws                                                                               |
+| `setConclusionPremise` on a response                                                         | Throws                                                                               |
+| `setExtras` given `respondsTo`                                                               | Throws                                                                               |
+| `evaluate` / `checkValidity` on a response                                                   | `ok: false` — `ARGUMENT_IS_RESPONSE`                                                 |
+| Response stored with a conclusion                                                            | Loads; `E-8` (Evaluable). `clearConclusionPremise()` clears it                       |
+| Two variables binding the same expression in the same aspect                                 | Loads; `E-9` (Evaluable)                                                             |
+| Binding on another version of the argument answered                                          | Loads; `E-10` (Evaluable); `validateLinks` reports `LINK_VERSION_MISMATCH`           |
+| Bound expression absent from the target snapshot; inference binding on a non-operator        | `validateLinks` reports it; `checkLink` and `checkResponseCoherent` answer `invalid` |
+| `rebaseResponse` missing a decision, or with one it cannot carry out                         | Throws; the response is unchanged                                                    |
 
 ### Claims, citations, and axioms — prevented at construction time
 

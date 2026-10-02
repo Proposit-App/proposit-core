@@ -37,6 +37,11 @@ answering the old one. To move it, copy it into a new version of your own
 which bindings changed, then `rebaseResponse` with a decision for each one that
 did. Bindings whose meaning provably did not change need no decision.
 
+A response may reason from the same claims its target uses, and may copy the
+target's derivation premises with the same cited sources: a claim is one
+proposition wherever it appears. Only links answer the target; everything else
+in a response is its reasons.
+
 `linkTargetsElement` tells you whether a stored link reference is about a
 given claim or expression.
 

@@ -309,9 +309,9 @@ export interface TVariableManagement<
      * classification `classifyBindings` gives is computed again from
      * `targetFrom`, `targetTo` and `options`; `respondsTo` becomes
      * `targetTo`; every unchanged binding is re-pointed; and every changed
-     * or removed binding, and every claim-binding conflict, takes the
-     * caller's decision. `convertToLink` replaces a claim binding in place,
-     * keeping each occurrence's polarity, and adds no premise.
+     * or removed binding takes the caller's decision. Claim-bound variables
+     * are left alone: a claim the response shares with the target is the
+     * same proposition in every version.
      *
      * Afterwards every expression-bound variable must be bound to
      * `targetTo` and name an expression present there, and `validateLinks`

@@ -37,8 +37,7 @@
 - Links: a response premise whose whole content is `x` or `NOT(x)` for an
   expression-bound `x`, read as contradict, affirm, undercut or reinforce.
   `listLinks`, `validateLinks` (codes `LINK_EXPRESSION_MISSING`,
-  `LINK_INFERENCE_ON_NON_OPERATOR`, `LINK_CLAIM_USED_BY_TARGET`,
-  `LINK_VERSION_MISMATCH`, and the informational `LINK_SAME_CLAIM`; it throws
+  `LINK_INFERENCE_ON_NON_OPERATOR`, `LINK_VERSION_MISMATCH`, and the informational `LINK_SAME_CLAIM`; it throws
   for a snapshot of another argument or version) and `elementsWithinPremise`.
   The checks below report a wrong snapshot as `invalid` with
   `LINK_TARGET_MISMATCH`.
@@ -53,8 +52,12 @@
   the argument it answers. Each binding is `unchanged`, `changed` (`content`,
   `position`, `outsideReferenceRepinned`), `removed` or `alreadyRebased`;
   `outsideSnapshots` lets references re-pinned to other versions of a third
-  argument be compared rather than reported. `convertToLink` replaces a claim
-  binding in place, keeping each occurrence's polarity.
+  argument be compared rather than reported. `positionClassOf` and
+  `linkTargetsElement` look through formula nodes at a premise's root.
+- A response's claim-bound variables may use any claim, including claims the
+  argument it answers uses; the checks read a shared claim as one proposition,
+  and rebasing leaves claim-bound variables alone. Only links answer the
+  target.
 - `TLinkReference` and `linkTargetsElement`.
 - Grammar rules S-15 (a response answering itself, or an expression-bound
   variable outside a response or bound into another argument), E-8 (a response

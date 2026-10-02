@@ -1567,18 +1567,32 @@ Every link of a response, in premise order, each as `{ premiseId, variableId, bo
 
 Checks a response's bindings against the snapshot of its target. Throws unless `targetSnapshot.argument` has the id and version `respondsTo` names. Returns `{ ok, violations }`, where `ok` is `true` when no violation has severity `"error"`. Each `TLinkViolation` is `{ code, severity, message, variableId?, premiseIds?, expressionId?, claimId? }`.
 
-| Code (`TLinkViolationCode`)      | Severity | Meaning                                                                                                                                                                                                                             |
-| -------------------------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `LINK_VERSION_MISMATCH`          | error    | A binding names another version of the target (rule E-10). The binding is not looked up in the snapshot supplied.                                                                                                                   |
-| `LINK_EXPRESSION_MISSING`        | error    | The bound expression is not in the target snapshot.                                                                                                                                                                                 |
-| `LINK_INFERENCE_ON_NON_OPERATOR` | error    | An inference-aspect binding names an expression that is not an operator.                                                                                                                                                            |
-| `LINK_CLAIM_USED_BY_TARGET`      | error    | The response holds a claim-bound variable for a claim the target uses. The response affirms such a claim through a link instead. A claim used only further back, by an argument the target itself answers, may be claim-bound here. |
-| `LINK_SAME_CLAIM`                | info     | Two or more links bind different occurrences of one claim in the same aspect. This is legal, and the checks treat them as one. A consumer that counts a response's links by claim must merge them the same way.                     |
-| `LINK_TARGET_MISMATCH`           | error    | Never returned by `validateLinks`, which throws instead. `checkLink` and `checkResponseCoherent` report it, in an `invalid` result, when the snapshot is not the target.                                                            |
+| Code (`TLinkViolationCode`)      | Severity | Meaning                                                                                                                                                                                                         |
+| -------------------------------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `LINK_VERSION_MISMATCH`          | error    | A binding names another version of the target (rule E-10). The binding is not looked up in the snapshot supplied.                                                                                               |
+| `LINK_EXPRESSION_MISSING`        | error    | The bound expression is not in the target snapshot.                                                                                                                                                             |
+| `LINK_INFERENCE_ON_NON_OPERATOR` | error    | An inference-aspect binding names an expression that is not an operator.                                                                                                                                        |
+| `LINK_SAME_CLAIM`                | info     | Two or more links bind different occurrences of one claim in the same aspect. This is legal, and the checks treat them as one. A consumer that counts a response's links by claim must merge them the same way. |
+| `LINK_TARGET_MISMATCH`           | error    | Never returned by `validateLinks`, which throws instead. `checkLink` and `checkResponseCoherent` report it, in an `invalid` result, when the snapshot is not the target.                                        |
 
 #### `elementsWithinPremise(targetSnapshot, premiseId)` → `TPremiseElements`
 
 Every expression id in one premise of a snapshot, and the claim ids of its claim-bound variable expressions, as `{ expressionIds, claimIds }`. Bindings to other premises are not followed. Throws when the snapshot has no such premise.
+
+### Claims a response shares with the argument it answers
+
+A response's claim-bound variables may use any claim in the claim library, including claims the target uses. A claim means one proposition wherever it is used, so a response that reasons from P, or copies the target's derivation premise for P with the same cited sources, is asserting the same P the target uses:
+
+```
+X:  P → Q,  Q → R,  S → P (derivation, S cited)
+Y:  S → P (derivation, S cited),  P → NOT(r),  NOT(r)      r: R's expression in X
+```
+
+Only a link answers the target. `P → NOT(r)` and Y's copy of the derivation premise are Y's reasons, not moves against X; Y answers only through the link `NOT(r)`.
+
+- **Checks.** A shared claim is one column (step 2 and step 4 below use the same column key), so the checks read it as one proposition. `checkLink` on `NOT(r)` above `follows`, because S is held true and so P holds. Without the derivation premise it is `asserted`. A response that uses P and also contradicts the target's P is `incoherent`.
+- **Rebasing.** `classifyBindings` and `rebaseResponse` never look at claim-bound variables: a newer target version that starts or stops using a claim the response uses needs no decision.
+- **`LINK_SAME_CLAIM`** is unaffected. It is about two links, not about claim-bound variables.
 
 ### Checking a response
 
@@ -1678,7 +1692,6 @@ Y.1 answers X.3. The author of X publishes X.4. Y.1 still answers X.3, and is ne
 
     const classification = classifyBindings(y2, x3Snapshot, x4Snapshot)
     // classification.bindings: one entry per expression-bound variable
-    // classification.claimBindingConflicts: claims X.4 newly uses that Y.2 binds itself
     ```
 
 3. It shows the author every entry that needs a decision, and passes the answers to the mutation:
@@ -1690,9 +1703,6 @@ Y.1 answers X.3. The author of X publishes X.4. Y.1 still answers X.3, and is ne
             "y-v-r": { action: "retarget", expressionId: "x-r2" },
             "y-v-gone": { action: "drop" },
         },
-        claimBindingConflicts: {
-            "y-v-claim-d": { action: "convertToLink", expressionId: "x-d" },
-        },
     })
     // `result` is the classification the rebase acted on. Persist `changes`:
     // the argument with respondsTo = X.4, and every variable, premise and
@@ -1703,7 +1713,7 @@ The same applies one level down. If Z.0 answers Y.1, it keeps answering Y.1 unti
 
 #### `classifyBindings(response, targetFrom, targetTo, options?)` → `TBindingClassificationResult`
 
-Classifies each expression-bound variable of `response` between two snapshots of its target, and returns `{ bindings, claimBindingConflicts }`. Throws when the argument is not a response, when the two snapshots are not versions of one argument, when the response answers neither version, or when a binding names any other version.
+Classifies each expression-bound variable of `response` between two snapshots of its target, and returns `{ bindings }`. The response's claim-bound variables are not classified: a claim the response shares with either version is the same proposition in both (see "Claims a response shares with the argument it answers"), so rebasing never touches it. Throws when the argument is not a response, when the two snapshots are not versions of one argument, when the response answers neither version, or when a binding names any other version.
 
 Each variable is judged against the snapshot of the version it is bound to. One already bound to `targetTo`'s version is `alreadyRebased`, or `removed` when its expression is missing from `targetTo`; this is how a partly saved rebase is finished. Every other variable must be bound to `targetFrom`'s version.
 
@@ -1731,13 +1741,11 @@ Each entry of `bindings` (`TBindingClassification`), in variable order, carries 
 
 Classification therefore reaches as far back as the snapshots supplied. The checks above still reach one argument back.
 
-**`claimBindingConflicts`** (`TClaimBindingConflict[]`) lists each claim-bound variable of the response whose claim `targetTo` uses and `targetFrom` did not, as `{ variableId, claimId, premises }`. Left alone, each would be a `LINK_CLAIM_USED_BY_TARGET` violation once the response answers `targetTo`.
-
 **Either version order works.** Nothing compares the two version numbers, so `targetTo` may be the older version: for example, to show the author of a response pinned to X.4 what differs from X.3. Every label then reads from `targetFrom` to `targetTo`. `removed` means "absent from `targetTo`", which in that direction means the expression was added in the newer version.
 
 #### `rebaseResponse(targetFrom, targetTo, decisions, options?)` → `TCoreMutationResult<TBindingClassificationResult>`
 
-An `ArgumentEngine` mutation that moves a response to `targetTo`. `decisions` is a `TRebaseDecisions`, `{ bindings?, claimBindingConflicts? }`, each keyed by variable id, and `options` is the same `TClassifyBindingsOptions` as above. The mutation computes the classification again, as `classifyBindings` does, and returns it as `result`. Then:
+An `ArgumentEngine` mutation that moves a response to `targetTo`. `decisions` is a `TRebaseDecisions`, `{ bindings? }`, keyed by variable id, and `options` is the same `TClassifyBindingsOptions` as above. The mutation computes the classification again, as `classifyBindings` does, and returns it as `result`. Then:
 
 - `respondsTo` becomes `targetTo`'s id and version;
 - every `unchanged` variable is re-pointed to `targetTo`'s version;
@@ -1745,18 +1753,15 @@ An `ArgumentEngine` mutation that moves a response to `targetTo`. `decisions` is
     - `{ action: "keep" }` re-points it to the same expression, accepting the new content. Not allowed for a `removed` variable;
     - `{ action: "retarget", expressionId }` binds it, in the same aspect, to another expression of `targetTo`;
     - `{ action: "drop" }` removes the variable and every premise its entry lists, links or not, since a premise cannot keep a variable that no longer means anything;
-- every claim-binding conflict takes its decision from `decisions.claimBindingConflicts` (`TClaimConflictDecision`):
-    - `{ action: "convertToLink", expressionId }` replaces the claim-bound variable, in place and keeping each occurrence's polarity, with a statement-aspect variable bound to `expressionId`, which must be a variable expression of the same claim in `targetTo`. A premise `c` becomes the affirm link `x`, a premise `NOT(c)` becomes the contradict link `NOT(x)`, and an occurrence inside a larger formula keeps its place there. No premise is added. A variable already bound to that expression is reused. Because `x` expands to the same claim column that `c` was, every check answers as it did before the conversion;
-    - `{ action: "drop" }` removes the variable and every premise its entry lists.
+- the response's claim-bound variables are left alone, whether or not either version uses their claims.
 
 It throws, and changes nothing, when:
 
 - `canBind` refuses `targetTo`;
-- a binding or conflict that needs a decision has none, or a decision names a variable that needs none;
+- a binding that needs a decision has none, or a decision names a variable that needs none;
 - `keep` is given for a `removed` binding;
 - `retarget` names an expression absent from `targetTo`;
-- a `keep` or `retarget` would bind an expression another variable already binds in the same aspect, which rule E-9 forbids; drop one of the two instead;
-- `convertToLink` names an expression that is not an occurrence of the claim, or the claim is a citation, or the claim is derived by a derivation premise of the response (that premise's consequent is locked to the claim's own variable).
+- a `keep` or `retarget` would bind an expression another variable already binds in the same aspect, which rule E-9 forbids; drop one of the two instead.
 
 **Postcondition.** Before returning, it checks that every expression-bound variable is bound to `targetTo`'s version and names an expression present in `targetTo`, and that `validateLinks` against `targetTo` reports no error it did not report before the rebase (compared by code, variable id and expression id). If the check fails, the mutation throws and the whole rebase is rolled back.
 
@@ -1775,7 +1780,7 @@ It ignores the argument's own ids and versions, and leaves out the versions of o
 
 #### `positionClassOf(snapshot, expressionId)` → `TPositionClass`
 
-Where an expression sits in its argument: `"freeformRoot"` (the root of a premise that is neither the conclusion nor a derivation premise), `"conclusionRoot"`, `"nested"` (below the root of a premise that is not a derivation premise), or `"inDerivation"` (anywhere in a derivation premise). Throws when the snapshot has no such expression.
+Where an expression sits in its argument: `"freeformRoot"` (the root of a premise that is neither the conclusion nor a derivation premise), `"conclusionRoot"`, `"nested"` (below the root of a premise that is not a derivation premise), or `"inDerivation"` (anywhere in a derivation premise). Formula (parenthesis) nodes above an expression are looked through: an operator whose only ancestors are formulas is its premise's root. Throws when the snapshot has no such expression.
 
 ### Link references
 
@@ -1786,7 +1791,7 @@ A `TLinkReference` names a link from outside the response that holds it: `{ argu
 Whether a referenced link is about an element of the target. `element` (`TLinkElement`) is `{ kind: "claim", claimId }` or `{ kind: "expression", expressionId }`. True when the reference names a link of `response` and:
 
 - for a claim, the link binds a variable expression of that claim, at any version of the claim;
-- for an expression, the link binds that expression, or the root of the premise that contains it.
+- for an expression, the link binds that expression, or the root of the premise that contains it. The root is read through formula nodes, as `positionClassOf` reads it, so an undercut of the operator just inside a premise's root formula is about the whole premise.
 
 A reference to another argument, another version, or a premise that is not a link is never about anything. Throws when `targetSnapshot` is not the target of `response`.
 
@@ -1819,7 +1824,6 @@ A stored variable with more than one kind of reference fails to load through `fr
 ### Limitations
 
 - **The checks reach one argument back.** Z, answering Y, sees only Y's snapshot. Two links of Y on two occurrences of one claim of X are two columns for Z, so Z may affirm one and contradict the other without being reported incoherent. Likewise, a response cannot deny a source cited two steps back: links reach only the immediate target, and rules D-4 and D-5 forbid placing the response's own citation variable under `NOT`. D-4 and D-5 do not restrict expression-bound variables, so a response may contradict or undercut anything in its target that rests on a source or an axiom.
-- **An affirm link cannot be backed by a derivation premise for the same claim.** A derivation premise for a claim the target uses holds a claim-bound variable for that claim, which `validateLinks` reports as `LINK_CLAIM_USED_BY_TARGET`. Back the link through a separate claim `D` instead: a derivation premise for `D`, and the premise `D → x`, where `x` is the link's variable.
 - **Responses are a library feature.** The CLI does not create or store them.
 
 ---

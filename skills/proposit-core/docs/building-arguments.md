@@ -310,21 +310,20 @@ A premise is a **link** when its whole content is one expression-bound variable 
 | `NOT(s)` | `inference` | `undercut`   | The target's step does not hold  |
 | `s`      | `inference` | `reinforce`  | The target's step holds          |
 
-Every other premise of a response is ordinary content: the reasons it gives. Those may use the link variables (for example `R → NOT(s)`), claim-bound variables and derivation premises.
+Every other premise of a response is ordinary content: the reasons it gives. Those may use the link variables (for example `R → NOT(s)`), claim-bound variables and derivation premises. A claim-bound variable may use any claim in the library, including one the target uses: a claim is one proposition wherever it appears, so a response may reason from the target's own P (`P → NOT(r)`) and copy the target's derivation premise for P with the same cited sources. The checks give a shared claim one column. Using P is giving a reason; only a link answers the target.
 
 - `listLinks(response)` returns each link as `{ premiseId, variableId, boundExpressionId, boundAspect, move }`.
 - `validateLinks(response, targetSnapshot)` checks the bindings against a snapshot of the target. It throws unless the snapshot is the argument and version in `respondsTo`, and returns `{ ok, violations }` with these codes:
     - `LINK_EXPRESSION_MISSING`: the bound expression is not in the snapshot;
     - `LINK_INFERENCE_ON_NON_OPERATOR`: an inference binding on something that is not an operator;
-    - `LINK_CLAIM_USED_BY_TARGET`: the response has its own claim-bound variable for a claim the target uses. Affirm such a claim through a link instead. A claim used only further back, by an argument the target itself answers, may be claim-bound;
     - `LINK_VERSION_MISMATCH`: a binding names another version of the target (rule E-10);
     - `LINK_SAME_CLAIM`, with severity `"info"`, which never makes `ok` false: two links bind different occurrences of one claim in the same aspect. The checks treat the two as one thing, and so must any code that counts a response's links by claim.
 - `elementsWithinPremise(targetSnapshot, premiseId)` lists every expression id and claim id in one premise of the target.
-- `linkTargetsElement(reference, response, targetSnapshot, element)` says whether a link, named from outside the response by a `TLinkReference` (`{ argumentId, argumentVersion, premiseId }`), is about a claim of the target (`{ kind: "claim", claimId }`, at any version of the claim) or an expression (`{ kind: "expression", expressionId }`: that expression, or the root of the premise that holds it).
+- `linkTargetsElement(reference, response, targetSnapshot, element)` says whether a link, named from outside the response by a `TLinkReference` (`{ argumentId, argumentVersion, premiseId }`), is about a claim of the target (`{ kind: "claim", claimId }`, at any version of the claim) or an expression (`{ kind: "expression", expressionId }`: that expression, or the root of the premise that holds it, read through formula nodes).
 
 The library never fetches the target. Every function that needs it takes a snapshot the caller supplies, usually `targetEngine.snapshot()`.
 
-Rules D-4 and D-5, which keep citation- and axiom-bound variables inside a derivation premise's antecedent, do not apply to expression-bound variables. So a response may contradict or undercut anything in its target, including what rests on a source or an axiom. Links reach only the immediate target, though, so a response cannot deny a source cited two arguments back. An affirm link cannot be backed by a derivation premise for the same claim; back it through a separate claim `D` and a premise `D → x`.
+Rules D-4 and D-5, which keep citation- and axiom-bound variables inside a derivation premise's antecedent, do not apply to expression-bound variables. So a response may contradict or undercut anything in its target, including what rests on a source or an axiom. Links reach only the immediate target, though, so a response cannot deny a source cited two arguments back.
 
 ### Example
 

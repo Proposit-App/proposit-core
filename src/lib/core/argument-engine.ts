@@ -1473,14 +1473,8 @@ export class ArgumentEngine<
      *   `decisions.bindings`: `keep` re-points it to the same expression,
      *   `retarget` to another expression of `targetTo` in the same aspect,
      *   and `drop` removes it with every premise its entry lists;
-     * - every claim-binding conflict takes its decision from
-     *   `decisions.claimBindingConflicts`: `convertToLink` replaces the
-     *   claim-bound variable, in place, with a statement binding to the
-     *   chosen occurrence of the claim, so `c` becomes the affirm link `x`,
-     *   `NOT(c)` the contradict link `NOT(x)`, and an occurrence inside a
-     *   larger formula keeps its place there. Nothing is added: the binding
-     *   reads the same claim the variable did, so every check answers as it
-     *   did before. `drop` removes it with every premise its entry lists.
+     * - the response's claim-bound variables are left alone, whether or not
+     *   either version uses their claims.
      *
      * Before returning, it checks that every expression-bound variable is
      * bound to `targetTo` and names an expression present there, and that
@@ -1566,18 +1560,6 @@ export class ArgumentEngine<
                 )
             }
             this.markAllPremisesDirty()
-            for (const conversion of resolved.conversions) {
-                changes = composeChangesets(
-                    changes,
-                    this.convertClaimToLink(
-                        conversion.claimVariableId,
-                        conversion.expressionId,
-                        toId,
-                        toVersion,
-                        collector
-                    )
-                )
-            }
             collector.setArgument(this.getArgument())
             changes = composeChangesets(
                 changes,
@@ -1610,65 +1592,6 @@ export class ArgumentEngine<
         this.variables.removeVariable(variableId)
         this.variables.addVariable(withChecksum)
         return withChecksum
-    }
-
-    /**
-     * Replaces a claim-bound variable, wherever it is used and keeping each
-     * use's polarity, with the statement binding to `expressionId`, reusing
-     * a variable that already binds it. Adds no premise. Variables it adds are
-     * recorded on `collector`; everything else it changed is returned.
-     */
-    private convertClaimToLink(
-        claimVariableId: string,
-        expressionId: string,
-        toId: string,
-        toVersion: number,
-        collector: ChangeCollector<TExpr, TVar, TPremise, TArg>
-    ): TCoreChangeset<TExpr, TVar, TPremise, TArg> {
-        let changes: TCoreChangeset<TExpr, TVar, TPremise, TArg> = {}
-        let linkVariable = this.findExpressionBinding(
-            toId,
-            expressionId,
-            "statement"
-        )
-        if (linkVariable === undefined) {
-            linkVariable = this.storeNewVariable({
-                id: this.generateId(),
-                argumentId: this.argument.id,
-                argumentVersion: this.argument.version,
-                symbol: this.generateUniqueSymbol(),
-                boundExpressionId: expressionId,
-                boundArgumentId: toId,
-                boundArgumentVersion: toVersion,
-                boundAspect: "statement",
-            } as unknown as TOptionalChecksum<TVar>)
-            collector.addedVariable(linkVariable)
-            this.markAllPremisesDirty()
-        }
-        const linkVariableId = linkVariable.id
-
-        const occurrences = this.listPremises().flatMap((pm) =>
-            pm
-                .getExpressions()
-                .filter(
-                    (expr) =>
-                        expr.type === "variable" &&
-                        expr.variableId === claimVariableId
-                )
-                .map((expr) => ({ pm, id: expr.id }))
-        )
-        for (const { pm, id } of occurrences) {
-            changes = composeChangesets(
-                changes,
-                pm.updateExpression(id, { variableId: linkVariableId }).changes
-            )
-        }
-        changes = composeChangesets(
-            changes,
-            this.removeVariableCore(claimVariableId).changes
-        )
-
-        return changes
     }
 
     /** Adds a premise-bound variable that references another argument's conclusion premise. */

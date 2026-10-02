@@ -4,6 +4,7 @@ import type {
     ArgumentEngine,
     TArgumentEngineSnapshot,
 } from "../argument-engine.js"
+import { isPremiseRootExpression } from "./fingerprint.js"
 import {
     assertTargetSnapshot,
     listLinks,
@@ -62,7 +63,7 @@ export function linkTargetsElement(
     const contained = expressions.get(element.expressionId)
     return (
         contained !== undefined &&
-        bound.parentId === null &&
+        isPremiseRootExpression(targetSnapshot, bound.id) &&
         bound.premiseId === contained.premiseId
     )
 }

@@ -1,10 +1,9 @@
-import { isClaimBound, isExpressionBound } from "../../schemata/index.js"
+import { isExpressionBound } from "../../schemata/index.js"
 import type {
     TBindingChangeReason,
     TBindingClassification,
     TBindingClassificationResult,
     TBindingPremiseUse,
-    TClaimBindingConflict,
     TRebaseDecisions,
 } from "../../types/response.js"
 import type {
@@ -18,12 +17,7 @@ import {
     snapshotHasExpression,
     type TOutsideReference,
 } from "./fingerprint.js"
-import {
-    readLink,
-    snapshotClaimIds,
-    snapshotVariables,
-    validateLinks,
-} from "./links.js"
+import { readLink, validateLinks } from "./links.js"
 
 export interface TClassifyBindingsOptions {
     /**
@@ -266,9 +260,10 @@ function assertRebaseTargets(
  *   (`outsideReferenceRepinned`);
  * - `unchanged` otherwise.
  *
- * Each entry lists the premises dropping the variable would remove. Claims
- * that `targetTo` uses and `targetFrom` does not, and that the response
- * binds as claims of its own, are listed in `claimBindingConflicts`.
+ * Each entry lists the premises dropping the variable would remove. The
+ * response's claim-bound variables are not classified: a claim it shares with
+ * either version means the same proposition in both, and rebasing never
+ * touches it.
  *
  * @throws When the response is not a response, when the two snapshots are
  * not versions of one argument, when the response answers neither version,
@@ -286,24 +281,7 @@ export function classifyBindings(
     const toVersion = targetTo.argument.version
 
     const bindings: TBindingClassification[] = []
-    const claimBindingConflicts: TClaimBindingConflict[] = []
-    const usedByFrom = snapshotClaimIds(targetFrom)
-    const usedByTo = snapshotClaimIds(targetTo)
-
     for (const variable of response.getVariables()) {
-        if (isClaimBound(variable)) {
-            if (
-                usedByTo.has(variable.claimId) &&
-                !usedByFrom.has(variable.claimId)
-            ) {
-                claimBindingConflicts.push({
-                    variableId: variable.id,
-                    claimId: variable.claimId,
-                    premises: premisesDroppedWith(response, variable.id),
-                })
-            }
-            continue
-        }
         if (!isExpressionBound(variable)) continue
         const base = {
             variableId: variable.id,
@@ -349,13 +327,7 @@ export function classifyBindings(
                 : { ...base, status: "changed", reasons: inOrder(reasons) }
         )
     }
-    return { bindings, claimBindingConflicts }
-}
-
-/** A claim-bound variable to replace with a statement binding. */
-export interface TLinkConversion {
-    claimVariableId: string
-    expressionId: string
+    return { bindings }
 }
 
 /** What a rebase does, worked out and checked before anything changes. */
@@ -367,7 +339,6 @@ export interface TResolvedRebase {
     dropPremiseIds: string[]
     /** Variables to remove after their premises. */
     dropVariableIds: string[]
-    conversions: TLinkConversion[]
 }
 
 /**
@@ -375,13 +346,10 @@ export interface TResolvedRebase {
  * decisions, refusing every decision that cannot be carried out before
  * anything changes.
  *
- * @throws When a changed or removed binding, or a claim-binding conflict,
- * has no decision; when a decision names a variable that needs none; when a
+ * @throws When a changed or removed binding has no decision; when a decision names a variable that needs none; when a
  * removed binding is to be kept; when a retarget names an expression absent
  * from `targetTo`; when a keep or retarget would bind an expression another
- * variable already binds in the same aspect; or when a conversion names an
- * expression that is not an occurrence of the claim, or the claim is derived
- * by a derivation premise of the response or is a citation.
+ * variable already binds in the same aspect.
  */
 export function resolveRebase(
     response: ArgumentEngine,
@@ -398,7 +366,6 @@ export function resolveRebase(
     )
     const toVersion = targetTo.argument.version
     const bindingDecisions = decisions.bindings ?? {}
-    const conflictDecisions = decisions.claimBindingConflicts ?? {}
 
     const repoint = new Map<string, string>()
     const decided = new Set<string>()
@@ -475,92 +442,11 @@ export function resolveRebase(
         )
     }
 
-    const conversions: TLinkConversion[] = []
-    const conflictIds = new Set<string>()
-    const toVariables = snapshotVariables(targetTo)
-    for (const conflict of classification.claimBindingConflicts) {
-        conflictIds.add(conflict.variableId)
-        const decision = conflictDecisions[conflict.variableId]
-        if (decision === undefined) {
-            throw new Error(
-                `No decision for claim-bound variable "${conflict.variableId}", whose claim "${conflict.claimId}" version ${toVersion} uses; give convertToLink or drop.`
-            )
-        }
-        if (decision.action === "drop") {
-            dropPremises(conflict.premises)
-            dropVariableIds.push(conflict.variableId)
-            continue
-        }
-        assertConvertible(
-            response,
-            conflict,
-            decision.expressionId,
-            targetTo,
-            toVariables
-        )
-        conversions.push({
-            claimVariableId: conflict.variableId,
-            expressionId: decision.expressionId,
-        })
-    }
-    for (const variableId of Object.keys(conflictDecisions)) {
-        if (!conflictIds.has(variableId)) {
-            throw new Error(
-                `Variable "${variableId}" needs no decision: it is not a claim-binding conflict.`
-            )
-        }
-    }
-
     return {
         classification,
         repoint,
         dropPremiseIds,
         dropVariableIds,
-        conversions,
-    }
-}
-
-function assertConvertible(
-    response: ArgumentEngine,
-    conflict: TClaimBindingConflict,
-    expressionId: string,
-    targetTo: TArgumentEngineSnapshot,
-    toVariables: ReadonlyMap<string, ReturnType<ArgumentEngine["getVariable"]>>
-): void {
-    const { claimId, variableId } = conflict
-    const expr = targetTo.premises
-        .flatMap((ps) => ps.expressions.expressions)
-        .find((candidate) => candidate.id === expressionId)
-    const bound =
-        expr?.type === "variable" ? toVariables.get(expr.variableId) : undefined
-    if (
-        bound === undefined ||
-        !isClaimBound(bound) ||
-        bound.claimId !== claimId
-    ) {
-        throw new Error(
-            `Expression "${expressionId}" is not an occurrence of claim "${claimId}" in version ${targetTo.argument.version} of "${targetTo.argument.id}".`
-        )
-    }
-    // The consequent of a derivation premise is locked to the derived
-    // claim's own variable, so it cannot be replaced by a link.
-    const deriving = response.listPremises().find((premise) => {
-        const data = premise.toPremiseData()
-        return data.type === "derivation" && data.derivedClaimId === claimId
-    })
-    if (deriving !== undefined) {
-        throw new Error(
-            `Variable "${variableId}" cannot become a link: claim "${claimId}" is derived by derivation premise "${deriving.getId()}"; drop it instead.`
-        )
-    }
-    const variable = response.getVariable(variableId)
-    if (variable !== undefined && isClaimBound(variable)) {
-        const claim = response.getClaim(variable.claimId, variable.claimVersion)
-        if (claim?.type === "citation") {
-            throw new Error(
-                `Variable "${variableId}" cannot become a link: claim "${claimId}" is a citation; drop it instead.`
-            )
-        }
     }
 }
 

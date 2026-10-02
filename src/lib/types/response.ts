@@ -28,11 +28,6 @@ export type TLinkViolationCode =
     | "LINK_EXPRESSION_MISSING"
     /** An inference-aspect binding names an expression that is not an operator. */
     | "LINK_INFERENCE_ON_NON_OPERATOR"
-    /**
-     * The response holds a claim-bound variable for a claim the target uses.
-     * The response affirms such a claim through a link instead.
-     */
-    | "LINK_CLAIM_USED_BY_TARGET"
     /** A binding names another version of the argument answered (rule E-10). */
     | "LINK_VERSION_MISMATCH"
     /**
@@ -238,23 +233,10 @@ export type TBindingClassification = TBindingClassificationBase &
         | { status: "alreadyRebased" }
     )
 
-/**
- * A claim-bound variable of a response for a claim the newer version of the
- * answered argument uses and the older one did not. A response affirms such
- * a claim through a link, so the variable needs a decision.
- */
-export interface TClaimBindingConflict {
-    variableId: string
-    claimId: string
-    /** Every premise dropping the variable would remove. */
-    premises: TBindingPremiseUse[]
-}
-
 /** The result of classifying a response's bindings against a newer target. */
 export interface TBindingClassificationResult {
     /** One entry per expression-bound variable, in variable order. */
     bindings: TBindingClassification[]
-    claimBindingConflicts: TClaimBindingConflict[]
 }
 
 /**
@@ -271,21 +253,7 @@ export type TBindingDecision =
     | { action: "retarget"; expressionId: string }
     | { action: "drop" }
 
-/**
- * The decision for one claim-binding conflict.
- *
- * - `convertToLink`: replace the claim-bound variable, in place wherever it
- *   is used and keeping each occurrence's polarity, with a statement binding
- *   to `expressionId`, a variable expression of the same claim in `targetTo`.
- *   No premise is added.
- * - `drop`: remove the variable and every premise listed for it.
- */
-export type TClaimConflictDecision =
-    | { action: "convertToLink"; expressionId: string }
-    | { action: "drop" }
-
 /** The caller's decisions for a rebase, keyed by variable id. */
 export interface TRebaseDecisions {
     bindings?: Record<string, TBindingDecision>
-    claimBindingConflicts?: Record<string, TClaimConflictDecision>
 }

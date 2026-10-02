@@ -8,7 +8,6 @@ import {
 } from "../../src/lib/core/response/fingerprint"
 import { classifyBindings } from "../../src/lib/core/response/rebase"
 import {
-    listLinks,
     snapshotExpressions,
     validateLinks,
 } from "../../src/lib/core/response/links"
@@ -22,6 +21,7 @@ import {
     newLib,
     not,
     or,
+    paren,
     pv,
     s,
     v,
@@ -224,6 +224,20 @@ describe("positionClassOf", () => {
         expect(positionClassOf(snap, t.expr("nested"))).toBe("nested")
         expect(positionClassOf(snap, t.expr("deriving"))).toBe("inDerivation")
     })
+
+    it("reads an operator under a formula at the premise root as the root", () => {
+        const lib = newLib()
+        const t = build({
+            id: "x",
+            version: 3,
+            lib,
+            conclusion: v("C"),
+            premises: [paren(at("wrapped", and(at("inside", v("P")), v("Q"))))],
+        })
+        const snap = t.engine.snapshot()
+        expect(positionClassOf(snap, t.expr("wrapped"))).toBe("freeformRoot")
+        expect(positionClassOf(snap, t.expr("inside"))).toBe("nested")
+    })
 })
 
 describe("classifyBindings", () => {
@@ -250,7 +264,6 @@ describe("classifyBindings", () => {
             "unchanged",
             "unchanged",
         ])
-        expect(result.claimBindingConflicts).toEqual([])
     })
 
     it("classifies a variable used only inside another premise, and lists that premise", () => {
@@ -510,7 +523,7 @@ describe("classifyBindings", () => {
         expect(entry(bindings, y.variable("q")).status).toBe("removed")
     })
 
-    it("lists a claim the newer version uses that the response holds as its own", () => {
+    it("does not classify the response's claim-bound variables, shared with either version or not", () => {
         const lib = newLib()
         const x3 = target(lib, 3)
         const x4 = target(lib, 4, [...basePremises(), at("n", v("N"))])
@@ -521,34 +534,15 @@ describe("classifyBindings", () => {
             respondsTo: x3,
             premises: [
                 labelled("own", v("N")),
-                labelled("rule", implies(v("N"), not(x("c")))),
-                labelled("other", v("M")),
+                labelled("rule", implies(v("P"), not(x("c")))),
             ],
         })
-        expect(validateLinks(y.engine, x3.engine.snapshot()).ok).toBe(true)
-        const { claimBindingConflicts } = classifyBindings(
+        const { bindings } = classifyBindings(
             y.engine,
             x3.engine.snapshot(),
             x4.engine.snapshot()
         )
-        expect(claimBindingConflicts).toEqual([
-            {
-                variableId: y.variable("N"),
-                claimId: "claim-N",
-                premises: [
-                    {
-                        premiseId: y.premise("own"),
-                        isLink: false,
-                        cascaded: false,
-                    },
-                    {
-                        premiseId: y.premise("rule"),
-                        isLink: false,
-                        cascaded: false,
-                    },
-                ],
-            },
-        ])
+        expect(bindings.map((b) => b.variableId)).toEqual([y.variable("c")])
     })
 
     it("throws for a newer snapshot of another argument", () => {
@@ -1117,11 +1111,8 @@ describe("rebaseResponse", () => {
         expect(refusing.snapshot()).toEqual(snap)
     })
 
-    describe("claim-binding conflicts", () => {
-        function conflict(
-            yPremises: (TNode | TPremiseSpec)[],
-            claimTypes?: Record<string, "citation">
-        ) {
+    describe("claims the response shares with the argument answered", () => {
+        function shared(x4Premises: (TNode | TPremiseSpec)[]) {
             const lib = newLib()
             const x3 = target(lib, 3)
             const y = build({
@@ -1129,184 +1120,63 @@ describe("rebaseResponse", () => {
                 version: 1,
                 lib,
                 respondsTo: x3,
-                premises: yPremises,
-                claimTypes,
+                premises: [
+                    labelled("reason", implies(v("P"), not(x("c")))),
+                    labelled("grant", v("P")),
+                    labelled("own", v("N")),
+                    labelled("link", not(x("c"))),
+                ],
             })
-            const x4 = target(lib, 4, [...basePremises(), at("n", v("N"))])
-            return { lib, x3, x4, y }
+            const x4 = target(lib, 4, x4Premises)
+            return { x3, x4, y }
         }
 
-        it("throws without a decision", () => {
-            const { x3, x4, y } = conflict([v("N")])
-            expect(() =>
-                y.engine.rebaseResponse(
-                    x3.engine.snapshot(),
-                    x4.engine.snapshot(),
-                    {}
-                )
-            ).toThrow(/decision/)
-        })
+        it("keeps a claim the newer version starts using, with nothing to decide", () => {
+            const { x3, x4, y } = shared([...basePremises(), at("n", v("N"))])
+            const before = y.engine.listPremises().map((pm) => pm.getId())
 
-        it("converts the claim-bound variable in place and adds no link", () => {
-            const { x3, x4, y } = conflict([
-                labelled("rule", implies(v("N"), not(x("c")))),
-            ])
-            const claimVariable = y.variable("N")
             y.engine.rebaseResponse(
                 x3.engine.snapshot(),
                 x4.engine.snapshot(),
-                {
-                    claimBindingConflicts: {
-                        [claimVariable]: {
-                            action: "convertToLink",
-                            expressionId: x4.expr("n"),
-                        },
-                    },
-                }
+                {}
             )
+
             expectRebased(y.engine, x4.engine.snapshot())
-            expect(y.engine.hasVariable(claimVariable)).toBe(false)
-            const bound = y.engine
-                .getVariables()
-                .find(
-                    (variable) =>
-                        isExpressionBound(variable) &&
-                        variable.boundExpressionId === x4.expr("n")
-                )
-            expect(bound).toBeDefined()
-            // The rule now reads the link variable, and nothing was added.
-            const rule = y.engine.getPremise(y.premise("rule"))!
-            expect(
-                rule
-                    .getExpressions()
-                    .some(
-                        (expr) =>
-                            expr.type === "variable" &&
-                            expr.variableId === bound!.id
-                    )
-            ).toBe(true)
-            expect(y.engine.listPremiseIds()).toEqual([y.premise("rule")])
+            expect(y.engine.listPremises().map((pm) => pm.getId())).toEqual(
+                before
+            )
+            expect(y.engine.getVariable(y.variable("N"))).toBeDefined()
+        })
+
+        it("keeps a claim the newer version no longer uses", () => {
+            const { x3, x4, y } = shared([at("both", and(v("A"), v("B")))])
+            const before = y.engine.listPremises().map((pm) => pm.getId())
+
+            y.engine.rebaseResponse(
+                x3.engine.snapshot(),
+                x4.engine.snapshot(),
+                {}
+            )
+
+            expectRebased(y.engine, x4.engine.snapshot())
+            expect(y.engine.listPremises().map((pm) => pm.getId())).toEqual(
+                before
+            )
+            expect(y.engine.getVariable(y.variable("P"))).toBeDefined()
             expect(validateLinks(y.engine, x4.engine.snapshot()).ok).toBe(true)
         })
 
-        it("keeps a denied claim denied: NOT(claim) becomes a contradict link, with no affirm link beside it", () => {
-            const { x3, x4, y } = conflict([
-                labelled("denial", not(v("N"))),
-                labelled("rule", implies(not(v("N")), not(x("c")))),
-                labelled("link", not(x("c"))),
-            ])
-            const before = y.engine.checkResponseCoherent(x3.engine.snapshot())
-            y.engine.rebaseResponse(
-                x3.engine.snapshot(),
-                x4.engine.snapshot(),
-                {
-                    claimBindingConflicts: {
-                        [y.variable("N")]: {
-                            action: "convertToLink",
-                            expressionId: x4.expr("n"),
-                        },
-                    },
-                }
-            )
-            expectRebased(y.engine, x4.engine.snapshot())
-            expect(y.engine.listPremiseIds()).toEqual([
-                y.premise("denial"),
-                y.premise("rule"),
-                y.premise("link"),
-            ])
-            const moves = listLinks(y.engine).map((link) => [
-                link.premiseId,
-                link.move,
-            ])
-            expect(moves).toEqual([
-                [y.premise("denial"), "contradict"],
-                [y.premise("link"), "contradict"],
-            ])
-            expect(before).toEqual({ status: "checked", coherent: true })
-            expect(
-                y.engine.checkResponseCoherent(x4.engine.snapshot())
-            ).toEqual(before)
-        })
-
-        it("drops every premise using the claim-bound variable", () => {
-            const { x3, x4, y } = conflict([
-                labelled("own", v("N")),
-                labelled("rule", implies(v("N"), not(x("c")))),
-                labelled("other", v("M")),
-            ])
-            y.engine.rebaseResponse(
-                x3.engine.snapshot(),
-                x4.engine.snapshot(),
-                {
-                    claimBindingConflicts: {
-                        [y.variable("N")]: { action: "drop" },
-                    },
-                }
-            )
-            expectRebased(y.engine, x4.engine.snapshot())
-            expect(y.engine.listPremiseIds()).toEqual([y.premise("other")])
-            expect(validateLinks(y.engine, x4.engine.snapshot()).ok).toBe(true)
-        })
-
-        it("refuses to convert a claim the response derives", () => {
-            const { x3, x4, y } = conflict([
-                labelled("derived", implies(v("S"), v("N")), "N"),
-            ])
-            const before = y.engine.snapshot()
+        it("refuses a decision for a claim-bound variable, which needs none", () => {
+            const { x3, x4, y } = shared([...basePremises()])
             expect(() =>
                 y.engine.rebaseResponse(
                     x3.engine.snapshot(),
                     x4.engine.snapshot(),
                     {
-                        claimBindingConflicts: {
-                            [y.variable("N")]: {
-                                action: "convertToLink",
-                                expressionId: x4.expr("n"),
-                            },
-                        },
+                        bindings: { [y.variable("P")]: { action: "drop" } },
                     }
                 )
-            ).toThrow(/derivation/)
-            expect(y.engine.snapshot()).toEqual(before)
-        })
-
-        it("refuses to convert a citation claim", () => {
-            const { x3, x4, y } = conflict(
-                [labelled("rule", implies(v("N"), not(x("c"))))],
-                { N: "citation" }
-            )
-            expect(() =>
-                y.engine.rebaseResponse(
-                    x3.engine.snapshot(),
-                    x4.engine.snapshot(),
-                    {
-                        claimBindingConflicts: {
-                            [y.variable("N")]: {
-                                action: "convertToLink",
-                                expressionId: x4.expr("n"),
-                            },
-                        },
-                    }
-                )
-            ).toThrow(/citation/)
-        })
-
-        it("refuses to convert onto an expression of another claim", () => {
-            const { x3, x4, y } = conflict([v("N")])
-            expect(() =>
-                y.engine.rebaseResponse(
-                    x3.engine.snapshot(),
-                    x4.engine.snapshot(),
-                    {
-                        claimBindingConflicts: {
-                            [y.variable("N")]: {
-                                action: "convertToLink",
-                                expressionId: x4.expr("p"),
-                            },
-                        },
-                    }
-                )
-            ).toThrow(/claim-N/)
+            ).toThrow(/needs no decision/)
         })
     })
 })

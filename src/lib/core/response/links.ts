@@ -137,22 +137,6 @@ function claimOfExpression(
 }
 
 /**
- * The claims a snapshot uses: those of its claim-bound variables that some
- * expression references.
- */
-export function snapshotClaimIds(
-    snapshot: TArgumentEngineSnapshot
-): Set<string> {
-    const variables = snapshotVariables(snapshot)
-    const used = new Set<string>()
-    for (const expr of snapshotExpressions(snapshot).values()) {
-        const claimId = claimOfExpression(expr, variables)
-        if (claimId !== undefined) used.add(claimId)
-    }
-    return used
-}
-
-/**
  * Checks a response's expression bindings against the snapshot of the
  * argument it answers.
  *
@@ -169,22 +153,11 @@ export function validateLinks(
     const targetVariables = snapshotVariables(targetSnapshot)
     const violations: TLinkViolation[] = []
 
-    const usedClaims = snapshotClaimIds(targetSnapshot)
-
+    // A claim-bound variable of the response may use a claim the target uses:
+    // it is the same proposition, and the checks give the two one column.
+    // Only an expression-bound variable answers the target.
     const variables = response.getVariables()
     for (const variable of variables) {
-        if (isClaimBound(variable)) {
-            if (usedClaims.has(variable.claimId)) {
-                violations.push({
-                    code: "LINK_CLAIM_USED_BY_TARGET",
-                    severity: "error",
-                    message: `Variable "${variable.id}" is bound to claim "${variable.claimId}", which the argument answered uses; affirm it through a link instead.`,
-                    variableId: variable.id,
-                    claimId: variable.claimId,
-                })
-            }
-            continue
-        }
         if (!isExpressionBound(variable)) continue
         if (variable.boundArgumentVersion !== respondsTo.argumentVersion) {
             violations.push({

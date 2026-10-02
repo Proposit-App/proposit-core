@@ -8,6 +8,8 @@ import {
     labelled,
     newLib,
     not,
+    or,
+    paren,
     s,
     v,
     x,
@@ -60,6 +62,42 @@ function setUp() {
 }
 
 describe("linkTargetsElement", () => {
+    it("reads an undercut of the operator under a premise's root formula as about the whole premise", () => {
+        const lib = newLib()
+        const target = build({
+            id: "x",
+            version: 3,
+            lib,
+            conclusion: v("C"),
+            premises: [
+                labelled(
+                    "wrapped",
+                    paren(at("top", or(at("p", v("P")), v("Q"))))
+                ),
+            ],
+        })
+        const response = build({
+            id: "y",
+            version: 0,
+            lib,
+            respondsTo: target,
+            premises: [labelled("onTop", not(s("top")))],
+        })
+        const snapshot = target.engine.snapshot()
+        expect(
+            linkTargetsElement(
+                {
+                    argumentId: "y",
+                    argumentVersion: 0,
+                    premiseId: response.premise("onTop"),
+                },
+                response.engine,
+                snapshot,
+                { kind: "expression", expressionId: target.expr("p") }
+            )
+        ).toBe(true)
+    })
+
     it("matches a claim through any of its occurrences", () => {
         const { targets } = setUp()
         expect(targets("onC", { kind: "claim", claimId: "claim-C" })).toBe(true)

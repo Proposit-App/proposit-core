@@ -22,6 +22,8 @@ export type TNode = {
 } & (
     | { kind: "var"; name: string }
     | { kind: "op"; operator: TOperator; kids: TNode[] }
+    /** A formula (parenthesis) node around one child. */
+    | { kind: "formula"; kid: TNode }
     /** A response's expression-bound variable on a labelled target expression. */
     | { kind: "bound"; target: string; aspect: TBoundAspect }
     /** The variable bound to an earlier premise of the same argument. */
@@ -49,6 +51,8 @@ export const or = op("or")
 export const implies = (left: TNode, right: TNode): TNode =>
     op("implies")(left, right)
 export const iff = (left: TNode, right: TNode): TNode => op("iff")(left, right)
+/** Wraps a node in a formula (parenthesis) node. */
+export const paren = (kid: TNode): TNode => ({ kind: "formula", kid })
 /** Gives a node a label, so a test can find its expression id. */
 export const at = (label: string, node: TNode): TNode => ({ ...node, label })
 /**
@@ -237,6 +241,11 @@ export function build(input: TBuildInput): TBuilt {
             node.kids.forEach((kid, index) =>
                 addTree(premiseId, kid, exprId, index)
             )
+            return exprId
+        }
+        if (node.kind === "formula") {
+            premise.addExpression({ ...common, type: "formula" })
+            addTree(premiseId, node.kid, exprId, 0)
             return exprId
         }
         const variableId =

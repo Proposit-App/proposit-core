@@ -464,7 +464,7 @@ describe("validateLinks", () => {
         })
     })
 
-    it("reports a claim-bound variable for a claim the target uses", () => {
+    it("accepts a claim-bound variable for a claim the target uses, as the same proposition", () => {
         const lib = newLib()
         const t = target(lib)
         const response = build({
@@ -472,13 +472,12 @@ describe("validateLinks", () => {
             version: 0,
             lib,
             respondsTo: t,
-            premises: [implies(v("P"), not(x("c")))],
+            premises: [implies(v("P"), not(x("c"))), not(x("c"))],
         })
-        const result = validateLinks(response.engine, t.engine.snapshot())
-        expect(result.violations.map((violation) => violation.code)).toEqual([
-            "LINK_CLAIM_USED_BY_TARGET",
-        ])
-        expect(result.violations[0].claimId).toBe("claim-P")
+        expect(validateLinks(response.engine, t.engine.snapshot())).toEqual({
+            ok: true,
+            violations: [],
+        })
     })
 
     it("does not report a claim only an older argument along the path uses", () => {

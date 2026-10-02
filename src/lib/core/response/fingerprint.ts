@@ -107,6 +107,32 @@ function expressionOf(
     return expr
 }
 
+/**
+ * Whether an expression is its premise's root once formula (parenthesis)
+ * nodes above it are looked through: every ancestor is a formula.
+ */
+function isAtRoot(
+    index: TSnapshotIndex,
+    expr: TCorePropositionalExpression
+): boolean {
+    let parentId = expr.parentId
+    while (parentId !== null) {
+        const parent = expressionOf(index, parentId)
+        if (parent.type !== "formula") return false
+        parentId = parent.parentId
+    }
+    return true
+}
+
+/** Whether an expression of the snapshot is its premise's root, as `isAtRoot` reads it. */
+export function isPremiseRootExpression(
+    snapshot: TArgumentEngineSnapshot,
+    expressionId: string
+): boolean {
+    const index = indexOf(snapshot)
+    return isAtRoot(index, expressionOf(index, expressionId))
+}
+
 /** Whether the snapshot holds the expression. */
 export function snapshotHasExpression(
     snapshot: TArgumentEngineSnapshot,
@@ -260,7 +286,7 @@ export function positionClassOf(
     const expr = expressionOf(index, expressionId)
     const premise = index.premiseOfExpression.get(expressionId)!
     if (premise.type === "derivation") return "inDerivation"
-    if (expr.parentId !== null) return "nested"
+    if (!isAtRoot(index, expr)) return "nested"
     return premise.id === index.conclusionPremiseId
         ? "conclusionRoot"
         : "freeformRoot"

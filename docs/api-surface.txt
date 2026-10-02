@@ -205,7 +205,6 @@ Interface lib.TBindingClassificationBase
 Interface lib.TBindingClassificationResult
 Interface lib.TBindingPremiseUse
 Interface lib.TCanonicalizeOperatorAssignmentsInput
-Interface lib.TClaimBindingConflict
 Interface lib.TClaimConnectionLibraryManagement
 Interface lib.TClaimConnectionLookup
 Interface lib.TClaimLibraryManagement
@@ -5008,7 +5007,6 @@ Property lib.TBindingClassificationBase.boundExpressionId
 Property lib.TBindingClassificationBase.premises
 Property lib.TBindingClassificationBase.variableId
 Property lib.TBindingClassificationResult.bindings
-Property lib.TBindingClassificationResult.claimBindingConflicts
 Property lib.TBindingDecision.action
 Property lib.TBindingDecision.action
 Property lib.TBindingDecision.action
@@ -5018,12 +5016,6 @@ Property lib.TBindingPremiseUse.isLink
 Property lib.TBindingPremiseUse.premiseId
 Property lib.TCanonicalizeOperatorAssignmentsInput.expressionOverrides
 Property lib.TCanonicalizeOperatorAssignmentsInput.premiseScope
-Property lib.TClaimBindingConflict.claimId
-Property lib.TClaimBindingConflict.premises
-Property lib.TClaimBindingConflict.variableId
-Property lib.TClaimConflictDecision.action
-Property lib.TClaimConflictDecision.action
-Property lib.TClaimConflictDecision.expressionId
 Property lib.TClaimConnectionLibrarySnapshot.connections
 Property lib.TClaimCreateInput.id
 Property lib.TClaimLibraryManagement.create.claim.id
@@ -5535,7 +5527,6 @@ Property lib.TReactiveSnapshot.premises
 Property lib.TReactiveSnapshot.roles
 Property lib.TReactiveSnapshot.variables
 Property lib.TRebaseDecisions.bindings
-Property lib.TRebaseDecisions.claimBindingConflicts
 Property lib.TResponseCoherenceResult.coherent
 Property lib.TResponseCoherenceResult.coherent
 Property lib.TResponseCoherenceResult.coherent
@@ -6493,7 +6484,6 @@ TypeAlias lib.TBindingClassification
 TypeAlias lib.TBindingDecision
 TypeAlias lib.TBoundAspect
 TypeAlias lib.TClaimBoundVariable
-TypeAlias lib.TClaimConflictDecision
 TypeAlias lib.TClaimConnectionLibrarySnapshot
 TypeAlias lib.TClaimCreateInput
 TypeAlias lib.TClaimLibrarySnapshot

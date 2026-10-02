@@ -15,6 +15,7 @@ import {
     type TNode,
     type TPremiseSpec,
 } from "./response-fixtures"
+import { validateLinks } from "../../src/lib/core/response/links"
 
 /** The argument answered: one labelled expression of each kind the cases need. */
 function target(lib = newLib(), extra: TNode[] = []): TBuilt {
@@ -354,5 +355,89 @@ describe("checkResponseCoherent", () => {
                 { S: "citation" }
             ).coherence()
         ).toMatchObject({ coherent: false })
+    })
+})
+
+describe("claims a response shares with the argument it answers", () => {
+    // The argument answered: P → Q and Q → R, with P derived from the cited
+    // source S. R is its conclusion.
+    function sharedTarget(lib: ReturnType<typeof newLib>): TBuilt {
+        return build({
+            id: "x",
+            version: 3,
+            lib,
+            conclusion: at("r", v("R")),
+            premises: [
+                implies(v("P"), v("Q")),
+                implies(v("Q"), v("R")),
+                labelled("derivation", implies(v("S"), v("P")), "P"),
+            ],
+            claimTypes: { S: "citation" },
+        })
+    }
+
+    function setUpShared(premises: (TNode | TPremiseSpec)[]) {
+        const lib = newLib()
+        const t = sharedTarget(lib)
+        const response = respond(t, lib, premises)
+        const snapshot = t.engine.snapshot()
+        return {
+            response,
+            snapshot,
+            check: (label: string) =>
+                response.engine.checkLink(response.premise(label), snapshot),
+            coherence: () => response.engine.checkResponseCoherent(snapshot),
+        }
+    }
+
+    it("follows when the shared claim is grounded by a copy of the target's derivation premise", () => {
+        const { response, snapshot, check } = setUpShared([
+            labelled("derivation", implies(v("S"), v("P")), "P"),
+            labelled("reason", implies(v("P"), not(x("r")))),
+            labelled("link", not(x("r"))),
+        ])
+        expect(validateLinks(response.engine, snapshot)).toEqual({
+            ok: true,
+            violations: [],
+        })
+        expect(check("link")).toMatchObject({
+            status: "follows",
+            restsOnlyOnLinks: false,
+        })
+    })
+
+    it("is asserted when nothing grounds the shared claim", () => {
+        const { check } = setUpShared([
+            labelled("reason", implies(v("P"), not(x("r")))),
+            labelled("link", not(x("r"))),
+        ])
+        expect(check("link")).toMatchObject({ status: "asserted" })
+    })
+
+    it("accepts a derivation premise reusing the target's cited source", () => {
+        const { response, snapshot } = setUpShared([
+            labelled("derivation", implies(v("S"), v("P")), "P"),
+            labelled("reason", implies(v("P"), not(x("r")))),
+            labelled("link", not(x("r"))),
+        ])
+        expect(response.engine.validate("structural")).toEqual([])
+        expect(response.engine.validate("evaluable")).toEqual([])
+        expect(validateLinks(response.engine, snapshot).ok).toBe(true)
+    })
+
+    it("reads a shared claim as one proposition: using it and contradicting it is incoherent", () => {
+        const lib = newLib()
+        const t = target(lib)
+        const response = respond(t, lib, [
+            v("P"),
+            labelled("link", not(x("p"))),
+        ])
+        const snapshot = t.engine.snapshot()
+        expect(
+            response.engine.checkLink(response.premise("link"), snapshot)
+        ).toEqual({ status: "incoherent" })
+        expect(response.engine.checkResponseCoherent(snapshot)).toMatchObject({
+            coherent: false,
+        })
     })
 })
