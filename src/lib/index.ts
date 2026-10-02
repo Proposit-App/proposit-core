@@ -91,10 +91,14 @@ export type {
     TEvaluablePremise,
 } from "./core/evaluation/argument-evaluation.js"
 export {
+    findSatisfyingAssignment,
     isPremiseSetSatisfiable,
     SATISFIABILITY_VARIABLE_CEILING,
 } from "./core/evaluation/satisfiability.js"
-export type { TPremiseSetSatisfiabilityInput } from "./core/evaluation/satisfiability.js"
+export type {
+    TPremiseSetSatisfiabilityInput,
+    TSatisfyingAssignmentResult,
+} from "./core/evaluation/satisfiability.js"
 export { collectArgumentReferencedClaims } from "./core/review-helpers.js"
 export type { TCollectArgumentReferencedClaimsResult } from "./core/review-helpers.js"
 export { canonicalizeOperatorAssignments } from "./core/review-helpers.js"
