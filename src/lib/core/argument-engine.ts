@@ -302,7 +302,11 @@ export class ArgumentEngine<
                 `Argument "${argument.id}" cannot respond to itself.`
             )
         }
-        this.argument = { ...argument }
+        // `respondsTo` is the engine's own, so it is copied in, and every
+        // read hands out a copy (`withOwnRespondsTo`): a caller mutating the
+        // object it built the engine from, or one it read back, must not
+        // re-point the response past `setExtras` and `rebaseResponse`.
+        this.argument = withOwnRespondsTo({ ...argument })
         this.claimLibrary = claimLibrary
         this.premises = new Map()
         this.checksumConfig = options?.checksumConfig
@@ -774,7 +778,7 @@ export class ArgumentEngine<
     public getArgument(): TArg {
         this.flushChecksums()
         return {
-            ...this.argument,
+            ...withOwnRespondsTo(this.argument),
             checksum: this.cachedMetaChecksum!,
             descendantChecksum: this.cachedDescendantChecksum!,
             combinedChecksum: this.cachedCombinedChecksum!,
@@ -1448,9 +1452,9 @@ export class ArgumentEngine<
 
     /** The argument this response answers, or `undefined` for a standard argument. */
     public getRespondsTo(): TCoreArgumentReference | undefined {
-        return (this.argument as Record<string, unknown>).respondsTo as
-            | TCoreArgumentReference
-            | undefined
+        const respondsTo = (this.argument as Record<string, unknown>)
+            .respondsTo as TCoreArgumentReference | null | undefined
+        return respondsTo == null ? undefined : { ...respondsTo }
     }
 
     private findExpressionBinding(
@@ -2189,9 +2193,7 @@ export class ArgumentEngine<
      * argument it answers pinned to one version, and has no conclusion.
      */
     public isResponse(): boolean {
-        return (
-            (this.argument as Record<string, unknown>).respondsTo !== undefined
-        )
+        return this.getRespondsTo() !== undefined
     }
 
     /**
@@ -2218,7 +2220,7 @@ export class ArgumentEngine<
         this.flushChecksums()
         return {
             argument: {
-                ...this.argument,
+                ...withOwnRespondsTo(this.argument),
                 checksum: this.cachedMetaChecksum!,
                 descendantChecksum: this.cachedDescendantChecksum!,
                 combinedChecksum: this.cachedCombinedChecksum!,
@@ -3312,4 +3314,16 @@ export class ArgumentEngine<
     ): boolean {
         return true
     }
+}
+
+// A copy of an argument entity holding its own copy of `respondsTo`, when it
+// has one. Any other field is shared as it was.
+function withOwnRespondsTo<T extends object>(argument: T): T {
+    const respondsTo = (argument as Record<string, unknown>).respondsTo as
+        | TCoreArgumentReference
+        | null
+        | undefined
+    return respondsTo == null
+        ? argument
+        : ({ ...argument, respondsTo: { ...respondsTo } } as T)
 }

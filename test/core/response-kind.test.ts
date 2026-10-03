@@ -45,6 +45,53 @@ describe("respondsTo belongs to the engine, not to extras", () => {
     })
 })
 
+describe("respondsTo cannot be changed from outside the engine", () => {
+    type TMutable = { argumentId: string; argumentVersion: number }
+    // A literal, not TARGET: a test that mutates what it reads must not be
+    // able to change what it compares against.
+    const ANSWERED = { argumentId: "arg-target", argumentVersion: 3 }
+    const fresh = () =>
+        new ArgumentEngine({ ...ARG, respondsTo: { ...ANSWERED } }, aLib())
+
+    it("is copied in, so the object a caller built it from does not reach it", () => {
+        const given = { ...ANSWERED }
+        const eng = new ArgumentEngine({ ...ARG, respondsTo: given }, aLib())
+        given.argumentVersion = 99
+        expect(eng.getRespondsTo()).toEqual(ANSWERED)
+    })
+
+    it.each([
+        ["getRespondsTo", (eng: ArgumentEngine) => eng.getRespondsTo()],
+        ["getArgument", (eng: ArgumentEngine) => eng.getArgument().respondsTo],
+        [
+            "snapshot",
+            (eng: ArgumentEngine) => eng.snapshot().argument.respondsTo,
+        ],
+    ])("is copied out of %s", (_, read) => {
+        const eng = fresh()
+        const returned = read(eng) as TMutable
+        returned.argumentVersion = 99
+        expect(eng.getRespondsTo()).toEqual(ANSWERED)
+    })
+
+    it("a fork holds its own copy", () => {
+        const eng = fresh()
+        const snap = eng.snapshot()
+        const restored = ArgumentEngine.fromSnapshot(snap, aLib())
+        ;(snap.argument.respondsTo as TMutable).argumentVersion = 99
+        expect(restored.getRespondsTo()).toEqual(ANSWERED)
+    })
+
+    it("a respondsTo of null is no response", () => {
+        const eng = new ArgumentEngine(
+            { ...ARG, respondsTo: null } as unknown as TCoreArgument,
+            aLib()
+        )
+        expect(eng.isResponse()).toBe(false)
+        expect(eng.getRespondsTo()).toBeUndefined()
+    })
+})
+
 describe("respondsTo is part of the argument checksum", () => {
     const configs: [string, TCoreChecksumConfig | undefined][] = [
         ["the default configuration", undefined],
