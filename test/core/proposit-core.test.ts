@@ -19,6 +19,7 @@ import type { TOptionalChecksum } from "../../src/lib/schemata/shared"
 import { POSITION_INITIAL } from "../../src/lib/utils/position"
 import { ARG, aLib, makeVarExpr, VAR_P } from "./fixtures"
 import { at, build, not, v, x } from "./response-fixtures"
+import { listLinks } from "../../src/lib/index"
 
 describe("ArgumentLibrary", () => {
     const makeArgument = (): TOptionalChecksum<TCoreArgument> => ({
@@ -942,7 +943,8 @@ describe("PropositCore.forkArgument of a response", () => {
         expect(fork.checkResponseCoherent(targetSnapshot)).toMatchObject({
             coherent: false,
         })
-        const linkId = fork.listPremises()[1].getId()
+        const [link] = listLinks(fork)
+        const linkId = link.premiseId
         expect(fork.checkLink(linkId, targetSnapshot).status).toBe("incoherent")
     })
 
