@@ -157,6 +157,46 @@ describe("calendarDateFromInstant", () => {
         expect(() => calendarDateFromInstant("nonsense")).toThrow(TypeError)
     })
 
+    it("returns a value that is already a calendar date unchanged, so a conversion can run twice", () => {
+        for (const timeZone of ["UTC", "Asia/Tokyo", "America/Los_Angeles"]) {
+            expect(calendarDateFromInstant("1787", "day", timeZone)).toBe(
+                "1787"
+            )
+            expect(calendarDateFromInstant("1787-11", "day", timeZone)).toBe(
+                "1787-11"
+            )
+            expect(calendarDateFromInstant("1787-11-22", "day", timeZone)).toBe(
+                "1787-11-22"
+            )
+        }
+        expect(calendarDateFromInstant("1787-11-22", "month")).toBe("1787-11")
+        expect(calendarDateFromInstant("1787-11", "year")).toBe("1787")
+    })
+
+    it("refuses a string that is neither a calendar date nor an instant with a zone", () => {
+        const original = process.env.TZ
+        process.env.TZ = "Asia/Tokyo"
+        try {
+            for (const value of [
+                "1787-11-22T00:00:00",
+                "Nov 22 1787",
+                "1787-13",
+                "87",
+            ]) {
+                expect(() => calendarDateFromInstant(value)).toThrow(TypeError)
+            }
+            expect(calendarDateFromInstant("1787-11-22T00:00:00+09:00")).toBe(
+                "1787-11-21"
+            )
+            expect(() =>
+                calendarDateFromInstant("+010000-01-01T00:00:00.000Z")
+            ).toThrow(RangeError)
+        } finally {
+            if (original === undefined) delete process.env.TZ
+            else process.env.TZ = original
+        }
+    })
+
     it("refuses an unknown zone", () => {
         expect(() =>
             calendarDateFromInstant(new Date(midnight), "day", "Not/AZone")

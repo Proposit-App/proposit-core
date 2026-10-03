@@ -80,16 +80,34 @@ function pad(value: number, width: number): string {
     return String(value).padStart(width, "0")
 }
 
+// An ISO 8601 date-time that names its zone, as `JSON.stringify` writes a
+// `Date`. A date-time without one is read in the process's own zone, which
+// would make the day depend on where the conversion runs.
+const ZONED_INSTANT_SHAPE =
+    /^[+-]?\d{4,6}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:\d{2})$/
+
+const PRECISION_LENGTH: Record<TCalendarDatePrecision, number> = {
+    year: 4,
+    month: 7,
+    day: 10,
+}
+
 /**
  * The calendar date of an instant, read in `timeZone` and cut to
  * `precision`.
  *
  * `value` is a `Date`, or the ISO string a `Date` is written as by
- * `JSON.stringify`. With the default zone, `"UTC"`, it gives the day a
- * citation date stored as midnight UTC of that day means. Pass the zone the
- * value was written in to recover a day stored at local midnight.
+ * `JSON.stringify`, which names its zone. With the default zone, `"UTC"`, it
+ * gives the day a citation date stored as midnight UTC of that day means.
+ * Pass the zone the value was written in to recover a day stored at local
+ * midnight.
  *
- * @throws TypeError when `value` is not a valid instant.
+ * A string that is already a calendar date comes back as it is, cut to
+ * `precision` only when it is longer, so converting a partly converted store
+ * twice changes nothing and never invents a month or day.
+ *
+ * @throws TypeError when `value` is neither a valid instant nor a calendar
+ * date, including a date-time string that names no zone.
  * @throws RangeError when the year falls outside 0000-9999, or `timeZone`
  * is not a time zone `Intl.DateTimeFormat` knows.
  */
@@ -98,6 +116,12 @@ export function calendarDateFromInstant(
     precision: TCalendarDatePrecision = "day",
     timeZone = "UTC"
 ): string {
+    if (typeof value === "string" && readCalendarDate(value) !== undefined) {
+        return value.slice(0, PRECISION_LENGTH[precision])
+    }
+    if (typeof value === "string" && !ZONED_INSTANT_SHAPE.test(value)) {
+        throw new TypeError(`Not an instant: ${JSON.stringify(value)}`)
+    }
     const date = value instanceof Date ? value : new Date(value)
     if (Number.isNaN(date.getTime())) {
         throw new TypeError(`Not an instant: ${String(value)}`)
