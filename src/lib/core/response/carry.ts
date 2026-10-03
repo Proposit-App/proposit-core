@@ -473,9 +473,12 @@ export function carryAnswers(input: TCarryInput): TCarryResult {
 
     // A link that would carry something another agreed link carries the other
     // way carries nothing at all: carrying only its uncontested part would
-    // assert less than it says. The reader's own answers are settled first:
-    // a carried link that disagrees with one of them is dropped instead, and
-    // the disagreement reported as a collision, so the reader's value wins.
+    // assert less than it says. The reader's own answers settle first, among
+    // themselves. A carried link that disagrees with a value they then carry
+    // is dropped, and the disagreement reported as a collision, so the
+    // reader's value wins; an own link dropped in a conflict of its own
+    // carries nothing, so it outranks nothing. The carried links left then
+    // settle among themselves.
     const own = new Set(input.ownLinkPremiseIds ?? [])
     const ownProposals = new Map(
         [...proposals].filter(([premiseId]) => own.has(premiseId))
@@ -483,21 +486,34 @@ export function carryAnswers(input: TCarryInput): TCarryResult {
     const carriedProposals = new Map(
         [...proposals].filter(([premiseId]) => !own.has(premiseId))
     )
+    proposals.clear()
+    const settle = (group: Map<string, TProposal[]>): void => {
+        const conflictsWith = conflictsWithin(group)
+        for (const [premiseId, others] of conflictsWith) {
+            group.delete(premiseId)
+            notCarried.push({
+                premiseId,
+                reason: "conflict",
+                conflictsWith: [...others].sort(byOrder),
+            })
+        }
+        for (const [premiseId, values] of group)
+            proposals.set(premiseId, values)
+    }
+    settle(ownProposals)
+    // After settling, the reader's own links agree on every value they carry.
     const ownValuesOf = proposalValues(ownProposals)
     const collisions: TCarryCollision[] = []
-    for (const [premiseId, values] of carriedProposals) {
+    for (const [premiseId, values] of [...carriedProposals]) {
         const outranking = new Set<string>()
-        const disputed: TProposal[] = []
+        const disputed: [TProposal, string][] = []
         for (const proposal of values) {
             const byValue = ownValuesOf.get(proposalKey(proposal))
             if (byValue === undefined) continue
-            let isDisputed = false
-            for (const [value, holders] of byValue) {
-                if (value === String(proposal.value)) continue
-                isDisputed = true
-                for (const holder of holders) outranking.add(holder)
-            }
-            if (isDisputed) disputed.push(proposal)
+            const [[ownValue, holders]] = [...byValue]
+            if (ownValue === String(proposal.value)) continue
+            for (const holder of holders) outranking.add(holder)
+            disputed.push([proposal, ownValue])
         }
         if (outranking.size === 0) continue
         carriedProposals.delete(premiseId)
@@ -506,27 +522,10 @@ export function carryAnswers(input: TCarryInput): TCarryResult {
             reason: "overriddenByOwn",
             conflictsWith: [...outranking].sort(byOrder),
         })
-        for (const proposal of disputed) {
-            const byValue = ownValuesOf.get(proposalKey(proposal))
-            // When the reader's own links disagree among themselves they
-            // conflict below and carry nothing, so there is no own value.
-            if (byValue?.size !== 1) continue
-            const ownValue = [...byValue.keys()][0]
+        for (const [proposal, ownValue] of disputed)
             collisions.push(collisionOf(proposal, ownValue, premiseId))
-        }
     }
-    proposals.clear()
-    for (const group of [ownProposals, carriedProposals]) {
-        const conflictsWith = conflictsWithin(group)
-        for (const [premiseId, values] of group)
-            if (!conflictsWith.has(premiseId)) proposals.set(premiseId, values)
-        for (const [premiseId, others] of conflictsWith)
-            notCarried.push({
-                premiseId,
-                reason: "conflict",
-                conflictsWith: [...others].sort(byOrder),
-            })
-    }
+    settle(carriedProposals)
     mergeCollisions(collisions, byOrder)
     notCarried.sort((a, b) => byOrder(a.premiseId, b.premiseId))
 
@@ -598,6 +597,18 @@ export function carryAnswers(input: TCarryInput): TCarryResult {
  * It does not check that `own` is for the argument `carried.into` names;
  * the caller pairs them.
  */
+// The reader's explicit value for a key, or undefined when they gave none;
+// an explicit null ("not sure") is not a value.
+function ownValueOf(
+    merged: TMergedCarriedInput,
+    kind: TCarryCollision["kind"],
+    id: string
+): boolean | string | undefined {
+    if (kind === "variable") return merged.variables[id] ?? undefined
+    if (kind === "operator") return merged.operatorAssignments[id]
+    return merged.linkAnswers[id]
+}
+
 export function mergeCarriedInput(
     own: {
         variables?: Readonly<Record<string, boolean | null>>
@@ -610,10 +621,23 @@ export function mergeCarriedInput(
         variables: { ...own.variables },
         operatorAssignments: { ...own.operatorAssignments },
         linkAnswers: { ...own.linkAnswers },
-        collisions: carried.collisions.map((collision) => ({
+        collisions: [],
+    }
+    // A collision settled inside carryAnswers set a carried link against the
+    // reader's answers on the response. The reader's explicit input here has
+    // the last word: where it gives the same value the carried link gave,
+    // that link did not lose and its collision goes; where it gives another,
+    // the collision names it as the reader's value. Either way the key keeps
+    // one entry, since the source check below then reports a collision only
+    // when the dropped one went.
+    for (const collision of carried.collisions) {
+        const mine = ownValueOf(merged, collision.kind, collision.id)
+        if (mine !== undefined && mine === collision.carried) continue
+        merged.collisions.push({
             ...collision,
+            ...(mine !== undefined ? { own: mine } : {}),
             linkPremiseIds: [...collision.linkPremiseIds],
-        })),
+        } as TCarryCollision)
     }
     for (const source of carried.sources) {
         const { linkPremiseIds } = source

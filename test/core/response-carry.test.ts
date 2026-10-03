@@ -1152,7 +1152,7 @@ describe("the reader's own answers outrank answers carried into a response", () 
         expect(intoX.collisions).toEqual([])
     })
 
-    it("a carried link that agrees with the reader's own carries beside it", () => {
+    it("a link carried in carries when no own link is involved", () => {
         const { lib, t, y } = threeStep()
         const intoX = y.engine.carryAnswers(
             t.engine.snapshot(),
@@ -1166,6 +1166,91 @@ describe("the reader's own answers outrank answers carried into a response", () 
             [t.variable("Q")]: true,
             [t.variable("R")]: true,
         })
+    })
+
+    // X: Q ∧ R. Y answers X with three links, so each test can pick which of
+    // them are the reader's own and which were carried in.
+    function threeLinks() {
+        const lib = newLib()
+        const t = build({
+            id: "x",
+            version: 3,
+            lib,
+            conclusion: at("c", v("C")),
+            premises: [at("qr", and(at("q", v("Q")), at("r", v("R"))))],
+        })
+        const y = build({
+            id: "y",
+            version: 0,
+            lib,
+            respondsTo: t,
+            premises: [
+                labelled("affirmQR", x("qr")),
+                labelled("denyR", not(x("r"))),
+                labelled("denyQ", not(x("q"))),
+                labelled("affirmQ", x("q")),
+            ],
+        })
+        const carry = (agreed: string[], own: string[]) => {
+            const answers: Record<string, TLinkAnswer> = {}
+            for (const label of agreed) answers[y.premise(label)] = "agree"
+            const result = y.engine.carryAnswers(
+                t.engine.snapshot(),
+                answers,
+                lib,
+                { ownLinkPremiseIds: own.map((label) => y.premise(label)) }
+            )
+            if (result.status !== "carried" || result.intoResponse)
+                throw new Error("expected values carried into X")
+            return result
+        }
+        return { t, y, carry }
+    }
+
+    it("an own link dropped in a conflict of its own outranks nothing, so a carried link it disputed carries", () => {
+        const { t, y, carry } = threeLinks()
+        // The reader's own links conflict over R, so neither carries; the
+        // carried denial of Q then has nothing of the reader's to lose to.
+        const result = carry(
+            ["affirmQR", "denyR", "denyQ"],
+            ["affirmQR", "denyR"]
+        )
+        expect(result.variables).toEqual({ [t.variable("Q")]: false })
+        expect(result.collisions).toEqual([])
+        expect(
+            result.notCarried.map((entry) => [entry.premiseId, entry.reason])
+        ).toEqual([
+            [y.premise("affirmQR"), "conflict"],
+            [y.premise("denyR"), "conflict"],
+        ])
+    })
+
+    it("mergeCarriedInput keeps one collision per value, naming the reader's final value", () => {
+        const { t, carry } = threeLinks()
+        const result = carry(["affirmQ", "denyQ"], ["affirmQ"])
+        expect(result.collisions).toEqual([
+            expect.objectContaining({ own: true, carried: false }),
+        ])
+        const q = t.variable("Q")
+
+        // The reader holds Q false on X too: their value wins, and the one
+        // collision reported is against what was carried, true.
+        const disagreeing = mergeCarriedInput(
+            { variables: { [q]: false } },
+            result
+        )
+        expect(disagreeing.variables[q]).toBe(false)
+        expect(disagreeing.collisions).toEqual([
+            expect.objectContaining({ id: q, own: false, carried: true }),
+        ])
+
+        // The reader holds Q true on X as well: the carried link's false
+        // lost, and that is the one collision.
+        const agreeing = mergeCarriedInput({ variables: { [q]: true } }, result)
+        expect(agreeing.variables[q]).toBe(true)
+        expect(agreeing.collisions).toEqual([
+            expect.objectContaining({ id: q, own: true, carried: false }),
+        ])
     })
 
     it("into a response, the reader's own link answer wins and the collision names the link answer", () => {
