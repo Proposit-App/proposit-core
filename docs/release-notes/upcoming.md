@@ -1,10 +1,16 @@
 # Upcoming
 
+This is a major release. Before upgrading, read **Migrating** at the end:
+citation dates change type, the engine's public interfaces gain methods, new
+grammar and validation codes appear, and a few new fields must be left out
+rather than stored as `null`.
+
 ## Added
 
 ### Response arguments
 
-An argument can now answer another one. A **response** carries
+An argument can now answer another one: the argument it answers is its
+**target**. A **response** carries
 `respondsTo: { argumentId, argumentVersion }`, naming the argument it answers
 pinned to one version, and it has no conclusion of its own. It answers through
 **links**: premises whose whole content is `x` or `NOT(x)`, where `x` is a
@@ -21,8 +27,7 @@ The undercut is the new capability: it denies that a step follows without
 denying either side of it, which a negated `implies` cannot express.
 
 Build one with `bindVariableToExpression`, then read it with `listLinks` and
-check its bindings against the answered argument's snapshot with
-`validateLinks`.
+check its bindings against the target's snapshot with `validateLinks`.
 
 `checkLink` tells you whether a link follows from the response's other
 premises (and which ones it needs), stands as a bare assertion, or cannot be
@@ -35,7 +40,10 @@ When the answered argument publishes a new version, the response keeps
 answering the old one. To move it, copy it into a new version of your own
 (keeping entity ids, as for any version) and call `classifyBindings` to see
 which bindings changed, then `rebaseResponse` with a decision for each one that
-did. Bindings whose meaning provably did not change need no decision.
+did. Bindings whose meaning provably did not change need no decision. A
+reader's stored answers on a link whose binding changed, was retargeted or was
+dropped still name the same premise after the rebase, but now speak about
+something else: invalidate them.
 
 A response may reason from the same claims its target uses, and may copy the
 target's derivation premises with the same cited sources: a claim is one
@@ -60,7 +68,14 @@ nothing, because no fixed values say "not both". A link that cannot be carried
 is reported with the reason, never approximated and never dropped. Carried
 values count as the reader's own assertions in attribution, and each one names
 the links it came from. For a chain of answers, carry one step at a time:
-carrying into another response gives answers on its links.
+carrying into another response gives answers on its links. Partway along the
+chain, pass `ownLinkPremiseIds` to name the reader's own answers, so a value
+carried in from further along never cancels one; the carried link is dropped
+instead and the difference reported in `collisions`.
+
+Forking a response through `PropositCore.forkArgument` keeps the claims it
+shares with its target rather than cloning them, so the fork's checks answer
+as the original's do.
 
 ### Rejected conclusion step
 
@@ -140,7 +155,8 @@ const article = {
 - **New in the package root:** `CalendarDate`, `calendarDateType`,
   `parseCalendarDate` and `calendarDateFromInstant`; `formatCalendarDate` in
   the IEEE extension. The API reference's "Citation dates" section has the
-  details.
+  details. `calendarDateFromInstant` returns a value that is already a
+  calendar date unchanged, so a conversion can safely run twice.
 - **Access dates are unchanged:** still a `Date`, rendered by its UTC day.
 
 ## Fixed
@@ -159,19 +175,36 @@ const article = {
   fires as soon as the default foreground stream reports the id, instead of
   only when the call completes, for a call that makes a single request.
   Background-stream mode already did this. A call with function tools makes a
-  request per round and still reports its id at completion, so the id event
-  and `stage:llm-call` always carry the same id. Only a background response
+  request per round and still reports its id at completion, so for a call that
+  completes, the id event and `stage:llm-call` carry the same id. A streaming
+  attempt that fails after the id arrived (a dropped stream, an incomplete
+  response) has reported its id with no `stage:llm-call` to follow, so do not
+  treat the id event as a completed response. Only a background response
   keeps generating after you disconnect, so recovering an interrupted call is
   still a background-stream guarantee.
-- **Stored citations format without decoding first.** A citation read back
-  from storage holds its dates as the ISO strings JSON wrote, such as
-  `"2026-07-30T00:00:00.000Z"`. `formatCitationParts` used to crash on those
-  with `d.getUTCMonth is not a function` unless you had run the reference
-  through `Value.Decode` first. It now formats them exactly as it formats the
-  decoded `Date`, and `formatDate` accepts either form. A date field holding
-  something that is not a date at all now fails with a `TypeError` that names
-  the field. That includes an invalid `Date`, which used to print as
-  "undefined NaN, NaN".
+- **Stored access dates format without decoding first.** A citation read back
+  from storage holds its access date as the ISO string JSON wrote, such as
+  `"2026-07-30T00:00:00.000Z"`. `formatCitationParts` used to crash on it with
+  `d.getUTCMonth is not a function` unless you had run the reference through
+  `Value.Decode` first; it now formats it exactly as the decoded `Date`. This
+  covers access dates only: every other reference date is now a calendar date
+  (see Migrating), and a stored ISO timestamp there must be converted. An
+  access date holding something that is not a date now fails with a
+  `TypeError` that names the field. That includes an invalid `Date`, which
+  used to print as "undefined NaN, NaN". `formatDate` itself still takes a
+  `Date` only.
+- **An error in your event handler is yours, not the network's.** If an
+  `onEvent` handler threw while a streamed chunk or the response id arrived,
+  the OpenAI provider reported it as a transient network failure: the stage
+  retried, paying for a second request, and the first stream was left open.
+  The handler's error now reaches the stage as it was thrown, is not retried,
+  and the stream is cancelled.
+- **Turns run at once keep their own messages.** When two `executeTurn` calls
+  overlapped, a retry of one could send the other's user message, or none.
+- **A failed conversation turn keeps the chain.** After a turn of
+  `createConversation` failed, the next turn was sent with no
+  `previousResponseId`, so the model lost the whole conversation. A failed
+  turn now leaves the chain where it was.
 
 ## Migrating
 
@@ -191,26 +224,45 @@ const article = {
   are hashed under every checksum configuration, including one stored in an
   older snapshot. They are absent from every existing entity, so no stored
   checksum changes.
+- **Leave the new fields out; never store them as `null`.** An argument that
+  is not a response has no `respondsTo` key at all, and a variable that is not
+  expression-bound has no `boundExpressionId` or `boundAspect`. A stored
+  `null` fails the schema when the argument loads, and a checksum includes a
+  field whenever its key is present. A storage layer that maps an absent value
+  to a `null` column must map it back to absent on the way out.
 - **Keep ids stable across versions.** Rebasing a response matches the
   answered argument's expressions by id between its versions. If you copy an
   argument into a new version, keep the ids of everything that persists.
-- **Implementing `TArgumentEvaluation` yourself?** It gains `carryAnswers`;
-  add it, or extend `ArgumentEngine` instead.
-- **A renamed refusal code.** With `strictUnknownAssignmentKeys: true`, an
+- **Implementing the engine's interfaces yourself?** They gain required
+  methods: `TArgumentEvaluation` gains `checkLink`, `checkResponseCoherent`
+  and `carryAnswers`; `TVariableManagement` gains `bindVariableToExpression`
+  and `rebaseResponse`; `TArgumentIdentity` gains `isResponse` and
+  `getRespondsTo`. Add them, or extend `ArgumentEngine` instead.
+- **New grammar and validation codes.** `TGrammarRuleCode` gains `S-15`,
+  `E-8`, `E-9` and `E-10`; `TCoreValidationCode` gains `ARGUMENT_IS_RESPONSE`;
+  and there are new invariant codes `ARG_RESPONDS_TO_ITSELF`,
+  `ARG_EXPRESSION_BINDING_OUTSIDE_RESPONSE` and `VAR_BINDING_AMBIGUOUS`. A
+  `switch` with no `default`, a table keyed by every code, or a database enum
+  or check constraint on stored codes must take the new ones.
+- **A different refusal code for unknown keys.** With
+  `strictUnknownAssignmentKeys: true`, an
   assignment naming a variable that no evaluated premise uses is now refused
   with `ASSIGNMENT_UNKNOWN_VARIABLE` instead of `ASSIGNMENT_MISSING_VARIABLE`.
-  If you match that code, match the new one.
+  `ASSIGNMENT_MISSING_VARIABLE` still exists for its other cases. If you match
+  it for this one, match the new code.
 - **A cross-argument reference.** An expression-bound variable names an
   expression in another argument, as an externally premise-bound variable
   already names a premise there. If your store enforces foreign keys, account
   for it.
 - **A new pipeline event kind.** If you `switch` over `TPipelineEvent`'s
   `kind` with no `default`, add a case for `stage:llm-text-delta` (or a
-  `default`).
+  `default`). A handler must not throw on a kind it does not know: it now
+  fires once per streamed chunk, and a throw fails the stage.
 - **Citation dates are strings now.** Fifteen IEEE date fields hold a calendar
   date string instead of a `Date`. Convert each stored value with
-  `calendarDateFromInstant(value)`, which takes a `Date` or its ISO string and
-  gives its UTC day. That is the day meant for data stored as 5.4.2 advised,
+  `calendarDateFromInstant(value)`, which takes a `Date` or its ISO string
+  (with its `Z` or offset) and gives its UTC day, and returns a value already
+  converted unchanged. That is the day meant for data stored as 5.4.2 advised,
   at midnight UTC. Data stored before 5.4.2 at local midnight east of UTC
   falls on the previous UTC day, and converts correctly only with the zone it
   was written in: `calendarDateFromInstant(value, "day", "Europe/Berlin")`.
@@ -229,7 +281,8 @@ const article = {
 - **Unconverted citations throw when rendered.** Core does not check citations
   when it loads them, so a stored `Date`, ISO timestamp or non-conforming year
   in a calendar-date field makes `formatCitationParts` throw a `TypeError`
-  naming the field. That includes `year: null`: an undated source has no
+  naming the field. That includes a `null` in any optional date field: `year`,
+  Video `releaseDate` and SocialMedia `accessedDate`. An undated source has no
   `year` key at all, so a storage layer that turns an absent value into `null`
   must turn it back. Convert before rendering. The relaxed schemas refuse such
   values too, so `Value.Check` with them finds what is left.
@@ -237,6 +290,9 @@ const article = {
   hashes `citation` (claims) or `reference` (origin documents). The defaults
   hash neither. Core never checks claim or origin-document checksums on load,
   so recompute them when you convert.
+- **`formatDate` takes a `Date` only**, as in 5.x. Format a calendar date
+  with `formatCalendarDate`: passing one to `formatDate` would read "1787" as
+  an instant and print "Jan. 1, 1787".
 - **The IEEE templates changed shape.** `TSegmentSource.kind` gains
   `"calendarDate"`, and each year-dated type's template holds a conditional
   where it held the year segment. Code that walks the templates must handle

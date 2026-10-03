@@ -109,8 +109,14 @@ The unit is the expression-bound **variable**, not the link premise, because one
 
 `rebaseResponse(targetFrom, targetTo, decisions, options?)` is a mutation on the response's engine and returns `{ result, changes }`, where `result` is the classification it acted on. It works out the classification again itself, consults `canBind` for `targetTo`, sets `respondsTo` to `targetTo`, and re-points every `unchanged` binding. `decisions` is a `TRebaseDecisions`, keyed by variable id:
 
-- `bindings`, for each `changed` or `removed` binding: - `{ action: "keep" }` re-points it to the same expression, accepting the new content (not allowed for `removed`); - `{ action: "retarget", expressionId }` binds it, in the same aspect, to another expression of `targetTo`; - `{ action: "drop" }` removes the variable and every premise listed for it, link or not.
-  Claim-bound variables are left alone.
+- `bindings`, for each `changed` or `removed` binding:
+    - `{ action: "keep" }` re-points it to the same expression, accepting the new content (not allowed for `removed`);
+    - `{ action: "retarget", expressionId }` binds it, in the same aspect, to another expression of `targetTo`;
+    - `{ action: "drop" }` removes the variable and every premise listed for it, link or not.
+
+Claim-bound variables are left alone.
+
+A reader's answers on a link are keyed by the link's premise id, which a rebase keeps. After a `keep` or `retarget` the same answer speaks about the new content, and after a `drop` it names no link (`notALink` when carried). Keep a reader's answers per version of the response, or invalidate those on links whose binding was `changed`, `removed` or retargeted.
 
 It throws, and changes nothing, when a decision is missing or names a binding that needs none, when `keep` is given for a `removed` binding, when `retarget` names an expression absent from `targetTo`, when a `keep` or `retarget` would bind an expression another variable already binds in the same aspect, or when `canBind` refuses. Before returning it checks that every expression-bound variable is bound to `targetTo` and names an expression present there, and that `validateLinks` reports nothing new; if not, it throws and undoes the whole rebase. The `changes` hold the argument with its new `respondsTo` and every variable re-pointed, added or removed; `diffArguments` between the before and after states reports the same.
 

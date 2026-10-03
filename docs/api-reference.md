@@ -1446,7 +1446,7 @@ This section writes versions as `{argument}.{version}`: `X.3` is argument X at v
 
 ### What makes an argument a response
 
-An argument is a response exactly when it carries `respondsTo: { argumentId, argumentVersion }` (type `TCoreArgumentReference`). The field is optional on `CoreArgumentSchema`, and absent, never `null`, on a standard argument. A response is created by passing the field to the constructor:
+An argument is a response exactly when it carries `respondsTo: { argumentId, argumentVersion }` (type `TCoreArgumentReference`). The field is optional on `CoreArgumentSchema`, and absent, never `null`, on a standard argument: a stored `null` fails the schema when the argument loads, though an engine built directly from one reads it as no response. The engine keeps its own copy, and `getArgument`, `snapshot` and `getRespondsTo` each return a fresh one, so mutating what they return changes nothing. A response is created by passing the field to the constructor:
 
 ```typescript
 import { ArgumentEngine } from "@proposit/proposit-core"
@@ -1638,13 +1638,13 @@ The order of decision:
 1. Can the whole combined set, the link included, be true at once? If not, the result is `incoherent`: the response contradicts itself, so nothing is said about the link. This agrees with `checkResponseCoherent` for every link of an incoherent response. If the search cannot decide, the result is `undetermined`.
 2. Can the other premises be true while the link's content is false? The link itself, and every link with the same merged referent and polarity, are left out of "the other premises". If they cannot, the result is `follows`. If they can, it is `asserted`. If the search cannot decide, it is `undetermined`.
 
-| `status`       | Fields                                   | Meaning                                                                                                                                                                                                                                                                                                                       |
-| -------------- | ---------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `follows`      | `supportPremiseIds`, `restsOnlyOnLinks?` | The link follows from the other premises. `supportPremiseIds` is a minimal set it follows from: no premise in it can be removed. It is not necessarily the smallest such set.                                                                                                                                                 |
-| `asserted`     | `attemptedSupport`, `counterexample`     | The other premises can be true with the link's content false, so the link stands as a base assertion. `counterexample` is one such assignment, as `TColumnValue[]`: each `{ column, value }`, where `column` (`TColumnReference`) is a claim, an unexpanded expression of another argument, or a premise of another argument. |
-| `incoherent`   | none                                     | The response's premises cannot all be true together.                                                                                                                                                                                                                                                                          |
-| `undetermined` | `reason: "too-many-variables"`           | A group of interacting columns is larger than the search ceiling. A check never throws for size.                                                                                                                                                                                                                              |
-| `invalid`      | `problems`                               | A precondition failed; `problems` are the `TLinkViolation`s of severity `"error"`.                                                                                                                                                                                                                                            |
+| `status`       | Fields                                                 | Meaning                                                                                                                                                                                                                                                                                                                       |
+| -------------- | ------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `follows`      | `supportPremiseIds`, `restsOnlyOnLinks?`               | The link follows from the other premises. `supportPremiseIds` is a minimal set it follows from: no premise in it can be removed. It is not necessarily the smallest such set.                                                                                                                                                 |
+| `asserted`     | `attemptedSupport`, `counterexample`                   | The other premises can be true with the link's content false, so the link stands as a base assertion. `counterexample` is one such assignment, as `TColumnValue[]`: each `{ column, value }`, where `column` (`TColumnReference`) is a claim, an unexpanded expression of another argument, or a premise of another argument. |
+| `incoherent`   | none                                                   | The response's premises cannot all be true together.                                                                                                                                                                                                                                                                          |
+| `undetermined` | `reason: "too-many-variables"` (`TUndeterminedReason`) | A group of interacting columns is larger than the search ceiling. A check never throws for size.                                                                                                                                                                                                                              |
+| `invalid`      | `problems`                                             | A precondition failed; `problems` are the `TLinkViolation`s of severity `"error"`.                                                                                                                                                                                                                                            |
 
 **`attemptedSupport`** is `true` when another premise has the link's merged referent on its consequent side: to the right of `→`, or on either side of `↔`, at any depth, including below a `NOT` there. So `{R → NOT(x), NOT(x)}` gives `asserted` with `attemptedSupport: true` (an attempt at support whose antecedent `R` is not asserted), while `{NOT(x)}` alone gives `attemptedSupport: false`. Inference referents count.
 
@@ -1721,7 +1721,7 @@ Classifies each expression-bound variable of `response` between two snapshots of
 
 Each variable is judged against the snapshot of the version it is bound to. One already bound to `targetTo`'s version is `alreadyRebased`, or `removed` when its expression is missing from `targetTo`; this is how a partly saved rebase is finished. Every other variable must be bound to `targetFrom`'s version.
 
-Each entry of `bindings` (`TBindingClassification`), in variable order, carries `variableId`, `boundExpressionId`, `boundAspect`, `boundArgumentVersion`, `premises`, and one `status`:
+Each entry of `bindings` (`TBindingClassification`), in variable order, carries the fields of `TBindingClassificationBase` — `variableId`, `boundExpressionId`, `boundAspect`, `boundArgumentVersion`, `premises` — and one `status`:
 
 | `status`         | Meaning                                                                                                                                                                                                                           |
 | ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -1771,6 +1771,8 @@ It throws, and changes nothing, when:
 **Postcondition.** Before returning, it checks that every expression-bound variable is bound to `targetTo`'s version and names an expression present in `targetTo`, and that `validateLinks` against `targetTo` reports no error it did not report before the rebase (compared by code, variable id and expression id). If the check fails, the mutation throws and the whole rebase is rolled back.
 
 `changes` holds the argument with its new `respondsTo`, every variable re-pointed, added or removed, and every premise and expression the drops removed. The consumer persists it like the changeset of any other mutation.
+
+**A reader's answers do not follow a rebase.** `carryAnswers` keys a reader's answers by link premise id, and a rebase keeps premise ids. After a `keep` or `retarget`, a stored answer on that link speaks about the new content; after a `drop` it names no link and is reported `notALink`. Core cannot tell, because answers carry no version. Keep a reader's answers per version of the response, or invalidate those on links whose binding was `changed`, `removed` or retargeted.
 
 #### `structuralFingerprint(snapshot, expressionId)` → `string`
 
@@ -2825,15 +2827,17 @@ The whole check is a refinement: the shape, a month of 01-12, and a day that exi
 
 ### `parseCalendarDate(value)` → `TCalendarDateParts`
 
-Reads a calendar date into `{ year, month?, day?, precision }`, where `precision` is `"year" | "month" | "day"`. Throws a `TypeError` naming the value if it is not a calendar date.
+Reads a calendar date into `{ year, month?, day?, precision }` (`TCalendarDateParts`), where `precision` is a `TCalendarDatePrecision`: `"year" | "month" | "day"`. Throws a `TypeError` naming the value if it is not a calendar date.
 
 ### `calendarDateFromInstant(value, precision?, timeZone?)` → `string`
 
-The calendar date of an instant: `value` is a `Date`, or the ISO string `JSON.stringify` writes one as. It is read in `timeZone`, default `"UTC"`, and cut to `precision`, default `"day"`.
+The calendar date of an instant: `value` is a `Date`, or the ISO string `JSON.stringify` writes one as, which names its zone (`Z` or an offset). It is read in `timeZone`, default `"UTC"`, and cut to `precision`, default `"day"`.
+
+- **Already converted.** A string that is already a calendar date comes back unchanged, cut to `precision` only when it is longer: `"1787-11"` stays `"1787-11"` even at `"day"`. A conversion can therefore run over a partly converted store, or twice, without inventing a month or day.
 
 - **Converting stored instants.** Dates stored as 5.4.2 advised, midnight UTC of the day meant, convert with the default zone.
 - **Data from before 5.4.2.** Data stored at local midnight converts with the zone it was written in. The UTC rule would give the previous day east of UTC.
-- **Errors.** It throws a `RangeError` for a year outside 0000-9999 or an unknown zone, and a `TypeError` for something that is not an instant.
+- **Errors.** It throws a `RangeError` for a year outside 0000-9999 or an unknown zone, and a `TypeError` for something that is not an instant, including a date-time string that names no zone (`"1787-11-22T00:00:00"`), which would otherwise be read in the process's own zone.
 
 ### Fields
 

@@ -23,14 +23,24 @@
   (variable fields) are hashed under every checksum configuration, including a
   configuration stored in an older snapshot. They are hashed only when
   present, so no existing checksum changes.
-- The public `TArgumentEvaluation` interface gains `carryAnswers`, so a class
-  implementing it itself must add the method.
+- Public engine interfaces gain required methods, so a class implementing one
+  itself must add them: `TArgumentEvaluation` gains `checkLink`,
+  `checkResponseCoherent` and `carryAnswers`; `TVariableManagement` gains
+  `bindVariableToExpression` and `rebaseResponse`; `TArgumentIdentity` gains
+  `isResponse` and `getRespondsTo`.
+- `TGrammarRuleCode` / `GrammarRuleCodeSchema` gains `S-15`, `E-8`, `E-9` and
+  `E-10`, and `TCoreValidationCode` gains `ARGUMENT_IS_RESPONSE`. A `switch`
+  with no `default`, a table keyed by every code, or a stored-code enum must
+  take them. New invariant codes: `ARG_RESPONDS_TO_ITSELF`,
+  `ARG_EXPRESSION_BINDING_OUTSIDE_RESPONSE`, `VAR_BINDING_AMBIGUOUS`.
 - With `strictUnknownAssignmentKeys: true`, an assignment key that no evaluated
   premise names is refused with the code `ASSIGNMENT_UNKNOWN_VARIABLE`; it was
   `ASSIGNMENT_MISSING_VARIABLE`. Code matching the old code must match the new
   one. The repair behind it is under Fixed.
 - `TPipelineEvent` gains a member, `stage:llm-text-delta`. A `switch` over
-  `kind` with no `default` stops compiling until it handles the new kind.
+  `kind` with no `default` stops compiling until it handles the new kind, and
+  a handler that throws on an unknown kind now fails the stage on the first
+  streamed chunk.
 - IEEE references: 15 date fields change from `EncodableDate` (`Date`) to
   `CalendarDate` (`string`): `date` on Standard, Patent, NewspaperArticle,
   ConferencePaper, ConferenceProceedings, Blog, Presentation, Interview,
@@ -96,7 +106,7 @@
 - `defaultCompareArgument` reports a change of `respondsTo`, and
   `defaultCompareVariable` compares `boundExpressionId` and `boundAspect`.
 - `toDisplayString` on a response names the argument and version it answers.
-- `ArgumentEngine.carryAnswers(targetSnapshot, linkAnswers, targetClaims)`,
+- `ArgumentEngine.carryAnswers(targetSnapshot, linkAnswers, targetClaims, options?)`,
   which reads what a reader's `agree` answers on a response's links carry into
   the argument it answers: variable values and operator decisions, or answers
   on another response's links. A statement link carries the fixed claim values
@@ -104,7 +114,11 @@
   reinforce carries `accepted` only at an `implies` or `iff` premise root; an
   undercut carries `rejected` where evaluation honours one. Every value names
   its links in `sources`, and every agreed link that carries nothing is in
-  `notCarried` with a `TNotCarriedReason`.
+  `notCarried` with a `TNotCarriedReason`. `options.ownLinkPremiseIds`
+  (`TCarryAnswersOptions`) names the reader's own answers on a response
+  partway along a chain: a carried link that disagrees with one is dropped
+  (`overriddenByOwn`) and the difference reported in the result's
+  `collisions`, which `mergeCarriedInput` passes on.
 - `mergeCarriedInput(own, carried)`, which adds carried values to the reader's
   explicit input, keeping the reader's value on every collision and listing
   each. Types `TLinkAnswer`, `TCarryResult`, `TCarriedSource`, `TNotCarried`,
@@ -115,12 +129,19 @@
   caller's signal aborts. Prefixed inside `subPipelineStage` like the other
   per-stage events.
 - `TLlmRequest.onTextDelta`: an optional per-chunk callback. The OpenAI
-  provider calls it in both streaming modes; `readSseEnvelope` parses
-  `response.output_text.delta` frames (a top-level `delta` string) and passes
-  each chunk to it, unaccumulated.
+  provider calls it in both streaming modes, once per
+  `response.output_text.delta` frame (a top-level `delta` string), with each
+  chunk unaccumulated.
 - `CalendarDate`, `calendarDateType`, `parseCalendarDate`,
   `calendarDateFromInstant`, `TCalendarDateParts` and `TCalendarDatePrecision`
   in the package root; `formatCalendarDate` in the IEEE extension.
+  `calendarDateFromInstant` returns a calendar date it is given unchanged (cut
+  to `precision` only when longer) and refuses a date-time string that names
+  no zone.
+- `PropositCore.forkArgument` takes `respondsToSnapshot`. Forking a response
+  keeps every claim its target uses instead of cloning it, so the fork's
+  checks read a shared claim as one proposition, as the original's do; it
+  throws when it cannot find the target at the version answered.
 
 ## Changed
 
@@ -159,13 +180,36 @@
   mid-flight id would be the first round's rather than the last round's that
   `stage:llm-call` carries.
 - `formatCitationParts` threw `TypeError: d.getUTCMonth is not a function` for
-  any reference whose date fields held ISO strings, the form a reference
-  takes after `JSON.stringify` and `JSON.parse` without `Value.Decode`. The
-  `date` source kind and `formatDate` now read such a string the way
-  `EncodableDate` decodes one. `formatDate` accepts `Date | string`; a value
-  that is neither a valid date nor a date string throws a `TypeError`, and
-  the citation formatter names the field. An invalid `Date` used to print as
-  "undefined NaN, NaN" and now throws the same error.
+  a reference whose access date held an ISO string, the form it takes after
+  `JSON.stringify` and `JSON.parse` without `Value.Decode`. The `date` source
+  kind, which only access dates use, now reads such a string the way
+  `EncodableDate` decodes one; a value that is not a date throws a
+  `TypeError` naming the field. `formatDate` still takes a `Date` only, and
+  an invalid `Date` there, which used to print as "undefined NaN, NaN", now
+  throws. Calendar-date fields do not read ISO strings: see Breaking.
+- An error message naming a `Date` that is not a calendar date shows it as its
+  UTC instant, not as local-time text that shows the previous day west of UTC.
+- An exception thrown by an `onTextDelta` or `onResponseCreated` callback,
+  such as one from a pipeline `onEvent` handler, was reported by the OpenAI
+  provider as a transient streaming failure, so the stage retried with a
+  second request and the stream stayed open. It now passes through unchanged,
+  is not retried, and the stream is cancelled. Pinned by
+  `test/extensions/openai/sse-parsing.test.ts` and `provider.test.ts`.
+- `executeTurn` kept the turn's user message in one variable shared by every
+  call, so when turns overlapped a retry could send another turn's message,
+  or the stage's empty one. Each turn now holds its own. Pinned by
+  `test/conversation/conversation.test.ts`.
+- `createConversation` set its chain to the failed turn's response id, or to
+  `null`, after a failed turn, so the next turn lost the conversation. A failed
+  turn now leaves the chain where it was.
+- `classifyBindings` reported a nested binding `unchanged` when only its
+  premise's conclusion role changed, although carrying an undercut there
+  changes from striking the premise to nothing; it is now `changed` with
+  `position`.
+- `respondsTo` was shared by reference with the object the engine was built
+  from and with what `getArgument`, `snapshot` and `getRespondsTo` returned, so
+  mutating one re-pointed the response. Each now holds its own copy, and a
+  `respondsTo` of `null` reads as no response.
 
 ## Tests
 
