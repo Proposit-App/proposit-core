@@ -34,7 +34,7 @@ export const IEEE_MONTHS = [
 // The citation formatter reads an access date stored as an ISO string itself
 // before calling this.
 export function formatDate(d: Date): string {
-    const date = d instanceof Date ? toCitationDate(d) : undefined
+    const date = isDateObject(d) ? toCitationDate(d) : undefined
     if (date === undefined) {
         throw new TypeError(`Not a date: ${describeValue(d)}`)
     }
@@ -49,7 +49,7 @@ export function formatDate(d: Date): string {
 // valid `Date` is shown as its UTC instant: its local-time text would show the
 // day before midnight UTC in zones west of UTC.
 function describeValue(value: unknown): string {
-    if (value instanceof Date) {
+    if (isDateObject(value)) {
         return Number.isNaN(value.getTime())
             ? String(value)
             : value.toISOString()
@@ -61,13 +61,18 @@ function describeValue(value: unknown): string {
     }
 }
 
+// Whether a value is a `Date`, including one made in another realm (another
+// `vm` context or frame), which `instanceof Date` does not recognise.
+function isDateObject(value: unknown): value is Date {
+    return Object.prototype.toString.call(value) === "[object Date]"
+}
+
 function toCitationDate(value: unknown): Date | undefined {
-    const date =
-        value instanceof Date
-            ? value
-            : typeof value === "string"
-              ? new Date(value)
-              : undefined
+    const date = isDateObject(value)
+        ? value
+        : typeof value === "string"
+          ? new Date(value)
+          : undefined
     return date === undefined || Number.isNaN(date.getTime()) ? undefined : date
 }
 

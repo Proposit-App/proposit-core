@@ -84,7 +84,28 @@ function pad(value: number, width: number): string {
 // `Date`. A date-time without one is read in the process's own zone, which
 // would make the day depend on where the conversion runs.
 const ZONED_INSTANT_SHAPE =
-    /^[+-]?\d{4,6}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:\d{2})$/
+    /^([+-]?\d{4,6})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2})(?:\.\d+)?)?(?:Z|[+-](\d{2}):(\d{2}))$/
+
+// Whether a string is a zoned ISO date-time naming a day and time that exist.
+// `Date` would roll "2024-02-30" over to March 1st and read "24:00" as the
+// next day, inventing a day the value never named.
+function isZonedInstant(value: string): boolean {
+    const match = ZONED_INSTANT_SHAPE.exec(value)
+    if (match === null) return false
+    const [, year, month, day, hour, minute, second, offsetHour, offsetMinute] =
+        match.map(Number)
+    return (
+        month >= 1 &&
+        month <= 12 &&
+        day >= 1 &&
+        day <= daysInMonth(year, month) &&
+        hour <= 23 &&
+        minute <= 59 &&
+        (Number.isNaN(second) || second <= 59) &&
+        (Number.isNaN(offsetHour) || offsetHour <= 23) &&
+        (Number.isNaN(offsetMinute) || offsetMinute <= 59)
+    )
+}
 
 const PRECISION_LENGTH: Record<TCalendarDatePrecision, number> = {
     year: 4,
@@ -107,7 +128,8 @@ const PRECISION_LENGTH: Record<TCalendarDatePrecision, number> = {
  * twice changes nothing and never invents a month or day.
  *
  * @throws TypeError when `value` is neither a valid instant nor a calendar
- * date, including a date-time string that names no zone.
+ * date, including a date-time string that names no zone or names a day or
+ * time that does not exist.
  * @throws RangeError when the year falls outside 0000-9999, or `timeZone`
  * is not a time zone `Intl.DateTimeFormat` knows.
  */
@@ -116,10 +138,12 @@ export function calendarDateFromInstant(
     precision: TCalendarDatePrecision = "day",
     timeZone = "UTC"
 ): string {
+    // Checked first, so a mistyped zone is refused whatever the value.
+    if (timeZone !== "UTC") new Intl.DateTimeFormat("en-US", { timeZone })
     if (typeof value === "string" && readCalendarDate(value) !== undefined) {
         return value.slice(0, PRECISION_LENGTH[precision])
     }
-    if (typeof value === "string" && !ZONED_INSTANT_SHAPE.test(value)) {
+    if (typeof value === "string" && !isZonedInstant(value)) {
         throw new TypeError(`Not an instant: ${JSON.stringify(value)}`)
     }
     const date = value instanceof Date ? value : new Date(value)

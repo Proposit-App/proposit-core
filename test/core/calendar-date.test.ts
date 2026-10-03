@@ -197,6 +197,29 @@ describe("calendarDateFromInstant", () => {
         }
     })
 
+    it("refuses an unknown zone even for a value already converted", () => {
+        expect(() =>
+            calendarDateFromInstant("1787-11-22", "day", "Not/AZone")
+        ).toThrow(RangeError)
+    })
+
+    it("refuses an instant naming a day or time that does not exist", () => {
+        for (const value of [
+            "2024-02-30T00:00:00Z",
+            "2023-02-29T00:00:00Z",
+            "2024-13-01T00:00:00Z",
+            "2024-06-15T24:00:00Z",
+            "2024-06-15T23:60:00Z",
+            "2024-06-15T23:00:60Z",
+            "2024-06-15T23:00:00+24:00",
+        ]) {
+            expect(() => calendarDateFromInstant(value)).toThrow(TypeError)
+        }
+        expect(calendarDateFromInstant("2024-02-29T23:59:59.999Z")).toBe(
+            "2024-02-29"
+        )
+    })
+
     it("refuses an unknown zone", () => {
         expect(() =>
             calendarDateFromInstant(new Date(midnight), "day", "Not/AZone")

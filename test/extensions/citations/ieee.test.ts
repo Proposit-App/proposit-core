@@ -1,3 +1,4 @@
+import { runInNewContext } from "node:vm"
 import { describe, expect, it } from "vitest"
 import { Value } from "typebox/value"
 
@@ -600,6 +601,23 @@ describe("IEEE extension", () => {
             expect(() => formatDate("1787-11-22T00:00:00.000Z")).toThrow(
                 TypeError
             )
+        })
+
+        it("formatDate takes a Date made in another realm", () => {
+            const foreign = runInNewContext(
+                'new Date("2024-06-15T00:00:00.000Z")'
+            ) as Date
+            expect(foreign instanceof Date).toBe(false)
+            expect(formatDate(foreign)).toBe("Jun. 15, 2024")
+            const ref = {
+                ...validWebsite(),
+                accessedDate: foreign,
+            } as unknown as TIEEEReference
+            expect(
+                formatCitationParts(ref).segments.find(
+                    (segment) => segment.role === "accessedDate"
+                )?.text
+            ).toBe("Jun. 15, 2024")
         })
 
         it("formatDate rejects an invalid Date", () => {
