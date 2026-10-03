@@ -1,0 +1,1 @@
+What a link says about the expression it binds. About its statement: affirm (x, it is true) or contradict (NOT(x), it is false). About the step of its operator: reinforce (the step holds) or undercut (the step does not hold, denying neither side of it).

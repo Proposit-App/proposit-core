@@ -1,0 +1,1 @@
+A variable of a response argument bound to one expression of the argument it answers, pinned to that argument's version, in one aspect: the expression's statement or the inference step of its operator. Only a response can hold one, and a link is built from one.

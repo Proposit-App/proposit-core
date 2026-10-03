@@ -1,0 +1,6 @@
+name: Expression-Bound Variable
+kind: Vocabulary
+relatesTo:
+    - argument/response-argument
+    - argument/response-argument/link
+    - argument/propositional-expression

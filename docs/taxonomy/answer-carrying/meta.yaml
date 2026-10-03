@@ -4,3 +4,5 @@ relatesTo: []
 vocabulary:
     - argument
     - carried-value
+    - argument/response-argument
+    - argument/response-argument/link

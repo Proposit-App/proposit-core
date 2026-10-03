@@ -1,0 +1,5 @@
+name: Move
+kind: Vocabulary
+relatesTo:
+    - argument/response-argument/link
+    - argument/propositional-expression/operator-expression

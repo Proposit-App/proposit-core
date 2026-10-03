@@ -1,0 +1,5 @@
+name: Response Argument
+kind: Vocabulary
+relatesTo:
+    - argument/response-argument/link
+    - carried-value

@@ -1,0 +1,1 @@
+An argument that answers one version of another argument, its target, through links. It names the argument and version it answers (respondsTo) and has no conclusion of its own; its premises other than links are its reasons, and may use the same claims as the target.

@@ -1,0 +1,1 @@
+A premise of a response argument whose whole content is x or NOT(x), where x is an expression-bound variable. It makes one move about one expression of the argument answered; only links answer the target.

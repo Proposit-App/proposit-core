@@ -1,0 +1,7 @@
+name: Link
+kind: Vocabulary
+relatesTo:
+    - argument/premise
+    - argument/propositional-expression/propositional-variable/expression-bound-variable
+    - argument/response-argument/move
+    - carried-value
