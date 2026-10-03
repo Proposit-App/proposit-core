@@ -104,7 +104,7 @@ export type TUndeterminedReason =
  *   undetermined.
  * - `asserted`: the other premises can hold with it false. `counterexample`
  *   is such an assignment; `attemptedSupport` is true when another premise has
- *   the link's content on its consequent side.
+ *   the link's content, up to negation, on its consequent side.
  * - `incoherent`: the response's premises cannot all hold, so nothing about
  *   the link is reported.
  * - `undetermined`: the search could not decide.

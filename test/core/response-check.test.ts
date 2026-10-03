@@ -309,6 +309,89 @@ describe("checkLink", () => {
     }, 60_000)
 })
 
+describe("checkLink on a reply, a response whose target is a response", () => {
+    // X: conclusion X. Y answers X with the link `yl`, contradicting or
+    // affirming X, and a reason for it. Z answers Y with a link on `yl` and
+    // a reason for that.
+    function reply(
+        yAffirms: boolean,
+        zAffirms: boolean,
+        zPremises?: (TNode | TPremiseSpec)[],
+        claimTypes?: Record<string, "citation" | "axiomatic">
+    ) {
+        const lib = newLib()
+        const t = target(lib)
+        const yLink = yAffirms ? x("x") : not(x("x"))
+        const y = respond(t, lib, [
+            labelled("yl", at("yl", yLink)),
+            implies(v("R"), yAffirms ? x("x") : not(x("x"))),
+        ])
+        const zLink = () => (zAffirms ? x("yl") : not(x("yl")))
+        const z = build({
+            id: "z",
+            version: 0,
+            lib,
+            respondsTo: y,
+            premises: zPremises ?? [
+                labelled("zl", zLink()),
+                implies(v("S"), zLink()),
+            ],
+            claimTypes,
+        })
+        return z.engine.checkLink(z.premise("zl"), y.engine.snapshot())
+    }
+
+    it.each([
+        ["contradicts", "contradicts", false, false],
+        ["affirms", "contradicts", true, false],
+        ["contradicts", "affirms", false, true],
+    ])(
+        "Y %s X and Z %s Y: a reason for Z's link is attempted support",
+        (_y, _z, yAffirms, zAffirms) => {
+            expect(reply(yAffirms, zAffirms)).toMatchObject({
+                status: "asserted",
+                attemptedSupport: true,
+            })
+        }
+    )
+
+    it("a link on a negated expression of a standard argument, with a reason, is attempted support", () => {
+        const lib = newLib()
+        const t = target(lib, [at("nq", not(v("Q")))])
+        const response = respond(t, lib, [
+            labelled("link", not(x("nq"))),
+            implies(v("S"), not(x("nq"))),
+        ])
+        expect(
+            response.engine.checkLink(
+                response.premise("link"),
+                t.engine.snapshot()
+            )
+        ).toMatchObject({ status: "asserted", attemptedSupport: true })
+    })
+
+    it("a reply link with no reason is a bare assertion", () => {
+        expect(
+            reply(false, false, [labelled("zl", not(x("yl")))])
+        ).toMatchObject({ status: "asserted", attemptedSupport: false })
+    })
+
+    it("a reply link whose reason a cited source backs follows", () => {
+        expect(
+            reply(
+                false,
+                false,
+                [
+                    labelled("zl", not(x("yl"))),
+                    v("S"),
+                    implies(v("S"), not(x("yl"))),
+                ],
+                { S: "citation" }
+            )
+        ).toMatchObject({ status: "follows" })
+    })
+})
+
 describe("checkResponseCoherent", () => {
     it("is coherent for a response that can hold", () => {
         expect(setUp([not(x("x")), x("y")]).coherence()).toEqual({
