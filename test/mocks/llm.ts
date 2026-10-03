@@ -25,6 +25,11 @@
 //     output as-is even if it would fail the caller's schema; lets
 //     tests exercise the `OUTPUT_SCHEMA_INVALID` retry path.
 //
+// `ok` and `schema-invalid` take optional `deltas`, passed to the request's
+// `onTextDelta` before the response delay, and `lateDeltas`, passed after it
+// whether or not the call was aborted meanwhile — a provider whose last
+// buffered chunk arrives after the abort.
+//
 // `onCall(record)` fires before every response is dispatched — tests
 // use this to record per-call timing for concurrency assertions.
 
@@ -35,14 +40,20 @@ import type {
     TLlmTokenUsage,
 } from "../../src/lib/llm/types.js"
 
+type TMockDeltas = { deltas?: string[]; lateDeltas?: string[] }
+
 export type TMockResponse =
-    | { kind: "ok"; output: unknown; tokenUsage?: TLlmTokenUsage }
+    | ({
+          kind: "ok"
+          output: unknown
+          tokenUsage?: TLlmTokenUsage
+      } & TMockDeltas)
     | { kind: "error"; error: Error }
-    | {
+    | ({
           kind: "schema-invalid"
           output: unknown
           tokenUsage?: TLlmTokenUsage
-      }
+      } & TMockDeltas)
 
 export type TMockCallRecord = {
     stageId: string | null
@@ -115,9 +126,12 @@ export function createMockLlmProvider(
             throw new Error(`mock-llm: queue for "${key}" returned undefined.`)
         }
 
+        const streamed: TMockDeltas = response.kind === "error" ? {} : response
+        for (const text of streamed.deltas ?? []) req.onTextDelta?.(text)
         if (delay > 0) {
             await sleepWithSignal(delay, req.signal)
         }
+        for (const text of streamed.lateDeltas ?? []) req.onTextDelta?.(text)
         if (req.signal?.aborted) {
             throw new Error("mock-llm: aborted")
         }

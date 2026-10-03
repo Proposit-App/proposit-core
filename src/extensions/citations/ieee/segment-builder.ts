@@ -1,6 +1,7 @@
 import type { TCitationSegment } from "./segment-types.js"
 import type { TSegmentInstruction } from "./segment-templates.js"
 import type { TAuthor } from "./references.js"
+import { parseCalendarDate } from "../../../lib/schemata/calendar-date.js"
 
 // ---------------------------------------------------------------------------
 // Shared formatting helpers (canonical home — formatting.ts re-exports these)
@@ -21,15 +22,75 @@ export const IEEE_MONTHS = [
     "Dec.",
 ]
 
-// A citation date is a calendar date, stored as midnight UTC of that day (the
-// way `EncodableDate` decodes "1787-11-22"). Read it back in UTC: the local-time
-// getters shift it into the formatting process's time zone and print the day
-// before or after, and no stored time of day avoids that for every zone.
+// Formats an instant (an access date, held as `EncodableDate`) by its UTC day.
+// A day is stored as midnight UTC of that day, the way `EncodableDate` decodes
+// "1787-11-22", so it is read back in UTC: the local-time getters would shift
+// it into the formatting process's time zone and print the day before or
+// after.
+//
+// It takes a `Date` only. A calendar date is a string, and reading one as an
+// instant invents a day ("1787" would print "Jan. 1, 1787"), so a string is
+// refused rather than parsed; `formatCalendarDate` renders calendar dates.
+// The citation formatter reads an access date stored as an ISO string itself
+// before calling this.
 export function formatDate(d: Date): string {
-    const month = IEEE_MONTHS[d.getUTCMonth()]
-    const day = d.getUTCDate()
-    const year = d.getUTCFullYear()
+    const date = isDateObject(d) ? toCitationDate(d) : undefined
+    if (date === undefined) {
+        throw new TypeError(`Not a date: ${describeValue(d)}`)
+    }
+    const month = IEEE_MONTHS[date.getUTCMonth()]
+    const day = date.getUTCDate()
+    const year = date.getUTCFullYear()
     return `${month} ${day}, ${year}`
+}
+
+// For an error message: `JSON.stringify` writes an invalid `Date` as `null`
+// and throws on a bigint or a cycle, so neither may hide the actual value. A
+// valid `Date` is shown as its UTC instant: its local-time text would show the
+// day before midnight UTC in zones west of UTC.
+function describeValue(value: unknown): string {
+    if (isDateObject(value)) {
+        return Number.isNaN(value.getTime())
+            ? String(value)
+            : value.toISOString()
+    }
+    try {
+        return JSON.stringify(value) ?? String(value)
+    } catch {
+        return String(value)
+    }
+}
+
+// Whether a value is a `Date`, including one made in another realm (another
+// `vm` context or frame), which `instanceof Date` does not recognise.
+function isDateObject(value: unknown): value is Date {
+    return Object.prototype.toString.call(value) === "[object Date]"
+}
+
+function toCitationDate(value: unknown): Date | undefined {
+    const date = isDateObject(value)
+        ? value
+        : typeof value === "string"
+          ? new Date(value)
+          : undefined
+    return date === undefined || Number.isNaN(date.getTime()) ? undefined : date
+}
+
+/**
+ * Formats a calendar date IEEE style at its precision: "1787", "Nov. 1787"
+ * or "Nov. 22, 1787". Builds no `Date`, so the process time zone cannot
+ * move the day.
+ *
+ * @throws TypeError when `value` is not a calendar date.
+ */
+export function formatCalendarDate(value: string): string {
+    const { year, month, day } = parseCalendarDate(value)
+    const yearText = String(year).padStart(4, "0")
+    if (month === undefined) return yearText
+    const monthText = IEEE_MONTHS[month - 1]
+    return day === undefined
+        ? `${monthText} ${yearText}`
+        : `${monthText} ${String(day)}, ${yearText}`
 }
 
 export function formatSingleAuthor(author: TAuthor): string {
@@ -66,8 +127,31 @@ function resolveSource(
     switch (src.kind) {
         case "string":
             return ref[src.field!] as string
-        case "date":
-            return formatDate(ref[src.field!] as Date)
+        case "date": {
+            const value = ref[src.field!]
+            const date = toCitationDate(value)
+            if (date === undefined) {
+                throw new TypeError(
+                    `Citation field "${src.field!}" is not a date: ${describeValue(value)}`
+                )
+            }
+            return formatDate(date)
+        }
+        case "calendarDate": {
+            const value = ref[src.field!]
+            if (typeof value !== "string") {
+                throw new TypeError(
+                    `Citation field "${src.field!}" is not a calendar date: ${describeValue(value)}`
+                )
+            }
+            try {
+                return formatCalendarDate(value)
+            } catch {
+                throw new TypeError(
+                    `Citation field "${src.field!}" is not a calendar date: ${describeValue(value)}`
+                )
+            }
+        }
         case "authors":
             return formatNamesInCitation(ref[src.field!] as TAuthor[])
         case "singleAuthor":

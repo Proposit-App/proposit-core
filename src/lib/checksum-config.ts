@@ -35,6 +35,8 @@ export const DEFAULT_CHECKSUM_CONFIG: Readonly<TCoreChecksumConfig> = {
         "boundPremiseId",
         "boundArgumentId",
         "boundArgumentVersion",
+        "boundExpressionId",
+        "boundAspect",
     ]),
     premiseFields: new Set([
         "argumentId",
@@ -42,7 +44,7 @@ export const DEFAULT_CHECKSUM_CONFIG: Readonly<TCoreChecksumConfig> = {
         "type",
         "derivedClaimId",
     ]),
-    argumentFields: new Set(["version"]),
+    argumentFields: new Set(["version", "respondsTo"]),
     roleFields: new Set(["conclusionPremiseId"]),
     claimFields: new Set(["version", "type"]),
     claimCitationFields: new Set([
@@ -137,4 +139,33 @@ export function createChecksumConfig(
         result[key] = extra ? new Set([...base, ...extra]) : new Set(base)
     }
     return result
+}
+
+/**
+ * Fields hashed under every configuration, including one stored before they
+ * existed. Each is absent on every entity that predates it, so adding it to a
+ * configuration moves no existing checksum, while leaving it out would let a
+ * change to it go undetected.
+ */
+const ALWAYS_HASHED_FIELDS: Partial<
+    Record<(typeof CHECKSUM_CONFIG_KEYS)[number], readonly string[]>
+> = {
+    argumentFields: ["respondsTo"],
+    variableFields: ["boundExpressionId", "boundAspect"],
+}
+
+/**
+ * The field set in force for one entity type: the configured set when the
+ * configuration has one, otherwise the default, together with the fields
+ * hashed under every configuration. Every place a checksum is computed
+ * resolves its fields here, so that creation, rollback, restore and strict
+ * verification agree.
+ */
+export function resolveChecksumFields(
+    config: TCoreChecksumConfig | undefined,
+    key: (typeof CHECKSUM_CONFIG_KEYS)[number]
+): Set<string> {
+    const base = config?.[key] ?? DEFAULT_CHECKSUM_CONFIG[key]!
+    const always = ALWAYS_HASHED_FIELDS[key]
+    return always ? new Set([...base, ...always]) : new Set(base)
 }

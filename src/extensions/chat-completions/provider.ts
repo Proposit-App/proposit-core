@@ -6,8 +6,9 @@
 //   * One POST to `{baseUrl}/chat/completions` via raw `fetch` (the
 //     `./http.ts` `requestJson` helper) — no SSE, no background/poll, no
 //     mid-flight responseId. `TLlmProvider.respond` is the whole surface;
-//     the optional `onResponseCreated` hook is left uncalled (a
-//     synchronous provider never learns an id mid-flight), which is
+//     the optional `onResponseCreated` and `onTextDelta` hooks are left
+//     uncalled (a synchronous provider never learns an id or text
+//     mid-flight), which is
 //     contract-legal — the same posture the prior local provider took.
 //   * Structured output via the lax `typeboxToJsonSchema` converter under
 //     a `response_format: { type: "json_schema", json_schema: { ... } }`.

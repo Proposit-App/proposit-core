@@ -1,3 +1,4 @@
+import { runInNewContext } from "node:vm"
 import { describe, expect, it } from "vitest"
 import { Value } from "typebox/value"
 
@@ -18,12 +19,22 @@ import {
     IEEEReferenceSchemaRelaxed,
     IEEEReferenceSchemaMapRelaxed,
     type TReferenceType,
-    type TAuthor,
     formatNamesInCitation,
     formatSingleAuthor,
     formatCitationParts,
+    formatDate,
     type TIEEEReference,
 } from "../../../src/extensions/citations/ieee"
+import {
+    author,
+    oneOfEachType,
+    validBlog,
+    validBook,
+    validDataset,
+    validJournalArticle,
+    validPatent,
+    validWebsite,
+} from "./fixtures.js"
 
 describe("UnparsedURL removal", () => {
     it("ReferenceTypeSchema has 33 literals and excludes UnparsedURL", () => {
@@ -42,82 +53,6 @@ describe("UnparsedURL removal", () => {
         expect(Value.Check(IEEEReferenceSchema, unparsedUrlShape)).toBe(false)
     })
 })
-
-// ---------------------------------------------------------------------------
-// Fixture helpers
-// ---------------------------------------------------------------------------
-
-function author(given: string, family: string, suffix?: string): TAuthor {
-    return suffix
-        ? { givenNames: given, familyName: family, suffix }
-        : { givenNames: given, familyName: family }
-}
-
-function validBook() {
-    return {
-        type: "Book" as const,
-        title: "Artificial Intelligence",
-        year: "2024",
-        authors: [author("Jane", "Smith")],
-        publisher: "MIT Press",
-    }
-}
-
-function validWebsite() {
-    return {
-        type: "Website" as const,
-        authors: [author("John", "Doe")],
-        pageTitle: "Understanding AI",
-        websiteTitle: "Tech Blog",
-        accessedDate: new Date("2024-06-15"),
-        url: "https://example.com/article",
-    }
-}
-
-function validJournalArticle() {
-    return {
-        type: "JournalArticle" as const,
-        authors: [author("Alice", "Johnson")],
-        title: "Quantum computing advances",
-        journalTitle: "Nature",
-        year: "2024",
-        doi: "10.1038/s41586-024-00001-1",
-    }
-}
-
-function validPatent() {
-    return {
-        type: "Patent" as const,
-        title: "Nonlinear resonant circuit devices",
-        inventors: [author("Bob", "Wilson")],
-        country: "US",
-        patentNumber: "US1234567",
-        date: new Date("2024-01-15"),
-    }
-}
-
-function validBlog() {
-    return {
-        type: "Blog" as const,
-        author: author("Carol", "White"),
-        postTitle: "My Latest Discovery",
-        blogName: "My Tech Blog",
-        date: new Date("2024-03-01"),
-        url: "https://blog.example.com/post",
-        accessedDate: new Date("2024-03-15"),
-    }
-}
-
-function validDataset() {
-    return {
-        type: "Dataset" as const,
-        title: "Climate Data 2024",
-        repository: "Zenodo",
-        year: "2024",
-        url: "https://zenodo.org/record/12345",
-        doi: "10.5281/zenodo.12345",
-    }
-}
 
 // ---------------------------------------------------------------------------
 // Tests
@@ -578,7 +513,7 @@ describe("IEEE extension", () => {
         it("formats a Patent citation", () => {
             const result = formatCitationParts({
                 ...validPatent(),
-                date: new Date("2024-01-15"),
+                date: "2024-01-15",
             })
             expect(result.type).toBe("Patent")
             const roles = result.segments.map((s) => s.role)
@@ -640,206 +575,99 @@ describe("IEEE extension", () => {
             expect(dateSeg.text).not.toContain("May.")
         })
 
+        it("formats a reference that came through JSON exactly as the original", () => {
+            // A stored citation comes back from JSON with its dates as ISO
+            // strings, unless the consumer decodes it first.
+            const withOptionalDates: TIEEEReference[] = oneOfEachType().map(
+                (ref) =>
+                    ref.type === "Video"
+                        ? { ...ref, releaseDate: "2024-03-01" }
+                        : ref.type === "SocialMedia"
+                          ? { ...ref, accessedDate: new Date("2024-03-02") }
+                          : ref
+            )
+            for (const ref of withOptionalDates) {
+                const stored = JSON.parse(JSON.stringify(ref)) as TIEEEReference
+                expect(formatCitationParts(stored)).toEqual(
+                    formatCitationParts(ref)
+                )
+            }
+        })
+
+        it("formatDate takes a Date only, so a calendar-date string is a type error and throws", () => {
+            // @ts-expect-error A calendar date is formatted by formatCalendarDate.
+            expect(() => formatDate("1787")).toThrow(/^Not a date: "1787"$/)
+            // @ts-expect-error An ISO instant must be decoded to a Date first.
+            expect(() => formatDate("1787-11-22T00:00:00.000Z")).toThrow(
+                TypeError
+            )
+        })
+
+        it("formatDate takes a Date made in another realm", () => {
+            const foreign = runInNewContext(
+                'new Date("2024-06-15T00:00:00.000Z")'
+            ) as Date
+            expect(foreign instanceof Date).toBe(false)
+            expect(formatDate(foreign)).toBe("Jun. 15, 2024")
+            const ref = {
+                ...validWebsite(),
+                accessedDate: foreign,
+            } as unknown as TIEEEReference
+            expect(
+                formatCitationParts(ref).segments.find(
+                    (segment) => segment.role === "accessedDate"
+                )?.text
+            ).toBe("Jun. 15, 2024")
+        })
+
+        it("formatDate rejects an invalid Date", () => {
+            expect(() => formatDate(new Date("nonsense"))).toThrow(
+                /^Not a date: Invalid Date$/
+            )
+        })
+
+        it("shows an unconverted Date in a calendar-date field as its UTC instant, whatever the process zone", () => {
+            const original = process.env.TZ
+            process.env.TZ = "America/Los_Angeles"
+            try {
+                const ref = {
+                    type: "NewspaperArticle",
+                    title: "t",
+                    authors: [{ name: "Publius" }],
+                    newspaperTitle: "n",
+                    date: new Date("1787-11-22"),
+                } as unknown as TIEEEReference
+                expect(() => formatCitationParts(ref)).toThrow(
+                    'Citation field "date" is not a calendar date: 1787-11-22T00:00:00.000Z'
+                )
+            } finally {
+                if (original === undefined) delete process.env.TZ
+                else process.env.TZ = original
+            }
+        })
+
+        it("names the field when a date field holds something that is not a date", () => {
+            const ref = {
+                ...validWebsite(),
+                accessedDate: "not a date",
+            } as unknown as TIEEEReference
+            expect(() => formatCitationParts(ref)).toThrow(
+                /accessedDate.*not a date/
+            )
+        })
+
+        it("shows an invalid Date as such in the error, not as null", () => {
+            const ref = {
+                ...validWebsite(),
+                accessedDate: new Date("nonsense"),
+            } as unknown as TIEEEReference
+            expect(() => formatCitationParts(ref)).toThrow(
+                'Citation field "accessedDate" is not a date: Invalid Date'
+            )
+        })
+
         it("handles all 33 reference types without throwing", () => {
-            const a = author("Alex", "Brown")
-            const refs: TIEEEReference[] = [
-                validBook(),
-                validWebsite(),
-                {
-                    type: "BookChapter" as const,
-                    chapterTitle: "Ch 1",
-                    year: "2024",
-                    authors: [a],
-                    bookTitle: "Book",
-                    publisher: "Pub",
-                    location: "NYC",
-                },
-                {
-                    type: "Handbook" as const,
-                    title: "Engineering Handbook",
-                    year: "2024",
-                    publisher: "Pub",
-                    location: "NYC",
-                },
-                {
-                    type: "TechnicalReport" as const,
-                    title: "Report on Systems",
-                    year: "2024",
-                    authors: [a],
-                    reportNumber: "TR-1",
-                    institution: "MIT",
-                    location: "Cambridge",
-                },
-                {
-                    type: "Standard" as const,
-                    organization: "IEEE",
-                    standardNumber: "802.11",
-                    title: "WiFi",
-                    date: new Date(),
-                },
-                {
-                    type: "Thesis" as const,
-                    title: "On Computation",
-                    year: "2024",
-                    authors: [a],
-                    degree: "Ph.D.",
-                    institution: "MIT",
-                    location: "Cambridge",
-                },
-                validPatent(),
-                {
-                    type: "Dictionary" as const,
-                    title: "English Dictionary",
-                    year: "2024",
-                    publisher: "OUP",
-                },
-                {
-                    type: "Encyclopedia" as const,
-                    title: "World Encyclopedia",
-                    year: "2024",
-                    publisher: "Britannica",
-                },
-                validJournalArticle(),
-                {
-                    type: "MagazineArticle" as const,
-                    title: "Tech Trends",
-                    year: "2024",
-                    authors: [a],
-                    magazineTitle: "Mag",
-                },
-                {
-                    type: "NewspaperArticle" as const,
-                    title: "Breaking News",
-                    authors: [a],
-                    newspaperTitle: "Times",
-                    date: new Date(),
-                },
-                {
-                    type: "ConferencePaper" as const,
-                    title: "New Algorithms",
-                    authors: [a],
-                    conferenceName: "Conf",
-                    location: "NYC",
-                    date: new Date(),
-                },
-                {
-                    type: "ConferenceProceedings" as const,
-                    conferenceName: "Conf",
-                    location: "NYC",
-                    date: new Date(),
-                    publisher: "Pub",
-                },
-                validDataset(),
-                {
-                    type: "Software" as const,
-                    title: "MyApp",
-                    year: "2024",
-                    url: "https://example.com",
-                },
-                {
-                    type: "OnlineDocument" as const,
-                    title: "Doc",
-                    url: "https://example.com",
-                    accessedDate: new Date(),
-                },
-                validBlog(),
-                {
-                    type: "SocialMedia" as const,
-                    author: a,
-                    platform: "Twitter",
-                    postDate: new Date(),
-                    url: "https://twitter.com",
-                },
-                {
-                    type: "Preprint" as const,
-                    title: "Early Results",
-                    year: "2024",
-                    authors: [a],
-                    server: "arXiv",
-                    url: "https://arxiv.org",
-                },
-                {
-                    type: "Video" as const,
-                    title: "Tutorial Video",
-                    platform: "YouTube",
-                    url: "https://youtube.com",
-                    accessedDate: new Date(),
-                },
-                {
-                    type: "Podcast" as const,
-                    episodeTitle: "Ep 1",
-                    seriesTitle: "Pod",
-                    platform: "Spotify",
-                    url: "https://spotify.com",
-                    accessedDate: new Date(),
-                },
-                {
-                    type: "Course" as const,
-                    title: "Intro to CS",
-                    year: "2024",
-                    instructor: a,
-                    institution: "MIT",
-                    term: "Fall 2024",
-                },
-                {
-                    type: "Presentation" as const,
-                    title: "Keynote Talk",
-                    presenter: a,
-                    eventTitle: "Event",
-                    location: "NYC",
-                    date: new Date(),
-                },
-                {
-                    type: "Interview" as const,
-                    interviewee: a,
-                    date: new Date(),
-                },
-                {
-                    type: "PersonalCommunication" as const,
-                    person: a,
-                    date: new Date(),
-                },
-                {
-                    type: "Email" as const,
-                    sender: a,
-                    recipient: author("Zara", "Lee"),
-                    date: new Date(),
-                },
-                {
-                    type: "Law" as const,
-                    title: "Act",
-                    jurisdiction: "US",
-                    dateEnacted: new Date(),
-                },
-                {
-                    type: "CourtCase" as const,
-                    caseName: "X v Y",
-                    court: "Supreme Court",
-                    date: new Date(),
-                },
-                {
-                    type: "GovernmentPublication" as const,
-                    title: "Annual Report",
-                    date: new Date(),
-                    agency: "EPA",
-                    location: "DC",
-                },
-                {
-                    type: "Datasheet" as const,
-                    title: "Processor Specs",
-                    year: "2024",
-                    manufacturer: "Intel",
-                    partNumber: "i7-12700K",
-                    url: "https://intel.com",
-                },
-                {
-                    type: "ProductManual" as const,
-                    title: "User Guide",
-                    year: "2024",
-                    manufacturer: "Dell",
-                    model: "XPS 15",
-                },
-            ]
+            const refs = oneOfEachType()
             expect(refs).toHaveLength(33)
             for (const ref of refs) {
                 const result = formatCitationParts(ref)
@@ -951,7 +779,7 @@ describe("SocialMedia", () => {
         postTitle: "Title",
         websiteTitle: "Site",
         platform: "Reddit",
-        postDate: new Date(Date.UTC(1995, 7, 12)),
+        postDate: "1995-08-12",
         url,
         accessedDate: new Date(Date.UTC(2026, 8, 1)),
     }
@@ -1060,7 +888,7 @@ describe("SocialMedia", () => {
             type: "SocialMedia" as const,
             author: author("Jane Q.", "Doe"),
             platform: "X",
-            postDate: new Date(Date.UTC(2026, 2, 5)),
+            postDate: "2026-03-05",
             url,
         }
         expect(Value.Check(SocialMediaReferenceSchema, old)).toBe(true)

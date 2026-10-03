@@ -88,7 +88,7 @@ How pipelines behave:
 - **Dependencies.** `dependsOn` lists stage ids. Wrap an id in `optional(id)` when the stage should still run if that dependency failed or was skipped. A stage whose required dependency did not complete is skipped, not failed.
 - **Failures.** Pipeline configuration errors, such as a dependency cycle, an unknown stage id or input that does not match `inputSchema`, throw `PipelineConfigurationError`. Every other problem comes back in `result.failures`, and `result.stageOutcomes` records each stage as `"completed"`, `"skipped"` or `"failed"`.
 - **Retries.** `llmStage` checks the LLM's output against `outputSchema` and retries under a retry policy (`DEFAULT_RETRY_POLICY`, adjustable per stage with `retry`). `checkOutput` adds your own content check, retried the same way.
-- **Running options.** `executePipeline`'s third argument also takes `generateId`, `signal` (an `AbortSignal`; aborted stages are reported as skipped), `onEvent` (progress events) and `concurrencyLimit` (default 4).
+- **Running options.** `executePipeline`'s third argument also takes `generateId`, `signal` (an `AbortSignal`; aborted stages are reported as skipped), `onEvent` (progress events) and `concurrencyLimit` (default 4). Among the events, `stage:llm-text-delta` carries each chunk of a stage's output text as it streams, labelled with its `attempt`: a retried attempt streams again from the beginning, so start over when `attempt` changes.
 - **One stage at a time.** To run each stage in a separate process, with outputs stored in between, use `executeStage`, `executeFinalize`, `launchStage` / `completeStage` and the `@proposit/proposit-core/pipelines/scheduling` helpers.
 
 ## Text to argument

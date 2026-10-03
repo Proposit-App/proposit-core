@@ -190,9 +190,16 @@ export function createOpenAiResponsesProvider(
         let lastUsage: TLlmTokenUsage = { input: 0, output: 0 }
         let lastResponseId: string | undefined
 
-        // Fire the mid-flight id callback at most once across the whole
-        // call (background-stream mode is no-tools-only, so the loop runs
-        // a single round, but guard regardless of future loop behavior).
+        // A function tool makes the loop below send one request per round,
+        // each with its own response id, and the id this call reports is the
+        // last round's. A mid-flight id would be the first round's, so it is
+        // reported only when there is exactly one round; otherwise the id
+        // arrives with the response. Background-stream mode allows no tools,
+        // so it always runs one round.
+        const runsOneRound = !req.tools?.some(
+            (tool) => tool.kind === "function"
+        )
+        // Fire the mid-flight id callback at most once across the whole call.
         let responseIdNotified = false
         const notifyResponseId = (responseId: string): void => {
             lastResponseId = responseId
@@ -249,10 +256,11 @@ export function createOpenAiResponsesProvider(
                 background: useBackground,
                 backgroundStream: useBackgroundStream,
                 pollIntervalMs: backgroundPollIntervalMs,
-                onResponseId: notifyResponseId,
+                onResponseId: runsOneRound ? notifyResponseId : undefined,
+                onTextDelta: req.onTextDelta,
             })
 
-            // The mid-flight callback (background-stream mode) already set
+            // The mid-flight callback (either streaming mode) already set
             // `lastResponseId`; fall back to the terminal envelope id for
             // the synchronous / poll paths where no mid-flight id fires.
             lastResponseId = envelope.id ?? lastResponseId

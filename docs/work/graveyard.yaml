@@ -94,6 +94,9 @@
 2026-08-18-cut-proposit-core-v4-1-0:
   resolution: done
   resolved: '2026-09-02'
+2026-08-18-expose-an-ontextdelta-token-streaming-callback-through-executeturn:
+  resolution: done
+  resolved: '2026-10-02'
 2026-08-18-link-the-patchexpressionappfields-item-to-its-epic-and-ship-the-public-engine-api:
   resolution: superseded
   resolved: '2026-09-02'
@@ -118,6 +121,9 @@
 2026-08-28-decompose-premiseengine-into-method-family-seam-files:
   resolution: superseded
   resolved: '2026-09-24'
+2026-09-24-add-an-at-most-one-operator-for-mutually-exclusive-options:
+  resolution: wontfix
+  resolved: '2026-10-02'
 2026-09-24-let-a-social-media-citation-carry-a-username-a-post-title-or-body-a-website-title-and-an-access-date:
   resolution: done
   resolved: '2026-09-24'
@@ -178,6 +184,21 @@
 2026-09-30-clean-up-the-repository-s-structure-and-readability-without-changing-behaviour:
   resolution: done
   resolved: '2026-09-30'
+2026-09-30-give-citation-dates-a-calendar-date-type-with-precision-separate-from-instants:
+  resolution: done
+  resolved: '2026-10-02'
 2026-09-30-ieee-citation-dates-render-a-day-off-outside-utc:
   resolution: done
   resolved: '2026-09-30'
+2026-10-02-add-response-arguments-that-answer-a-pinned-version-of-another-argument-through-links:
+  resolution: done
+  resolved: '2026-10-02'
+2026-10-02-carry-a-reader-s-agreement-with-a-response-argument-into-the-argument-it-answers:
+  resolution: done
+  resolved: '2026-10-02'
+2026-10-02-citation-dates-that-came-through-json-crash-the-ieee-formatter:
+  resolution: done
+  resolved: '2026-10-02'
+2026-10-02-forking-breaks-bindings-into-another-argument:
+  resolution: done
+  resolved: '2026-10-02'

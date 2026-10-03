@@ -3,7 +3,8 @@
 import {
     separator,
     stringField,
-    dateField,
+    yearOrUndated,
+    calendarDateField,
     literal,
     singleAuthorLead,
     whenPresent,
@@ -21,7 +22,7 @@ export const VIDEO_TEMPLATE: TSegmentInstruction[] = [
     stringField("platform", "platform"),
     whenPresent("releaseDate", [
         separator(". "),
-        dateField("releaseDate", "date"),
+        calendarDateField("releaseDate", "date"),
     ]),
     separator(". "),
     ...accessedOn(),
@@ -57,7 +58,7 @@ export const COURSE_TEMPLATE: TSegmentInstruction[] = [
     separator(", "),
     stringField("term", "misc"),
     separator(", "),
-    stringField("year", "year"),
+    yearOrUndated(),
     separator("."),
 ]
 
@@ -72,6 +73,6 @@ export const PRESENTATION_TEMPLATE: TSegmentInstruction[] = [
     separator(", "),
     stringField("location", "location"),
     separator(", "),
-    dateField("date", "date"),
+    calendarDateField("date", "date"),
     separator("."),
 ]

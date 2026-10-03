@@ -3,7 +3,7 @@
 import {
     separator,
     segment,
-    dateField,
+    calendarDateField,
     literal,
     singleAuthorLead,
     whenPresent,
@@ -19,7 +19,7 @@ export const INTERVIEW_TEMPLATE: TSegmentInstruction[] = [
         segment({ kind: "singleAuthor", field: "interviewer" }, "misc"),
     ]),
     separator(", "),
-    dateField("date", "date"),
+    calendarDateField("date", "date"),
     separator("."),
 ]
 
@@ -29,7 +29,7 @@ export const PERSONAL_COMMUNICATION_TEMPLATE: TSegmentInstruction[] = [
     separator(", "),
     literal("personal communication", "misc"),
     separator(", "),
-    dateField("date", "date"),
+    calendarDateField("date", "date"),
     separator("."),
 ]
 
@@ -40,6 +40,6 @@ export const EMAIL_TEMPLATE: TSegmentInstruction[] = [
     literal("email to ", "prefix"),
     segment({ kind: "singleAuthor", field: "recipient" }, "misc"),
     separator(", "),
-    dateField("date", "date"),
+    calendarDateField("date", "date"),
     separator("."),
 ]

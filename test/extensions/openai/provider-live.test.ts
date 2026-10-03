@@ -14,12 +14,19 @@
 //       round-trips a structured output and returns populated token usage.
 //   (b) Background mode — submit-then-poll completes against the live
 //       Responses API and delivers a schema-valid result.
+//   (c) Text deltas — the foreground stream passes each chunk of output
+//       text to `onTextDelta`, and the chunks joined in order are the
+//       output; the response id arrives before the call resolves.
+//   (d) The same chunks reach an `executeTurn` caller as
+//       `stage:llm-text-delta` events.
 
 import { describe, it, expect } from "vitest"
 import Type from "typebox"
 import type { Static } from "typebox"
 import { Value } from "typebox/value"
 import { createOpenAiResponsesProvider } from "../../../src/extensions/openai/index.js"
+import { executeTurn, llmStage } from "../../../src/lib/index.js"
+import type { TPipelineEvent } from "../../../src/lib/index.js"
 
 const MODEL = process.env.OPENAI_LIVE_MODEL ?? "gpt-5.4"
 const optInEnabled = process.env.RUN_LIVE_LLM_TESTS === "1"
@@ -118,6 +125,88 @@ describeIf(
                 expect(Array.isArray(result.output.keyPoints)).toBe(true)
                 expect(result.tokenUsage.input).toBeGreaterThan(0)
                 expect(result.tokenUsage.output).toBeGreaterThan(0)
+            }
+        )
+
+        // (c) Text deltas --------------------------------------------------
+
+        it(
+            "(c) foreground SSE — text deltas arrive and, joined in order, are the output",
+            { timeout: 120_000 },
+            async () => {
+                const provider = createOpenAiResponsesProvider({ apiKey })
+                const Schema = Type.Object({ capital: Type.String() })
+                const deltas: string[] = []
+                let idBeforeResolve: string | undefined
+                let resolved = false
+
+                const result = await provider
+                    .respond<Static<typeof Schema>>({
+                        model: MODEL,
+                        systemPrompt:
+                            "You answer with strict JSON matching the schema. No prose.",
+                        userMessage: "What is the capital of Italy?",
+                        outputSchema: Schema,
+                        onTextDelta: (text) => deltas.push(text),
+                        onResponseCreated: (id) => {
+                            if (!resolved) idBeforeResolve = id
+                        },
+                    })
+                    .then((r) => {
+                        resolved = true
+                        return r
+                    })
+
+                expect(deltas.length).toBeGreaterThan(0)
+                expect(JSON.parse(deltas.join(""))).toEqual(result.output)
+                expect(idBeforeResolve).toBe(result.rawResponseId)
+            }
+        )
+
+        // (d) Text deltas through executeTurn ------------------------------
+
+        it(
+            "(d) executeTurn — stage:llm-text-delta events carry the stage's output text",
+            { timeout: 120_000 },
+            async () => {
+                const Schema = Type.Object({ capital: Type.String() })
+                const stage = llmStage<Static<typeof Schema>>({
+                    id: "capital",
+                    dependsOn: [],
+                    outputSchema: Schema,
+                    model: MODEL,
+                    buildPrompt: () => ({
+                        system: "You answer with strict JSON matching the schema. No prose.",
+                        user: "What is the capital of Spain?",
+                    }),
+                })
+                const events: TPipelineEvent[] = []
+
+                const result = await executeTurn(
+                    stage,
+                    { userMessage: "What is the capital of Spain?" },
+                    {
+                        llm: createOpenAiResponsesProvider({ apiKey }),
+                        onEvent: (e) => events.push(e),
+                    }
+                )
+
+                const deltas = events.flatMap((e) =>
+                    e.kind === "stage:llm-text-delta" ? [e] : []
+                )
+                expect(deltas.length).toBeGreaterThan(0)
+                expect(deltas.every((e) => e.stageId === "capital")).toBe(true)
+                expect(deltas.every((e) => e.attempt === 1)).toBe(true)
+                expect(JSON.parse(deltas.map((e) => e.delta).join(""))).toEqual(
+                    result.output
+                )
+                const kinds = events.map((e) => e.kind)
+                expect(kinds.indexOf("stage:llm-text-delta")).toBeGreaterThan(
+                    kinds.indexOf("stage:llm-request")
+                )
+                expect(kinds.lastIndexOf("stage:llm-text-delta")).toBeLessThan(
+                    kinds.indexOf("stage:llm-call")
+                )
             }
         )
     }

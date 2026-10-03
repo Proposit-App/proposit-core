@@ -1174,6 +1174,33 @@ describe("forking an argument bound into another argument", () => {
         expect(variable.boundArgumentVersion).toBe(2)
     })
 
+    it("forkArgumentEngine moves a binding into this argument onto the fork", () => {
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
+        eng.createPremiseWithId("p-local")
+        eng.bindVariableToPremise({
+            id: "v-int",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            symbol: "Int",
+            boundPremiseId: "p-local",
+            boundArgumentId: ARG.id,
+            boundArgumentVersion: ARG.version,
+        } as TPremiseBoundVariable)
+
+        const { engine: forked, remapTable } = forkArgumentEngine(
+            eng,
+            "forked-arg",
+            { claimLibrary: aLib() }
+        )
+
+        const variable = forked.getVariable(
+            remapTable.variables.get("v-int")!
+        ) as unknown as TPremiseBoundVariable
+        expect(variable.boundPremiseId).toBe(remapTable.premises.get("p-local"))
+        expect(variable.boundArgumentId).toBe("forked-arg")
+        expect(variable.boundArgumentVersion).toBe(0)
+    })
+
     it("PropositCore.forkArgument succeeds on an argument holding the binding", () => {
         const core = new PropositCore()
         const arg = { id: crypto.randomUUID(), version: 0 }

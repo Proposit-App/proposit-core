@@ -4,7 +4,8 @@ import {
     separator,
     segment,
     stringField,
-    dateField,
+    yearOrUndated,
+    calendarDateField,
     literal,
     authorsLead,
     whenPresent,
@@ -28,7 +29,7 @@ export const BOOK_TEMPLATE: TSegmentInstruction[] = [
     separator(": "),
     stringField("publisher", "publisher"),
     separator(", "),
-    stringField("year", "year"),
+    yearOrUndated(),
     separator("."),
     isbnIfPresent(" "),
 ]
@@ -67,7 +68,7 @@ export const BOOK_CHAPTER_TEMPLATE: TSegmentInstruction[] = [
     separator(": "),
     stringField("publisher", "publisher"),
     separator(", "),
-    stringField("year", "year"),
+    yearOrUndated(),
     whenPresent("pages", [
         separator(", "),
         literal("pp. ", "prefix"),
@@ -86,7 +87,7 @@ export const HANDBOOK_TEMPLATE: TSegmentInstruction[] = [
     separator(": "),
     stringField("publisher", "publisher"),
     separator(", "),
-    stringField("year", "year"),
+    yearOrUndated(),
     separator("."),
     isbnIfPresent(" "),
 ]
@@ -104,7 +105,7 @@ export const TECHNICAL_REPORT_TEMPLATE: TSegmentInstruction[] = [
     literal("Rep. ", "prefix"),
     stringField("reportNumber", "reportNumber"),
     separator(", "),
-    stringField("year", "year"),
+    yearOrUndated(),
     separator("."),
 ]
 
@@ -116,7 +117,7 @@ export const STANDARD_TEMPLATE: TSegmentInstruction[] = [
     separator(", "),
     stringField("organization", "organization"),
     separator(", "),
-    dateField("date", "date"),
+    calendarDateField("date", "date"),
     separator("."),
 ]
 
@@ -133,7 +134,7 @@ export const THESIS_TEMPLATE: TSegmentInstruction[] = [
     separator(", "),
     stringField("location", "location"),
     separator(", "),
-    stringField("year", "year"),
+    yearOrUndated(),
     separator("."),
 ]
 
@@ -147,7 +148,7 @@ export const PATENT_TEMPLATE: TSegmentInstruction[] = [
     literal(" Patent ", "prefix"),
     stringField("patentNumber", "patentNumber"),
     separator(", "),
-    dateField("date", "date"),
+    calendarDateField("date", "date"),
     separator("."),
 ]
 
@@ -158,7 +159,7 @@ export const DICTIONARY_TEMPLATE: TSegmentInstruction[] = [
     stringField("publisher", "publisher"),
     editionIfPresent(),
     separator(", "),
-    stringField("year", "year"),
+    yearOrUndated(),
     separator("."),
 ]
 
@@ -169,6 +170,6 @@ export const ENCYCLOPEDIA_TEMPLATE: TSegmentInstruction[] = [
     stringField("publisher", "publisher"),
     editionIfPresent(),
     separator(", "),
-    stringField("year", "year"),
+    yearOrUndated(),
     separator("."),
 ]

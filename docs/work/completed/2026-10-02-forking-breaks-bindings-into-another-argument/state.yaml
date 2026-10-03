@@ -1,0 +1,11 @@
+slug: 2026-10-02-forking-breaks-bindings-into-another-argument
+title: Forking breaks bindings into another argument
+created: '2026-10-02'
+resolution: done
+priority: 50
+effort: low
+complexity: low
+tags:
+- bug
+owner: ''
+started: ''

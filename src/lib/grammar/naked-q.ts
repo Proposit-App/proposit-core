@@ -35,6 +35,18 @@ import type {
 } from "../schemata/index.js"
 
 /**
+ * Return `true` iff a premise's expressions are exactly one expression, of
+ * type `variable` (one expression is necessarily the root). The shape test
+ * both predicates below share, for callers that hold a premise's expressions
+ * rather than its engine, such as one read from a snapshot.
+ */
+export function isNakedQExpressionList(
+    expressions: readonly TCorePropositionalExpression[]
+): boolean {
+    return expressions.length === 1 && expressions[0].type === "variable"
+}
+
+/**
  * Return `true` iff `pe`'s expression tree is exactly one expression at
  * the root and that expression is of type `variable`. Does NOT inspect
  * the premise type — caller is responsible for any `type === 'derivation'`
@@ -48,11 +60,7 @@ export function isNakedQTree<
     TExpr extends TCorePropositionalExpression,
     TVar extends TCorePropositionalVariable,
 >(pe: PremiseEngine<TArg, TPremise, TExpr, TVar>): boolean {
-    const exprs = pe.getExpressions()
-    if (exprs.length !== 1) return false
-    const root = pe.getRootExpression()
-    if (root === undefined) return false
-    return root.type === "variable"
+    return isNakedQExpressionList(pe.getExpressions())
 }
 
 /**

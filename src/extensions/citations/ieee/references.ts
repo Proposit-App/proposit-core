@@ -3,6 +3,18 @@
 
 import Type, { type Static, type TSchema } from "typebox"
 import { EncodableDate } from "../../../lib/schemata/shared.js"
+import {
+    CalendarDate,
+    calendarDateType,
+} from "../../../lib/schemata/calendar-date.js"
+
+// The publication date of a source dated by year. Absent when the source is
+// undated, which the citation shows as "(n.d.)", as IEEE's Reference Guide
+// asks.
+const YearDate = calendarDateType({
+    description:
+        'Publication date as written: a year, a year and month, or a full day (ISO 8601: "1787", "1787-11", "1787-11-22"). Absent when the source is undated.',
+})
 
 // ---------------------------------------------------------------------------
 // Reference type discriminator
@@ -160,10 +172,7 @@ export const BookReferenceSchema = Type.Intersect([
     Type.Object({
         type: Type.Literal("Book"),
         title: Type.String({ minLength: 1, description: "Book title" }),
-        year: Type.String({
-            pattern: "^\\d{4}$",
-            description: "Four-digit publication year",
-        }),
+        year: Type.Optional(YearDate),
         authors: Type.Array(AuthorSchema, {
             minItems: 1,
             description: "Author names",
@@ -225,10 +234,7 @@ export const BookChapterReferenceSchema = Type.Intersect([
             minLength: 1,
             description: "Chapter title",
         }),
-        year: Type.String({
-            pattern: "^\\d{4}$",
-            description: "Four-digit publication year",
-        }),
+        year: Type.Optional(YearDate),
         authors: Type.Array(AuthorSchema, {
             minItems: 1,
             description: "Chapter author names",
@@ -271,10 +277,7 @@ export const HandbookReferenceSchema = Type.Intersect([
             minLength: 1,
             description: "Handbook title",
         }),
-        year: Type.String({
-            pattern: "^\\d{4}$",
-            description: "Four-digit publication year",
-        }),
+        year: Type.Optional(YearDate),
         publisher: Type.String({
             minLength: 1,
             description: "Publisher name",
@@ -304,10 +307,7 @@ export const TechnicalReportReferenceSchema = Type.Intersect([
             minLength: 1,
             description: "Report title",
         }),
-        year: Type.String({
-            pattern: "^\\d{4}$",
-            description: "Four-digit publication year",
-        }),
+        year: Type.Optional(YearDate),
         authors: Type.Array(AuthorSchema, {
             minItems: 1,
             description: "Author names",
@@ -346,7 +346,7 @@ export const StandardReferenceSchema = Type.Intersect([
             minLength: 1,
             description: "Standard title",
         }),
-        date: EncodableDate,
+        date: CalendarDate,
     }),
 ])
 export type TStandardReference = Static<typeof StandardReferenceSchema>
@@ -359,10 +359,7 @@ export const ThesisReferenceSchema = Type.Intersect([
             minLength: 1,
             description: "Thesis title",
         }),
-        year: Type.String({
-            pattern: "^\\d{4}$",
-            description: "Four-digit publication year",
-        }),
+        year: Type.Optional(YearDate),
         authors: Type.Array(AuthorSchema, {
             minItems: 1,
             description: "Author names",
@@ -403,7 +400,7 @@ export const PatentReferenceSchema = Type.Intersect([
             minLength: 1,
             description: "Patent number",
         }),
-        date: EncodableDate,
+        date: CalendarDate,
     }),
 ])
 export type TPatentReference = Static<typeof PatentReferenceSchema>
@@ -416,10 +413,7 @@ export const DictionaryReferenceSchema = Type.Intersect([
             minLength: 1,
             description: "Entry title",
         }),
-        year: Type.String({
-            pattern: "^\\d{4}$",
-            description: "Four-digit publication year",
-        }),
+        year: Type.Optional(YearDate),
         publisher: Type.String({
             minLength: 1,
             description: "Publisher name",
@@ -439,10 +433,7 @@ export const EncyclopediaReferenceSchema = Type.Intersect([
             minLength: 1,
             description: "Entry title",
         }),
-        year: Type.String({
-            pattern: "^\\d{4}$",
-            description: "Four-digit publication year",
-        }),
+        year: Type.Optional(YearDate),
         publisher: Type.String({
             minLength: 1,
             description: "Publisher name",
@@ -465,10 +456,7 @@ export const JournalArticleReferenceSchema = Type.Intersect([
             minLength: 1,
             description: "Article title",
         }),
-        year: Type.String({
-            pattern: "^\\d{4}$",
-            description: "Four-digit publication year",
-        }),
+        year: Type.Optional(YearDate),
         authors: Type.Array(AuthorSchema, {
             minItems: 1,
             description: "Author names",
@@ -506,10 +494,7 @@ export const MagazineArticleReferenceSchema = Type.Intersect([
             minLength: 1,
             description: "Article title",
         }),
-        year: Type.String({
-            pattern: "^\\d{4}$",
-            description: "Four-digit publication year",
-        }),
+        year: Type.Optional(YearDate),
         authors: Type.Array(AuthorSchema, {
             minItems: 1,
             description: "Author names",
@@ -549,7 +534,7 @@ export const NewspaperArticleReferenceSchema = Type.Intersect([
             minLength: 1,
             description: "Newspaper title",
         }),
-        date: EncodableDate,
+        date: CalendarDate,
         pages: Type.Optional(
             Type.String({ minLength: 1, description: "Page range" })
         ),
@@ -582,7 +567,7 @@ export const ConferencePaperReferenceSchema = Type.Intersect([
             minLength: 1,
             description: "Conference location",
         }),
-        date: EncodableDate,
+        date: CalendarDate,
         pages: Type.Optional(
             Type.String({ minLength: 1, description: "Page range" })
         ),
@@ -615,7 +600,7 @@ export const ConferenceProceedingsReferenceSchema = Type.Intersect([
             minLength: 1,
             description: "Conference location",
         }),
-        date: EncodableDate,
+        date: CalendarDate,
         publisher: Type.String({
             minLength: 1,
             description: "Publisher name",
@@ -643,10 +628,7 @@ export const DatasetReferenceSchema = Type.Intersect([
             minLength: 1,
             description: "Dataset title",
         }),
-        year: Type.String({
-            pattern: "^\\d{4}$",
-            description: "Four-digit publication year",
-        }),
+        year: Type.Optional(YearDate),
         authors: Type.Optional(
             Type.Array(AuthorSchema, {
                 description: "Author names",
@@ -682,10 +664,7 @@ export const SoftwareReferenceSchema = Type.Intersect([
             minLength: 1,
             description: "Software title",
         }),
-        year: Type.String({
-            pattern: "^\\d{4}$",
-            description: "Four-digit publication year",
-        }),
+        year: Type.Optional(YearDate),
         authors: Type.Optional(
             Type.Array(AuthorSchema, {
                 description: "Author names",
@@ -753,7 +732,7 @@ export const BlogReferenceSchema = Type.Intersect([
             minLength: 1,
             description: "Blog name",
         }),
-        date: EncodableDate,
+        date: CalendarDate,
         url: Type.String({
             format: "uri",
             minLength: 1,
@@ -803,7 +782,7 @@ export const SocialMediaReferenceSchema = Type.Intersect([
             minLength: 1,
             description: "Social media platform name",
         }),
-        postDate: EncodableDate,
+        postDate: CalendarDate,
         url: Type.String({
             format: "uri",
             minLength: 1,
@@ -822,10 +801,7 @@ export const PreprintReferenceSchema = Type.Intersect([
             minLength: 1,
             description: "Paper title",
         }),
-        year: Type.String({
-            pattern: "^\\d{4}$",
-            description: "Four-digit publication year",
-        }),
+        year: Type.Optional(YearDate),
         authors: Type.Array(AuthorSchema, {
             minItems: 1,
             description: "Author names",
@@ -865,7 +841,7 @@ export const VideoReferenceSchema = Type.Intersect([
                 description: "Author or creator names",
             })
         ),
-        releaseDate: Type.Optional(EncodableDate),
+        releaseDate: Type.Optional(CalendarDate),
         platform: Type.String({
             minLength: 1,
             description: "Video hosting platform",
@@ -919,10 +895,7 @@ export const CourseReferenceSchema = Type.Intersect([
             minLength: 1,
             description: "Course title",
         }),
-        year: Type.String({
-            pattern: "^\\d{4}$",
-            description: "Four-digit publication year",
-        }),
+        year: Type.Optional(YearDate),
         instructor: AuthorSchema,
         institution: Type.String({
             minLength: 1,
@@ -956,7 +929,7 @@ export const PresentationReferenceSchema = Type.Intersect([
             minLength: 1,
             description: "Event location",
         }),
-        date: EncodableDate,
+        date: CalendarDate,
     }),
 ])
 export type TPresentationReference = Static<typeof PresentationReferenceSchema>
@@ -970,7 +943,7 @@ export const InterviewReferenceSchema = Type.Intersect([
         type: Type.Literal("Interview"),
         interviewee: AuthorSchema,
         interviewer: Type.Optional(AuthorSchema),
-        date: EncodableDate,
+        date: CalendarDate,
     }),
 ])
 export type TInterviewReference = Static<typeof InterviewReferenceSchema>
@@ -980,7 +953,7 @@ export const PersonalCommunicationReferenceSchema = Type.Intersect([
     Type.Object({
         type: Type.Literal("PersonalCommunication"),
         person: AuthorSchema,
-        date: EncodableDate,
+        date: CalendarDate,
     }),
 ])
 export type TPersonalCommunicationReference = Static<
@@ -993,7 +966,7 @@ export const EmailReferenceSchema = Type.Intersect([
         type: Type.Literal("Email"),
         sender: AuthorSchema,
         recipient: AuthorSchema,
-        date: EncodableDate,
+        date: CalendarDate,
     }),
 ])
 export type TEmailReference = Static<typeof EmailReferenceSchema>
@@ -1013,7 +986,7 @@ export const LawReferenceSchema = Type.Intersect([
             minLength: 1,
             description: "Jurisdiction",
         }),
-        dateEnacted: EncodableDate,
+        dateEnacted: CalendarDate,
     }),
 ])
 export type TLawReference = Static<typeof LawReferenceSchema>
@@ -1030,7 +1003,7 @@ export const CourtCaseReferenceSchema = Type.Intersect([
             minLength: 1,
             description: "Court name",
         }),
-        date: EncodableDate,
+        date: CalendarDate,
         reporter: Type.Optional(
             Type.String({ minLength: 1, description: "Reporter citation" })
         ),
@@ -1046,7 +1019,7 @@ export const GovernmentPublicationReferenceSchema = Type.Intersect([
             minLength: 1,
             description: "Publication title",
         }),
-        date: EncodableDate,
+        date: CalendarDate,
         authors: Type.Optional(
             Type.Array(AuthorSchema, {
                 description: "Author names",
@@ -1083,10 +1056,7 @@ export const DatasheetReferenceSchema = Type.Intersect([
             minLength: 1,
             description: "Datasheet title",
         }),
-        year: Type.String({
-            pattern: "^\\d{4}$",
-            description: "Four-digit publication year",
-        }),
+        year: Type.Optional(YearDate),
         manufacturer: Type.String({
             minLength: 1,
             description: "Manufacturer name",
@@ -1112,10 +1082,7 @@ export const ProductManualReferenceSchema = Type.Intersect([
             minLength: 1,
             description: "Manual title",
         }),
-        year: Type.String({
-            pattern: "^\\d{4}$",
-            description: "Four-digit publication year",
-        }),
+        year: Type.Optional(YearDate),
         manufacturer: Type.String({
             minLength: 1,
             description: "Manufacturer name",

@@ -1,0 +1,1 @@
+Turning a reader's agreement with a response's links into input for the argument it answers, one step along a chain of answers, carrying only what each link says exactly and reporting the rest with a reason (ArgumentEngine.carryAnswers, mergeCarriedInput).

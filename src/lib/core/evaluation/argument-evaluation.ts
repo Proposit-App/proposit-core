@@ -45,6 +45,12 @@ export { closeUnderAcceptedOperators, propagateOperatorConstraints }
 export interface TArgumentEvaluationContext {
     /** The argument's own ID. */
     argumentId: string
+    /**
+     * Whether the argument is a response. A response has no conclusion and is
+     * not evaluated against one, so evaluation and the validity check refuse
+     * it with `ARGUMENT_IS_RESPONSE`. Absent means a standard argument.
+     */
+    isResponse?: boolean
     /** Returns the conclusion PremiseEngine, or undefined. */
     getConclusionPremise(): TEvaluablePremise | undefined
     /** Returns supporting premises (inference premises minus conclusion). */
@@ -178,6 +184,26 @@ export function evaluateSubtree(
 }
 
 /**
+ * The refusal both evaluation and the validity check give a response: it has
+ * no conclusion to evaluate against.
+ */
+function responseRefusal(): {
+    ok: false
+    validation: TCoreValidationResult
+} {
+    return {
+        ok: false,
+        validation: makeValidationResult([
+            makeErrorIssue({
+                code: "ARGUMENT_IS_RESPONSE",
+                message:
+                    "A response argument has no conclusion and is not evaluated against one; check its links with checkLink and checkResponseCoherent.",
+            }),
+        ]),
+    }
+}
+
+/**
  * Evaluates an argument under a three-valued expression assignment.
  */
 export function evaluateArgument(
@@ -185,6 +211,7 @@ export function evaluateArgument(
     assignment: TCoreExpressionAssignment,
     options?: TCoreArgumentEvaluationOptions
 ): TCoreArgumentEvaluationResult {
+    if (ctx.isResponse === true) return responseRefusal()
     const validateFirst = options?.validateFirst ?? true
     if (validateFirst) {
         const validation = ctx.validateEvaluability()
@@ -235,6 +262,27 @@ export function evaluateArgument(
         ),
     ].sort()
 
+    // A key is unknown only when no evaluated premise names it. Checking each
+    // premise against its own variables instead would reject every reader who
+    // assigns variables in two different premises.
+    if (options?.strictUnknownAssignmentKeys === true) {
+        const knownVariableIds = new Set(allVariableIds)
+        const unknownKeys = Object.keys(assignment.variables)
+            .filter((variableId) => !knownVariableIds.has(variableId))
+            .sort()
+        if (unknownKeys.length > 0) {
+            return {
+                ok: false,
+                validation: makeValidationResult([
+                    makeErrorIssue({
+                        code: "ASSIGNMENT_UNKNOWN_VARIABLE",
+                        message: `Assignment contains variable IDs no evaluated premise references: ${unknownKeys.join(", ")}`,
+                    }),
+                ]),
+            }
+        }
+    }
+
     // Claim-bound and externally-bound premise variables get truth-table columns;
     // internally-bound premise variables are resolved lazily.
     const referencedVariableIds = allVariableIds.filter((vid) => {
@@ -266,6 +314,27 @@ export function evaluateArgument(
         )
         .map((pm) => pm.getId())
     const struckIds = new Set(struckPremiseIds)
+
+    // A rejection of the conclusion premise's root step withholds the final
+    // inference. It is reported here and nowhere else: the conclusion premise
+    // is not struck and every aggregate keeps its value, because an operator
+    // decision is never a truth value. A rejection of a nested operator in the
+    // conclusion premise stays ignored. Formula (parenthesis) nodes at the
+    // root are looked through, so the step is the first expression below them.
+    const conclusionExpressions = conclusion.getExpressions()
+    let conclusionRoot = conclusionExpressions.find(
+        (expr) => expr.parentId === null
+    )
+    while (conclusionRoot?.type === "formula") {
+        const formulaId = conclusionRoot.id
+        conclusionRoot = conclusionExpressions.find(
+            (expr) => expr.parentId === formulaId
+        )
+    }
+    const conclusionRootId = conclusionRoot?.id
+    const conclusionInferenceRejected =
+        conclusionRootId !== undefined &&
+        assignment.operatorAssignments[conclusionRootId] === "rejected"
 
     try {
         const premiseSetSatisfiable =
@@ -302,7 +371,7 @@ export function evaluateArgument(
         const resolver = createPremiseBoundResolver(ctx, propagatedAssignment)
 
         const evalOpts = {
-            strictUnknownKeys: options?.strictUnknownAssignmentKeys ?? false,
+            strictUnknownKeys: false,
             resolver,
         }
         const conclusionEvaluation = conclusion.evaluate(
@@ -508,6 +577,9 @@ export function evaluateArgument(
             supportingPremises: supportingEvaluations.map(strip),
             constraintPremises: constraintEvaluations.map(strip),
             struckPremiseIds,
+            ...(conclusionInferenceRejected
+                ? { conclusionInferenceRejected: true as const }
+                : {}),
             survivingSupportingPremiseCount: survivingSupport.length,
             isAdmissibleAssignment,
             survivingSupportingPremisesTrue,
@@ -549,6 +621,7 @@ export function checkArgumentValidity(
     ctx: TArgumentEvaluationContext,
     options?: TCoreValidityCheckOptions
 ): TCoreValidityCheckResult {
+    if (ctx.isResponse === true) return responseRefusal()
     const validateFirst = options?.validateFirst ?? true
     if (validateFirst) {
         const validation = ctx.validateEvaluability()

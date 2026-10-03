@@ -1,0 +1,8 @@
+slug: 2026-10-02-let-a-reader-hold-a-whole-premise-true-or-false-during-evaluation
+title: Let a reader hold a whole premise true or false during evaluation
+created: '2026-10-02'
+resolution: null
+effort: medium
+complexity: high
+blocked_by:
+- slug: 2026-10-02-carry-a-reader-s-agreement-with-a-response-argument-into-the-argument-it-answers

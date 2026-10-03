@@ -1,9 +1,13 @@
 import {
     isClaimBound,
+    isExpressionBound,
     isPremiseBound,
     type TClaimBoundVariable,
     type TPremiseBoundVariable,
+    type TExpressionBoundVariable,
+    type TBoundAspect,
     type TCoreArgument,
+    type TCoreArgumentReference,
     type TCoreClaim,
     type TCoreDerivationPremise,
     type TCorePremise,
@@ -11,6 +15,23 @@ import {
     type TCorePropositionalVariable,
     type TOptionalChecksum,
 } from "../schemata/index.js"
+import {
+    checkLink as checkLinkStandalone,
+    checkResponseCoherent as checkResponseCoherentStandalone,
+    type TResponseCheckInput,
+} from "./response/check.js"
+import { listLinks, readLink, validateLinks } from "./response/links.js"
+import { carryAnswers as carryAnswersStandalone } from "./response/carry.js"
+import {
+    assertRebased,
+    linkFaultKeys,
+    resolveRebase,
+    type TClassifyBindingsOptions,
+} from "./response/rebase.js"
+import type {
+    TBindingClassificationResult,
+    TRebaseDecisions,
+} from "../types/response.js"
 import type {
     TCoreArgumentEvaluationOptions,
     TCoreArgumentEvaluationResult,
@@ -19,8 +40,17 @@ import type {
     TCoreValidationResult,
     TCoreValidityCheckOptions,
     TCoreValidityCheckResult,
+    TCoreOperatorAssignment,
     TCoreVariableAssignment,
 } from "../types/evaluation.js"
+import type {
+    TLinkCheckResult,
+    TCarryAnswersOptions,
+    TCarryResult,
+    TLinkAnswer,
+    TLinkViolation,
+    TResponseCoherenceResult,
+} from "../types/response.js"
 import type { TCoreChecksumConfig } from "../types/checksum.js"
 import type { TCorePositionConfig } from "../utils/position.js"
 import type { TInvariantValidationResult } from "../types/validation.js"
@@ -28,12 +58,14 @@ import {
     CLAIM_NOT_FOUND,
     CREATE_DERIVATION_CLAIM_NOT_FOUND,
     CREATE_DERIVATION_REQUIRES_DERIVED_CLAIM_ID,
+    VAR_BINDING_AMBIGUOUS,
 } from "../types/validation.js"
 import { validateDerivationStructure } from "../grammar/derivation-validation.js"
 import { withoutUndefinedValues } from "../utils/collections.js"
 import {
     DEFAULT_CHECKSUM_CONFIG,
     normalizeChecksumConfig,
+    resolveChecksumFields,
     serializeChecksumConfig,
 } from "../checksum-config.js"
 import type { TCoreMutationResult, TCoreChangeset } from "../types/mutation.js"
@@ -158,6 +190,33 @@ export type TArgumentEngineSnapshot<
 }
 
 /**
+ * Refuses stored variables carrying more than one kind of reference — a
+ * claim, a premise, an expression. Each load path restores one kind at a
+ * time, so such a variable would otherwise be added twice and fail with a
+ * message about a duplicate symbol rather than about its shape.
+ */
+function assertOneReferenceKind(
+    variables: readonly TCorePropositionalVariable[]
+): void {
+    const violations = variables
+        .filter(
+            (v) =>
+                [
+                    isClaimBound(v),
+                    isPremiseBound(v),
+                    isExpressionBound(v),
+                ].filter(Boolean).length > 1
+        )
+        .map((v) => ({
+            code: VAR_BINDING_AMBIGUOUS,
+            message: `Variable "${v.id}" has more than one kind of reference.`,
+            entityType: "variable" as const,
+            entityId: v.id,
+        }))
+    if (violations.length > 0) throw new InvariantViolationError(violations)
+}
+
+/**
  * Manages a propositional logic argument composed of premises, variable
  * assignments, and logical roles (supporting premises and a conclusion).
  *
@@ -235,7 +294,19 @@ export class ArgumentEngine<
         options?: TLogicEngineOptions
     ) {
         super()
-        this.argument = { ...argument }
+        const respondsTo = (argument as Record<string, unknown>).respondsTo as
+            | TCoreArgumentReference
+            | undefined
+        if (respondsTo?.argumentId === argument.id) {
+            throw new Error(
+                `Argument "${argument.id}" cannot respond to itself.`
+            )
+        }
+        // `respondsTo` is the engine's own, so it is copied in, and every
+        // read hands out a copy (`withOwnRespondsTo`): a caller mutating the
+        // object it built the engine from, or one it read back, must not
+        // re-point the response past `setExtras` and `rebaseResponse`.
+        this.argument = withOwnRespondsTo({ ...argument })
         this.claimLibrary = claimLibrary
         this.premises = new Map()
         this.checksumConfig = options?.checksumConfig
@@ -292,9 +363,11 @@ export class ArgumentEngine<
                 !isPremiseBound(v as unknown as TCorePropositionalVariable)
             )
                 return false
-            const boundPremise = this.premises.get(
-                (v as TPremiseBoundVariable).boundPremiseId
-            )
+            const bound = v as TPremiseBoundVariable
+            // A premise in another argument is not held here, and a local
+            // premise that shares its id is a different premise.
+            if (bound.boundArgumentId !== this.argument.id) return false
+            const boundPremise = this.premises.get(bound.boundPremiseId)
             return !boundPremise?.getRootExpressionId()
         })
     }
@@ -705,7 +778,7 @@ export class ArgumentEngine<
     public getArgument(): TArg {
         this.flushChecksums()
         return {
-            ...this.argument,
+            ...withOwnRespondsTo(this.argument),
             checksum: this.cachedMetaChecksum!,
             descendantChecksum: this.cachedDescendantChecksum!,
             combinedChecksum: this.cachedCombinedChecksum!,
@@ -719,6 +792,7 @@ export class ArgumentEngine<
             checksum: _checksum,
             descendantChecksum: _descendantChecksum,
             combinedChecksum: _combinedChecksum,
+            respondsTo: _respondsTo,
             ...extras
         } = this.argument as Record<string, unknown>
         return { ...extras }
@@ -733,12 +807,28 @@ export class ArgumentEngine<
         TPremise,
         TArg
     > {
-        const { id, version, checksum, descendantChecksum, combinedChecksum } =
-            this.argument as Record<string, unknown>
+        // `respondsTo` is the engine's, like the id and version: an extras
+        // update must neither drop it, which would turn a response into a
+        // standard argument, nor add it, which would skip every guard a
+        // response is built under.
+        if ("respondsTo" in extras) {
+            throw new Error(
+                "respondsTo cannot be set through extras; it is fixed when the engine is built and changed only by rebasing a response."
+            )
+        }
+        const {
+            id,
+            version,
+            checksum,
+            descendantChecksum,
+            combinedChecksum,
+            respondsTo,
+        } = this.argument as Record<string, unknown>
         this.argument = {
             ...withoutUndefinedValues(extras),
             id,
             version,
+            ...(respondsTo !== undefined ? { respondsTo } : {}),
             ...(checksum !== undefined ? { checksum } : {}),
             ...(descendantChecksum !== undefined ? { descendantChecksum } : {}),
             ...(combinedChecksum !== undefined ? { combinedChecksum } : {}),
@@ -952,7 +1042,9 @@ export class ArgumentEngine<
             collector.addedPremise(pm.toPremiseData())
             this.markDirty()
 
-            if (this.conclusionPremiseId === undefined) {
+            // A response has no conclusion, so its first premise is not made
+            // one.
+            if (this.conclusionPremiseId === undefined && !this.isResponse()) {
                 this.conclusionPremiseId = id
                 collector.setRoles(this.getRoleState())
             }
@@ -1067,7 +1159,8 @@ export class ArgumentEngine<
                 const remainingIds = Array.from(this.premises.keys()).sort(
                     (a, b) => a.localeCompare(b)
                 )
-                if (remainingIds.length > 0) {
+                // A response promotes nothing: it has no conclusion to keep.
+                if (remainingIds.length > 0 && !this.isResponse()) {
                     this.conclusionPremiseId = remainingIds[0]
                 } else {
                     this.conclusionPremiseId = undefined
@@ -1299,6 +1392,219 @@ export class ArgumentEngine<
         })
     }
 
+    /**
+     * Adds an expression-bound variable to a response: a variable that stands
+     * for one expression of the argument the response answers, either its
+     * truth (`boundAspect: "statement"`) or whether its step holds
+     * (`"inference"`). Only a response may hold one, and it binds only into
+     * the argument and version named by `respondsTo`. A variable with the same
+     * referent — the same expression and aspect — is returned instead of a
+     * second one being added.
+     */
+    public bindVariableToExpression(
+        variable: TOptionalChecksum<TExpressionBoundVariable> &
+            Record<string, unknown>
+    ): TCoreMutationResult<TVar, TExpr, TVar, TPremise, TArg> {
+        return this.withValidation(() => {
+            this.assertVariableInThisArgument(variable)
+            const respondsTo = this.getRespondsTo()
+            if (respondsTo === undefined) {
+                throw new Error(
+                    `Argument "${this.argument.id}" is not a response; only a response binds variables to another argument's expressions.`
+                )
+            }
+            // Loading keeps what was stored, so that rules E-9 and E-10 can
+            // report it: dropping a variable here would leave an expression
+            // already restored pointing at nothing.
+            if (!this.restoringFromSnapshot) {
+                if (
+                    variable.boundArgumentId !== respondsTo.argumentId ||
+                    variable.boundArgumentVersion !== respondsTo.argumentVersion
+                ) {
+                    throw new Error(
+                        `A response binds only into the argument it answers, "${respondsTo.argumentId}" version ${respondsTo.argumentVersion}.`
+                    )
+                }
+                const existing = this.findExpressionBinding(
+                    variable.boundArgumentId,
+                    variable.boundExpressionId,
+                    variable.boundAspect
+                )
+                if (existing !== undefined) {
+                    return { result: existing, changes: {} }
+                }
+            }
+            if (
+                !this.canBind(
+                    variable.boundArgumentId,
+                    variable.boundArgumentVersion
+                )
+            ) {
+                throw new Error(
+                    `Binding to argument "${variable.boundArgumentId}" version ${variable.boundArgumentVersion} is not allowed.`
+                )
+            }
+            return this.addNewVariable(
+                variable as unknown as TOptionalChecksum<TVar>
+            )
+        })
+    }
+
+    /** The argument this response answers, or `undefined` for a standard argument. */
+    public getRespondsTo(): TCoreArgumentReference | undefined {
+        const respondsTo = (this.argument as Record<string, unknown>)
+            .respondsTo as TCoreArgumentReference | null | undefined
+        return respondsTo == null ? undefined : { ...respondsTo }
+    }
+
+    private findExpressionBinding(
+        boundArgumentId: string,
+        boundExpressionId: string,
+        boundAspect: TBoundAspect
+    ): TVar | undefined {
+        return this.variables.toArray().find((v) => {
+            const base = v as unknown as TCorePropositionalVariable
+            return (
+                isExpressionBound(base) &&
+                base.boundArgumentId === boundArgumentId &&
+                base.boundExpressionId === boundExpressionId &&
+                base.boundAspect === boundAspect
+            )
+        })
+    }
+
+    /**
+     * Moves a response to a newer version of the argument it answers.
+     *
+     * The classification is computed again here, as `classifyBindings`
+     * computes it, from `targetFrom`, `targetTo` and `options`. Then:
+     * - `respondsTo` becomes `targetTo`;
+     * - every `unchanged` binding is re-pointed to `targetTo`;
+     * - every `changed` or `removed` binding takes its decision from
+     *   `decisions.bindings`: `keep` re-points it to the same expression,
+     *   `retarget` to another expression of `targetTo` in the same aspect,
+     *   and `drop` removes it with every premise its entry lists;
+     * - the response's claim-bound variables are left alone, whether or not
+     *   either version uses their claims.
+     *
+     * Before returning, it checks that every expression-bound variable is
+     * bound to `targetTo` and names an expression present there, and that
+     * `validateLinks` against `targetTo` reports no fault, by code, variable
+     * and expression, that it did not report before. Any failure undoes the
+     * whole rebase. The changeset holds the argument with its new
+     * `respondsTo` and every variable re-pointed, added or removed.
+     *
+     * @returns The classification the rebase acted on.
+     * @throws When this argument is not a response, or the snapshots are not
+     * versions of the argument it answers; when `canBind` refuses `targetTo`;
+     * when a changed or removed binding has no decision, or a decision names
+     * a variable needing none; when a removed binding is kept; when a
+     * retarget names an expression absent from `targetTo`; when a keep or
+     * retarget would bind an expression another variable already binds in
+     * the same aspect; or when the check above fails.
+     */
+    public rebaseResponse(
+        targetFrom: TArgumentEngineSnapshot,
+        targetTo: TArgumentEngineSnapshot,
+        decisions: TRebaseDecisions,
+        options: TClassifyBindingsOptions = {}
+    ): TCoreMutationResult<
+        TBindingClassificationResult,
+        TExpr,
+        TVar,
+        TPremise,
+        TArg
+    > {
+        return this.withValidation(() => {
+            const self = this as unknown as ArgumentEngine
+            const toId = targetTo.argument.id
+            const toVersion = targetTo.argument.version
+            if (!this.canBind(toId, toVersion)) {
+                throw new Error(
+                    `Binding to argument "${toId}" version ${toVersion} is not allowed.`
+                )
+            }
+            const resolved = resolveRebase(
+                self,
+                targetFrom,
+                targetTo,
+                decisions,
+                options
+            )
+            const answered = this.getRespondsTo()!
+            const faultsBefore = linkFaultKeys(
+                self,
+                answered.argumentVersion === targetFrom.argument.version
+                    ? targetFrom
+                    : targetTo
+            )
+
+            let changes: TCoreChangeset<TExpr, TVar, TPremise, TArg> = {}
+            for (const premiseId of resolved.dropPremiseIds) {
+                if (!this.premises.has(premiseId)) continue
+                changes = composeChangesets(
+                    changes,
+                    this.removePremise(premiseId).changes
+                )
+            }
+            for (const variableId of resolved.dropVariableIds) {
+                changes = composeChangesets(
+                    changes,
+                    this.removeVariableCore(variableId).changes
+                )
+            }
+
+            this.argument = {
+                ...this.argument,
+                respondsTo: { argumentId: toId, argumentVersion: toVersion },
+            } as TOptionalChecksum<TArg>
+            this.markDirty()
+
+            const collector = new ChangeCollector<TExpr, TVar, TPremise, TArg>()
+            for (const [variableId, expressionId] of resolved.repoint) {
+                collector.modifiedVariable(
+                    this.repointExpressionBinding(
+                        variableId,
+                        expressionId,
+                        toVersion
+                    )
+                )
+            }
+            this.markAllPremisesDirty()
+            collector.setArgument(this.getArgument())
+            changes = composeChangesets(
+                changes,
+                this.finalizeChanges(collector)
+            )
+
+            assertRebased(self, targetTo, faultsBefore)
+            return { result: resolved.classification, changes }
+        })
+    }
+
+    /**
+     * Binds an expression-bound variable to another expression and version
+     * of the argument the response answers. The only path that changes these
+     * fields: `updateVariable` refuses them.
+     */
+    private repointExpressionBinding(
+        variableId: string,
+        boundExpressionId: string,
+        boundArgumentVersion: number
+    ): TVar {
+        const updated = this.variables.updateVariable(variableId, {
+            boundExpressionId,
+            boundArgumentVersion,
+        } as unknown as Partial<TVar>)
+        if (updated === undefined) {
+            throw new Error(`Variable "${variableId}" does not exist.`)
+        }
+        const withChecksum = this.attachVariableChecksum({ ...updated })
+        this.variables.removeVariable(variableId)
+        this.variables.addVariable(withChecksum)
+        return withChecksum
+    }
+
     /** Adds a premise-bound variable that references another argument's conclusion premise. */
     public bindVariableToArgument(
         variable: Omit<
@@ -1329,11 +1635,33 @@ export class ArgumentEngine<
             const updatesObj = updates
 
             // Reject binding-type conversion
-            if (isClaimBound(existingVar)) {
+            const expressionBindingFields = [
+                "boundExpressionId",
+                "boundAspect",
+            ] as const
+            if (isExpressionBound(existingVar)) {
+                // A link is re-pointed only by rebasing the response, which
+                // keeps it on the version the response answers.
+                for (const f of [
+                    ...expressionBindingFields,
+                    "boundArgumentId",
+                    "boundArgumentVersion",
+                    "boundPremiseId",
+                    "claimId",
+                    "claimVersion",
+                ] as const) {
+                    if (updatesObj[f] !== undefined) {
+                        throw new Error(
+                            `Cannot set "${f}" on an expression-bound variable. Rebase the response to re-point it.`
+                        )
+                    }
+                }
+            } else if (isClaimBound(existingVar)) {
                 const premiseBoundFields = [
                     "boundPremiseId",
                     "boundArgumentId",
                     "boundArgumentVersion",
+                    ...expressionBindingFields,
                 ] as const
                 for (const f of premiseBoundFields) {
                     if (updatesObj[f] !== undefined) {
@@ -1364,7 +1692,11 @@ export class ArgumentEngine<
                     }
                 }
             } else if (isPremiseBound(existingVar)) {
-                const claimBoundFields = ["claimId", "claimVersion"] as const
+                const claimBoundFields = [
+                    "claimId",
+                    "claimVersion",
+                    ...expressionBindingFields,
+                ] as const
                 for (const f of claimBoundFields) {
                     if (updatesObj[f] !== undefined) {
                         throw new Error(
@@ -1764,6 +2096,11 @@ export class ArgumentEngine<
         TArg
     > {
         return this.withValidation(() => {
+            if (this.isResponse()) {
+                throw new Error(
+                    `Argument "${this.argument.id}" is a response, and a response has no conclusion.`
+                )
+            }
             const premise = this.premises.get(premiseId)
             if (!premise) {
                 throw new Error(`Premise "${premiseId}" does not exist.`)
@@ -1807,7 +2144,10 @@ export class ArgumentEngine<
             // clearing on an empty argument is fine because the
             // invariant ("non-empty argument has a conclusion") is
             // vacuously satisfied.
-            if (this.premises.size > 0) {
+            //
+            // A response is the exception: it has no conclusion, so clearing
+            // one it was stored with (reported by E-8) is always allowed.
+            if (this.premises.size > 0 && !this.isResponse()) {
                 return {
                     result: this.getRoleState(),
                     changes: {},
@@ -1840,8 +2180,39 @@ export class ArgumentEngine<
         TExpr,
         TVar
     >[] {
+        if (this.isResponse()) {
+            return this.listPremises().filter((pm) => !this.isLinkPremise(pm))
+        }
         return this.listPremises().filter(
             (pm) => pm.isInference() && pm.getId() !== this.conclusionPremiseId
+        )
+    }
+
+    /**
+     * Whether this argument is a response: it carries `respondsTo`, the
+     * argument it answers pinned to one version, and has no conclusion.
+     */
+    public isResponse(): boolean {
+        return this.getRespondsTo() !== undefined
+    }
+
+    /**
+     * Whether a premise of a response is a link: its whole content is one
+     * variable expression, or `NOT` over one, whose variable is bound to an
+     * expression of the argument the response answers.
+     */
+    private isLinkPremise(
+        premise: PremiseEngine<TArg, TPremise, TExpr, TVar>
+    ): boolean {
+        return (
+            readLink(
+                premise.getId(),
+                premise.getExpressions(),
+                (id) =>
+                    this.variables.getVariable(id) as unknown as
+                        | TCorePropositionalVariable
+                        | undefined
+            ) !== undefined
         )
     }
 
@@ -1849,7 +2220,7 @@ export class ArgumentEngine<
         this.flushChecksums()
         return {
             argument: {
-                ...this.argument,
+                ...withOwnRespondsTo(this.argument),
                 checksum: this.cachedMetaChecksum!,
                 descendantChecksum: this.cachedDescendantChecksum!,
                 combinedChecksum: this.cachedCombinedChecksum!,
@@ -1918,6 +2289,10 @@ export class ArgumentEngine<
             engine.premises.set(pe.getId(), pe)
             engine.wirePremiseEngine(pe)
         }
+        assertOneReferenceKind(
+            snapshot.variables
+                .variables as unknown as TCorePropositionalVariable[]
+        )
         // Restore claim-bound variables first, then premise-bound variables
         for (const v of snapshot.variables.variables) {
             if (isClaimBound(v as unknown as TCorePropositionalVariable)) {
@@ -1938,6 +2313,13 @@ export class ArgumentEngine<
                         v as unknown as TOptionalChecksum<TPremiseBoundVariable>
                     )
                 }
+            }
+        }
+        for (const v of snapshot.variables.variables) {
+            if (isExpressionBound(v as unknown as TCorePropositionalVariable)) {
+                engine.bindVariableToExpression(
+                    v as unknown as TOptionalChecksum<TExpressionBoundVariable>
+                )
             }
         }
         // Restore conclusion role (don't use setConclusionPremise to avoid auto-assign logic)
@@ -2006,6 +2388,9 @@ export class ArgumentEngine<
         )
         engine.restoringFromSnapshot = true
 
+        assertOneReferenceKind(
+            variables as unknown as TCorePropositionalVariable[]
+        )
         // Register claim-bound variables first (no dependencies)
         for (const v of variables) {
             if (isClaimBound(v as unknown as TCorePropositionalVariable)) {
@@ -2061,6 +2446,13 @@ export class ArgumentEngine<
                 }
             }
         }
+        for (const v of variables) {
+            if (isExpressionBound(v as unknown as TCorePropositionalVariable)) {
+                engine.bindVariableToExpression(
+                    v as unknown as TOptionalChecksum<TExpressionBoundVariable>
+                )
+            }
+        }
 
         // Group expressions by premiseId
         const exprsByPremise = new Map<string, TExpressionInput<TExpr>[]>()
@@ -2082,9 +2474,15 @@ export class ArgumentEngine<
             pe.loadExpressions(premiseExprs)
         }
 
-        // Set roles (override auto-assignment)
+        // Set roles (override auto-assignment). A response stored with a
+        // conclusion keeps it as stored, so that rule E-8 can report it;
+        // `setConclusionPremise` would refuse it.
         if (roles.conclusionPremiseId !== undefined) {
-            engine.setConclusionPremise(roles.conclusionPremiseId)
+            if (engine.isResponse()) {
+                engine.conclusionPremiseId = roles.conclusionPremiseId
+            } else {
+                engine.setConclusionPremise(roles.conclusionPremiseId)
+            }
         }
 
         engine.restoringFromSnapshot = false
@@ -2126,7 +2524,7 @@ export class ArgumentEngine<
     private rollbackInternal(
         snapshot: TArgumentEngineSnapshot<TArg, TPremise, TExpr, TVar>
     ): void {
-        this.argument = { ...snapshot.argument }
+        this.argument = withOwnRespondsTo({ ...snapshot.argument })
         this.checksumConfig = normalizeChecksumConfig(
             snapshot.config?.checksumConfig
         )
@@ -2178,8 +2576,7 @@ export class ArgumentEngine<
         }
 
         // 2. Compute argument meta checksum (entity fields + role state MERGED)
-        const argumentFields =
-            config?.argumentFields ?? DEFAULT_CHECKSUM_CONFIG.argumentFields!
+        const argumentFields = resolveChecksumFields(config, "argumentFields")
         const roleFields =
             config?.roleFields ?? DEFAULT_CHECKSUM_CONFIG.roleFields!
         const mergedFields = new Set([...argumentFields, ...roleFields])
@@ -2257,9 +2654,10 @@ export class ArgumentEngine<
     }
 
     private attachVariableChecksum(v: TOptionalChecksum<TVar>): TVar {
-        const fields =
-            this.checksumConfig?.variableFields ??
-            DEFAULT_CHECKSUM_CONFIG.variableFields!
+        const fields = resolveChecksumFields(
+            this.checksumConfig,
+            "variableFields"
+        )
         return {
             ...v,
             checksum: entityChecksum(
@@ -2486,6 +2884,7 @@ export class ArgumentEngine<
         // this filter share one definition.
         return {
             argumentId: this.argument.id,
+            isResponse: this.isResponse(),
             conclusionPremiseId: this.conclusionPremiseId,
             getConclusionPremise: () => {
                 const c = this.getConclusionPremise()
@@ -2560,6 +2959,152 @@ export class ArgumentEngine<
                 satisfiabilityForcedTrueVariableIds,
             }
         )
+    }
+
+    /**
+     * Whether one link of this response follows from the response's other
+     * premises, read against the snapshot of the argument it answers. Each
+     * statement link is expanded into the expression it names, so the
+     * question is asked of what the links say rather than of the links as
+     * opaque values. See `TLinkCheckResult` for each answer.
+     *
+     * Answers `invalid`, without searching, when the snapshot is not the
+     * argument and version this response answers or `validateLinks` reports a
+     * problem.
+     *
+     * @throws When this argument is not a response, or the premise is not one
+     * of its links.
+     */
+    public checkLink(
+        linkPremiseId: string,
+        targetSnapshot: TArgumentEngineSnapshot
+    ): TLinkCheckResult {
+        return checkLinkStandalone(
+            this.asResponseCheckInput(targetSnapshot),
+            linkPremiseId
+        )
+    }
+
+    /**
+     * Whether all of this response's premises can hold at once, read against
+     * the snapshot of the argument it answers. Uses the same expansion as
+     * `checkLink`, so the two never disagree: when the premises cannot all
+     * hold, every link checks as `incoherent`.
+     *
+     * @throws When this argument is not a response.
+     */
+    public checkResponseCoherent(
+        targetSnapshot: TArgumentEngineSnapshot
+    ): TResponseCoherenceResult {
+        return checkResponseCoherentStandalone(
+            this.asResponseCheckInput(targetSnapshot)
+        )
+    }
+
+    /**
+     * Reads what a reader's answers on this response's links carry into the
+     * argument it answers, one step along a chain of answers. See
+     * `TCarryResult` and `TNotCarriedReason`.
+     *
+     * Answers `invalid`, without carrying anything, when this argument is not
+     * a response, the snapshot is not the argument and version it answers, or
+     * `validateLinks` reports an error. It never throws on an answer it cannot
+     * carry.
+     *
+     * @param targetSnapshot - The argument answered, at the version answered.
+     * @param linkAnswers - The reader's answers, keyed by link premise id.
+     * @param targetClaims - Resolves the answered argument's claims at the
+     *   versions it binds, to tell which are axioms.
+     */
+    public carryAnswers(
+        targetSnapshot: TArgumentEngineSnapshot,
+        linkAnswers: Record<string, TLinkAnswer>,
+        targetClaims: TClaimLookup,
+        options?: TCarryAnswersOptions
+    ): TCarryResult {
+        const respondsTo = this.getRespondsTo()
+        const problems: TLinkViolation[] =
+            respondsTo === undefined
+                ? [
+                      {
+                          code: "LINK_TARGET_MISMATCH",
+                          severity: "error",
+                          message: `Argument "${this.argument.id}" is not a response, so it answers no argument.`,
+                      },
+                  ]
+                : this.responseLinkProblems(respondsTo, targetSnapshot)
+        return carryAnswersStandalone({
+            problems,
+            into: respondsTo ?? {
+                argumentId: targetSnapshot.argument.id,
+                argumentVersion: targetSnapshot.argument.version,
+            },
+            responsePremiseIds: this.listPremises().map((pm) => pm.getId()),
+            links: listLinks(this as unknown as ArgumentEngine),
+            linkAnswers,
+            target: targetSnapshot as unknown as TArgumentEngineSnapshot,
+            targetClaims,
+            ownLinkPremiseIds: options?.ownLinkPremiseIds,
+        })
+    }
+
+    /**
+     * What makes every check of this response against the snapshot answer
+     * `invalid`: a snapshot of another argument or version, or an error
+     * `validateLinks` reports.
+     */
+    private responseLinkProblems(
+        respondsTo: TCoreArgumentReference,
+        targetSnapshot: TArgumentEngineSnapshot
+    ): TLinkViolation[] {
+        const { id, version } = targetSnapshot.argument
+        const matches =
+            id === respondsTo.argumentId &&
+            version === respondsTo.argumentVersion
+        return matches
+            ? validateLinks(
+                  this as unknown as ArgumentEngine,
+                  targetSnapshot
+              ).violations.filter((violation) => violation.severity === "error")
+            : [
+                  {
+                      code: "LINK_TARGET_MISMATCH",
+                      severity: "error",
+                      message: `The response answers "${respondsTo.argumentId}" version ${respondsTo.argumentVersion}, but the snapshot is "${id}" version ${version}.`,
+                  },
+              ]
+    }
+
+    private asResponseCheckInput(
+        targetSnapshot: TArgumentEngineSnapshot
+    ): TResponseCheckInput {
+        const respondsTo = this.getRespondsTo()
+        if (respondsTo === undefined) {
+            throw new Error(`Argument "${this.argument.id}" is not a response.`)
+        }
+        const problems = this.responseLinkProblems(respondsTo, targetSnapshot)
+        const argument = this.getArgument()
+        return {
+            problems,
+            responseKey: argument.combinedChecksum,
+            responseArgumentId: argument.id,
+            responseArgumentVersion: argument.version,
+            premises: this.listPremises()
+                .filter((pm) => !isNakedQDerivationPremise(pm))
+                .map((pm) => ({
+                    id: pm.getId(),
+                    expressions:
+                        pm.getExpressions() as unknown as TCorePropositionalExpression[],
+                })),
+            getVariable: (variableId) =>
+                this.variables.getVariable(variableId) as unknown as
+                    | TCorePropositionalVariable
+                    | undefined,
+            groundedVariableIds: getGroundedBoundVariableIds(
+                this.asClaimVariableContext()
+            ),
+            target: targetSnapshot as unknown as TArgumentEngineSnapshot,
+        }
     }
 
     public checkValidity(
@@ -2712,11 +3257,17 @@ export class ArgumentEngine<
      * supplied by this map. That also makes citation defaults reviewer-
      * overridable, whereas axioms stay locked.
      *
+     * `operatorAssignments` is passed to `evaluate` unchanged; without it no
+     * operator decision is made. Values carried from a response go in
+     * `overrides` and `operatorAssignments` through `mergeCarriedInput`, so
+     * the order is defaults, then carried values, then the reader's own.
+     *
      * @since 3.1.0
      */
     public evaluateWithDefaults(
         overrides?: TCoreVariableAssignment,
-        options?: TCoreArgumentEvaluationOptions
+        options?: TCoreArgumentEvaluationOptions,
+        operatorAssignments?: Record<string, TCoreOperatorAssignment>
     ): TCoreArgumentEvaluationResult {
         const defaults = this.deriveDefaultAssignment()
         const axiomaticIds = getAxiomaticBoundVariableIds(
@@ -2733,7 +3284,10 @@ export class ArgumentEngine<
             }
         }
         return this.evaluate(
-            { variables: merged, operatorAssignments: {} },
+            {
+                variables: merged,
+                operatorAssignments: { ...operatorAssignments },
+            },
             options
         )
     }
@@ -2760,4 +3314,26 @@ export class ArgumentEngine<
     ): boolean {
         return true
     }
+}
+
+// A copy of an argument entity holding its own copy of `respondsTo`, when it
+// has one. A `respondsTo` of `null` is left out, as an absent field: the
+// schema allows only absent, every reader tests for `undefined`, and a
+// checksum would otherwise count the present key. Any other field is shared
+// as it was.
+function withOwnRespondsTo<T extends object>(argument: T): T {
+    const respondsTo = (argument as Record<string, unknown>).respondsTo as
+        | TCoreArgumentReference
+        | null
+        | undefined
+    if (respondsTo === null) {
+        const { respondsTo: _null, ...rest } = argument as Record<
+            string,
+            unknown
+        >
+        return rest as T
+    }
+    return respondsTo === undefined
+        ? argument
+        : ({ ...argument, respondsTo: { ...respondsTo } } as T)
 }

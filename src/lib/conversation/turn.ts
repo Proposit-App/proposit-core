@@ -43,8 +43,14 @@ export type TTurnInput = {
 export type TTurnResult<TOut> = {
     /** The stage's parsed output, or `null` when the turn failed. */
     output: TOut | null
-    /** The provider response id for this turn (nullable for
-     * non-chaining providers such as chat-completions). */
+    /**
+     * The provider response id for this turn (nullable for non-chaining
+     * providers such as chat-completions). For a turn that failed it is the
+     * last response the provider returned, which the stage may have
+     * rejected, or `null` when none returned. A caller chaining turns should
+     * keep its previous id when the turn failed (it recorded failures and
+     * produced no output), as `createConversation` does.
+     */
     responseId: TResponseId | null
     /** Cumulative token usage for this turn's LLM call. */
     tokenUsage: TLlmTokenUsage
@@ -65,39 +71,24 @@ export type TExecuteTurnDeps = {
     onComplete?: () => void
 }
 
-// -- Internal: module-level bridge for user message ------------------------
-//
-// `llmStage` builds its user message from `buildPrompt(ctx)`. To override
-// it without modifying the stage, we use a module-level variable that the
-// provider wrapper reads. This keeps `executeTurn`'s signature clean
-// while still letting the caller supply the actual user message.
-//
-// The variable is set synchronously before `executeStage` and cleared
-// after it resolves, so it's safe for sequential (non-concurrent) use.
-
-let currentTurnInput: TTurnInput | null = null
-
 // -- Internal: LLM provider wrapper ----------------------------------------
 //
 // Wraps the underlying provider to inject `previousResponseId` into each
-// `respond` call and capture the surfaced response id. Also overrides the
-// user message via the module-level bridge so `llmStage`'s `buildPrompt`
-// user message is replaced with the caller-supplied one.
+// `respond` call and capture the surfaced response id. Also replaces the
+// user message `llmStage`'s `buildPrompt` produced with the caller-supplied
+// one. Each turn gets its own wrapper holding its own input, so turns run at
+// once never see each other's message, retries included.
 
 function wrapProviderForTurn(
     llm: TLlmProvider,
-    previousResponseId: TResponseId | undefined,
+    input: TTurnInput,
     captured: { responseId: TResponseId | null }
 ): TLlmProvider {
     const underlying = llm
     return {
         async respond<T>(req: import("../llm/types.js").TLlmRequest<T>) {
-            // Inject `previousResponseId` into the request.
-            req.previousResponseId = previousResponseId
-            // Override user message via the module-level bridge.
-            if (currentTurnInput) {
-                req.userMessage = currentTurnInput.userMessage
-            }
+            req.previousResponseId = input.previousResponseId
+            req.userMessage = input.userMessage
             const response = await underlying.respond(req)
             // Capture the response id if surfaced.
             if (response.rawResponseId) {
@@ -127,6 +118,18 @@ export async function executeTurn<TOut>(
     input: TTurnInput,
     deps: TExecuteTurnDeps
 ): Promise<TTurnResult<TOut>> {
+    return (await runTurn(stage, input, deps)).result
+}
+
+/**
+ * `executeTurn`, also saying whether the stage completed. Internal: a
+ * conversation moves its chain only onto a completed turn's response.
+ */
+export async function runTurn<TOut>(
+    stage: TStage<TOut>,
+    input: TTurnInput,
+    deps: TExecuteTurnDeps
+): Promise<{ result: TTurnResult<TOut>; completed: boolean }> {
     // Capture the response id from the provider's response.
     const captured: { responseId: TResponseId | null } = {
         responseId: null,
@@ -134,14 +137,7 @@ export async function executeTurn<TOut>(
 
     // Wrap the LLM provider to inject `previousResponseId` and capture
     // the response id.
-    const wrapped = wrapProviderForTurn(
-        deps.llm,
-        input.previousResponseId,
-        captured
-    )
-
-    // Bridge the user message to the provider wrapper.
-    currentTurnInput = input
+    const wrapped = wrapProviderForTurn(deps.llm, input, captured)
 
     // Create a synthetic pipeline containing just this stage.
     const stageId = stage.id
@@ -171,19 +167,20 @@ export async function executeTurn<TOut>(
         }
     )
 
-    // Clear the user message bridge.
-    currentTurnInput = null
-
     // Call the completion callback (for terminal turns like finalize).
     deps.onComplete?.()
 
+    const completed = result.outcome === "completed"
     return {
-        output: (result.outcome === "completed"
-            ? ((result.output as TOut | null | undefined) ?? null)
-            : null) as TOut | null,
-        responseId: captured.responseId,
-        tokenUsage: result.tokenUsage ?? { input: 0, output: 0 },
-        failures: result.failures,
+        completed,
+        result: {
+            output: (completed
+                ? ((result.output as TOut | null | undefined) ?? null)
+                : null) as TOut | null,
+            responseId: captured.responseId,
+            tokenUsage: result.tokenUsage ?? { input: 0, output: 0 },
+            failures: result.failures,
+        },
     }
 }
 

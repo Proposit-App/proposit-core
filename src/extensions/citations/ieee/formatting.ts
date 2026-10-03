@@ -12,6 +12,7 @@ export {
     formatSingleAuthor,
     formatNamesInCitation,
     formatDate,
+    formatCalendarDate,
     IEEE_MONTHS,
 } from "./segment-builder.js"
 

@@ -267,7 +267,7 @@ Both libraries implement a generic `TClaimConnectionLibraryManagement` interface
 
 Connections are immutable (create or delete, no update). Each connection pins both endpoints to specific claim versions. They live on `PropositCore` as `core.citations` and `core.axioms`.
 
-The `@proposit/proposit-core/extensions/citations/ieee` subpath export provides `IEEECitationClaimSchema` — an extended citation-claim type with IEEE reference schemas covering 33 reference types. Every author field takes either a personal name (`givenNames`, `familyName`, optional `suffix`) or a single name rendered as written (`{ name }`), for an organisation such as Reuters or a one-part name such as Aristotle. The `@proposit/proposit-core/extensions/citations/unparsed` subpath export provides `UnparsedCitationSchema` — an extracted-but-not-yet-structured citation (`text` + a guessed reference type + optional `url`).
+The `@proposit/proposit-core/extensions/citations/ieee` subpath export provides `IEEECitationClaimSchema` — an extended citation-claim type with IEEE reference schemas covering 33 reference types. Every author field takes either a personal name (`givenNames`, `familyName`, optional `suffix`) or a single name rendered as written (`{ name }`), for an organisation such as Reuters or a one-part name such as Aristotle. Reference dates other than access dates are calendar dates (`CalendarDate`): strings such as `"1787"`, `"1787-11"` or `"1787-11-22"`, rendered at their precision and never moved by a time zone; a source with no `year` renders "(n.d.)". The `@proposit/proposit-core/extensions/citations/unparsed` subpath export provides `UnparsedCitationSchema` — an extracted-but-not-yet-structured citation (`text` + a guessed reference type + optional `url`).
 
 ### Evaluation semantics by claim type
 
@@ -827,7 +827,7 @@ const result = richArg.evaluate({
 
 The engine enforces invariants at two levels:
 
-- **Mutation-time throws** for **Structural-tier** rules (S-1..S-14 — see `docs/Proposit_Grammar.md` §3.1). Mutations on `ArgumentEngine` / `PremiseEngine` reject Structural violations with a thrown error.
+- **Mutation-time throws** for **Structural-tier** rules (S-1..S-15 — see `docs/Proposit_Grammar.md` §3.1). Mutations on `ArgumentEngine` / `PremiseEngine` reject Structural violations with a thrown error.
 - **Validation-time violations** for everything else. `engine.validate('evaluable' | 'derivable' | 'presentable')` returns `readonly TViolation[]` covering tiers up to the requested level. Mutations **never** throw on Evaluable, Derivable, or Presentable issues — they surface through `validate(tier)` and can be addressed by the AN post-hook (`assistive` behavior) or by user-initiated repair primitives.
 
 The tables below list invalid constructions and what happens.
@@ -862,7 +862,7 @@ In v1.0 the engine no longer throws on non-`not` operators placed as direct chil
 | Axiomatic-bound variable assignment supplied to `evaluate`       | `E-4`     | Evaluable   |
 | Derivation premise expression tree lacks the consequent variable | `E-5`     | Evaluable   |
 | Claim has more than one paired derivation premise                | `E-6`     | Evaluable   |
-| Argument has premises but no conclusion designated               | `E-7`     | Evaluable   |
+| Standard argument has premises but no conclusion designated      | `E-7`     | Evaluable   |
 | Non-`not` operator placed directly under another operator        | `P-1`     | Presentable |
 | `not(not(x))` chain in the tree                                  | `P-2`     | Presentable |
 | `formula` wrapping no operator (leaf or single `not`)            | `P-3`     | Presentable |
@@ -873,26 +873,28 @@ In v1.0 the engine no longer throws on non-`not` operators placed as direct chil
 
 ### Variables — prevented at construction time
 
-| Invalid construction                                                                    | What happens                                                            |
-| --------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
-| Duplicate variable `id`                                                                 | Throws                                                                  |
-| Duplicate variable `symbol`                                                             | Throws                                                                  |
-| Variable `argumentId`/`argumentVersion` doesn't match the engine                        | Throws                                                                  |
-| Claim-bound variable references a non-existent claim/version                            | Throws                                                                  |
-| Premise-bound variable references a non-existent premise (internal)                     | Throws                                                                  |
-| Adding a premise-bound variable via `addVariable()`                                     | Throws — use `bindVariableToPremise` or `bindVariableToExternalPremise` |
-| Circular binding (variable → premise → expression → variable, transitively)             | Throws                                                                  |
-| `bindVariableToPremise` with `boundArgumentId !== engine.argumentId`                    | Throws — use `bindVariableToExternalPremise` for cross-argument         |
-| `bindVariableToExternalPremise` with `boundArgumentId === engine.argumentId`            | Throws — use `bindVariableToPremise` for internal                       |
-| External binding rejected by `canBind()` policy                                         | Throws                                                                  |
-| Renaming a variable to a symbol already in use                                          | Throws                                                                  |
-| Changing a variable's binding type (claim → premise or vice versa) via `updateVariable` | Throws — delete and re-create                                           |
+| Invalid construction                                                                      | What happens                                                            |
+| ----------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| Duplicate variable `id`                                                                   | Throws                                                                  |
+| Duplicate variable `symbol`                                                               | Throws                                                                  |
+| Variable `argumentId`/`argumentVersion` doesn't match the engine                          | Throws                                                                  |
+| Claim-bound variable references a non-existent claim/version                              | Throws                                                                  |
+| Premise-bound variable references a non-existent premise (internal)                       | Throws                                                                  |
+| Adding a premise-bound variable via `addVariable()`                                       | Throws — use `bindVariableToPremise` or `bindVariableToExternalPremise` |
+| Circular binding (variable → premise → expression → variable, transitively)               | Throws                                                                  |
+| `bindVariableToPremise` with `boundArgumentId !== engine.argumentId`                      | Throws — use `bindVariableToExternalPremise` for cross-argument         |
+| `bindVariableToExternalPremise` with `boundArgumentId === engine.argumentId`              | Throws — use `bindVariableToPremise` for internal                       |
+| External binding rejected by `canBind()` policy                                           | Throws                                                                  |
+| Renaming a variable to a symbol already in use                                            | Throws                                                                  |
+| Changing a variable's binding type (claim → premise or vice versa) via `updateVariable`   | Throws — delete and re-create                                           |
+| Changing an expression-bound variable's binding fields, or its kind, via `updateVariable` | Throws — rebase the response to re-point it                             |
+| Stored variable with more than one kind of reference (claim, premise, expression)         | Fails to load — `VAR_BINDING_AMBIGUOUS`                                 |
 
 ### Variables — detected by validation
 
-| Invalid construction                               | Error code                 | Severity |
-| -------------------------------------------------- | -------------------------- | -------- |
-| Premise-bound variable references an empty premise | `EXPR_BOUND_PREMISE_EMPTY` | Warning  |
+| Invalid construction                                                    | Error code                 | Severity |
+| ----------------------------------------------------------------------- | -------------------------- | -------- |
+| Premise-bound variable references an empty premise of the same argument | `EXPR_BOUND_PREMISE_EMPTY` | Warning  |
 
 ### Premises — Structural (thrown on mutation)
 
@@ -931,6 +933,24 @@ Naked-Q (a derivation premise whose tree is a single variable bound to `derivedC
 | Conclusion premise ID points to a non-existent premise      | `E-7` (`ARGUMENT_CONCLUSION_NOT_FOUND`)                          | Evaluable  |
 | Same variable ID used with multiple symbols across premises | `ARGUMENT_VARIABLE_ID_SYMBOL_MISMATCH` (engine error)            | —          |
 | Same variable symbol used with multiple IDs across premises | S-11 (`ARGUMENT_VARIABLE_SYMBOL_AMBIGUOUS`) — thrown on mutation | Structural |
+
+### Response arguments
+
+A response carries `respondsTo` and answers that argument through links (see `docs/api-reference.md`). A reader's agreement with a response's links is carried into the argument it answers with `carryAnswers` and `mergeCarriedInput`; a link that cannot be carried exactly is reported, never thrown on (see "Carrying a reader's answers" there).
+
+| Invalid construction                                                                         | What happens / code                                                                  |
+| -------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| `respondsTo` naming the argument itself                                                      | Throws on construction; fails to load — S-15 (`ARG_RESPONDS_TO_ITSELF`)              |
+| Expression-bound variable in a standard argument, or bound into another argument             | Throws; fails to load — S-15 (`ARG_EXPRESSION_BINDING_OUTSIDE_RESPONSE`)             |
+| `bindVariableToExpression` outside a response, on another version, or refused by `canBind()` | Throws                                                                               |
+| `setConclusionPremise` on a response                                                         | Throws                                                                               |
+| `setExtras` given `respondsTo`                                                               | Throws                                                                               |
+| `evaluate` / `checkValidity` on a response                                                   | `ok: false` — `ARGUMENT_IS_RESPONSE`                                                 |
+| Response stored with a conclusion                                                            | Loads; `E-8` (Evaluable). `clearConclusionPremise()` clears it                       |
+| Two variables binding the same expression in the same aspect                                 | Loads; `E-9` (Evaluable)                                                             |
+| Binding on another version of the argument answered                                          | Loads; `E-10` (Evaluable); `validateLinks` reports `LINK_VERSION_MISMATCH`           |
+| Bound expression absent from the target snapshot; inference binding on a non-operator        | `validateLinks` reports it; `checkLink` and `checkResponseCoherent` answer `invalid` |
+| `rebaseResponse` missing a decision, or with one it cannot carry out                         | Throws; the response is unchanged                                                    |
 
 ### Claims, citations, and axioms — prevented at construction time
 
@@ -983,7 +1003,7 @@ See [docs/api-reference.md](docs/api-reference.md) for the full API reference co
 
 ## CLI
 
-The package ships a command-line interface for managing arguments stored on disk.
+The package ships a command-line interface for managing arguments stored on disk. Response arguments are a library feature that the CLI does not store: no command creates one, and its storage keeps no `respondsTo` or expression-bound variables.
 
 ### Running the CLI
 

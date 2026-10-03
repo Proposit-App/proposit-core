@@ -12,7 +12,7 @@ With the default type parameters the argument accepts only the core fields, and 
 
 ### `createPremise(options?)` → `TCoreMutationResult<PremiseEngine>`
 
-Creates a new `PremiseEngine`, registers it with the engine, and returns it wrapped in a mutation result with the changeset. If no conclusion is currently set, the new premise is automatically designated as the conclusion (reflected in the changeset's `roles` field).
+Creates a new `PremiseEngine`, registers it with the engine, and returns it wrapped in a mutation result with the changeset. If no conclusion is currently set, the new premise is automatically designated as the conclusion (reflected in the changeset's `roles` field). In a [response](#response-arguments) it is not: a response has no conclusion.
 
 Also auto-creates a premise-bound variable for the new premise, included in the changeset's `variables.added`.
 
@@ -70,7 +70,7 @@ In v1.0 this method's checks have been folded into the four-tier grammar — der
 
 ### `removePremise(premiseId)` → `TCoreMutationResult<TCorePremise>`
 
-Removes a premise and clears its role assignments. Also cascade-deletes any premise-bound variables targeting the removed premise (which in turn cascade-deletes their referencing expressions). Returns the removed premise data. The changeset lists the premise, its own expressions, and everything the cascade removed or changed.
+Removes a premise and clears its role assignments. When the removed premise was the conclusion of a standard argument, the remaining premise with the lowest id becomes the conclusion; a [response](#response-arguments) promotes nothing. Also cascade-deletes any premise-bound variables targeting the removed premise (which in turn cascade-deletes their referencing expressions). Returns the removed premise data. The changeset lists the premise, its own expressions, and everything the cascade removed or changed.
 
 ---
 
@@ -128,7 +128,7 @@ Convenience method for binding a variable to another argument's conclusion. Sets
 
 ### `canBind(boundArgumentId, boundArgumentVersion)` → `boolean` _(protected)_
 
-Returns whether this engine allows binding to the specified external argument version. Default returns `true`. Override in subclasses to inject validation policy (e.g., only allow binding to published argument versions). Called by `bindVariableToExternalPremise` before registration; throws if `false`.
+Returns whether this engine allows binding to the specified external argument version. Default returns `true`. Override in subclasses to inject validation policy (e.g., only allow binding to published argument versions). Called by `bindVariableToExternalPremise` and `bindVariableToExpression` before registration, and by `rebaseResponse` for the newer target version; each throws if `false`.
 
 ---
 
@@ -140,7 +140,7 @@ Returns the premise-bound variables bound to the given premise of this argument.
 
 ### `updateVariable(variableId, updates)` → `TCoreMutationResult<TPropositionalVariable>`
 
-Updates variable fields. For claim-bound variables, allowed updates are `symbol`, `claimId`, `claimVersion` (`claimId` and `claimVersion` must be provided together). For premise-bound variables, allowed updates are `symbol`, `boundPremiseId`, `boundArgumentId`, `boundArgumentVersion`. Throws if updates include fields from the wrong binding type. Returns a mutation result with the modified variable.
+Updates variable fields. For claim-bound variables, allowed updates are `symbol`, `claimId`, `claimVersion` (`claimId` and `claimVersion` must be provided together). For premise-bound variables, allowed updates are `symbol`, `boundPremiseId`, `boundArgumentId`, `boundArgumentVersion`. Throws if updates include fields from the wrong binding type. For expression-bound variables, `symbol` may change, but any change to a binding field (`boundExpressionId`, `boundAspect`, `boundArgumentId`, `boundArgumentVersion`) throws, since only `rebaseResponse` re-points one, and no update converts a variable to or from the expression-bound shape. Returns a mutation result with the modified variable.
 
 ---
 
@@ -254,7 +254,7 @@ Added in **2.3.1**.
 
 ### `setConclusionPremise(premiseId)` → `TCoreMutationResult<TCoreArgumentRoleState>`
 
-Designates a premise as the conclusion. Throws if the premise does not exist.
+Designates a premise as the conclusion. Throws if the premise does not exist, and throws for a [response](#response-arguments), which has no conclusion.
 
 ---
 
@@ -272,7 +272,12 @@ Returns the conclusion `PremiseEngine`, if one has been set.
 
 ### `listSupportingPremises()` → `PremiseManager[]`
 
-Returns all supporting premises (derived automatically: inference premises that are not the conclusion), sorted by ID.
+Returns all supporting premises, sorted by ID. What counts as supporting depends on the kind of argument:
+
+- **Standard argument:** inference premises (rooted at `implies` or `iff`) that are not the conclusion, derived automatically.
+- **Response:** every premise that is not a link (see [Response arguments](#response-arguments)). A response has no conclusion to support; its other premises are the reasoning its links may rest on.
+
+> **Not a list of what the author offered in support.** In a standard argument the selection is by tree shape, not authorship: every citation- or axiom-backed derivation premise is rooted at `implies` (`IMPLIES(source, Q)`) and so is included. That makes the result the wrong input for any total meant to speak for what the author offered in support. Test authorship with `getPremiseType() === "derivation"`.
 
 ---
 
@@ -301,6 +306,10 @@ As of v0.12.0, `evaluate()` and `checkValidity()` additionally run a claim-type 
 Evaluates all relevant premises under the given expression assignment (`TCoreExpressionAssignment`). The assignment contains `variables` (a `Record<string, boolean | null>`) and `operatorAssignments` (a `Record<string, "accepted" | "rejected">` mapping operator expression IDs to a reader's decision about that step).
 
 **An operator decision is not a truth value.** `"accepted"` grants the step, so constraint propagation may derive values through it. `"rejected"` withholds the step and **strikes the whole premise the operator lives in** from the evaluated set — it asserts nothing, and in particular never forces the expression or its children to `false`. An absent entry means normal evaluation. As of v4.0.0 evaluation emits a set of orthogonal facts rather than a single named grade; see [Evaluation facts](#evaluation-facts) below.
+
+A rejection of the conclusion premise's **root** operator is the one exception to striking: the reader withholds the final step, which is reported as `conclusionInferenceRejected: true` and strikes nothing. See [Evaluation facts](#evaluation-facts).
+
+For a [response](#response-arguments), `evaluate()` returns `ok: false` with the validation code `ARGUMENT_IS_RESPONSE`: a response has no conclusion to evaluate against. Check it with `checkLink` and `checkResponseCoherent` instead.
 
 ---
 
@@ -375,10 +384,13 @@ Options:
 | `isAdmissibleAssignment`                        | Every surviving constraint premise is true. A blocking fact, not a label.                                                                                                                                                                                                                                                                                                                             |
 | `premisesHoldConclusionFalse`                   | Constraints satisfied, every surviving supporting premise true, conclusion false. A reader-relative gap under one assignment — _not_ a countermodel to entailment, which is the stronger claim `checkValidity` answers. `null` when the argument had supporting premises and the reader struck every one: the case was withheld, not weighed.                                                         |
 | `premiseSetSatisfiable`                         | Some total assignment makes every surviving premise true. `null` means "not determined" (past the search ceiling).                                                                                                                                                                                                                                                                                    |
+| `conclusionInferenceRejected`                   | Present, and `true`, when the reader rejected the conclusion premise's root operator: they withhold the final step, so the conclusion is not established for them. Absent otherwise. Nothing else moves — see below.                                                                                                                                                                                  |
 | `claimAttribution`                              | Per-claim attribution, one entry per reader-asserted claim-bound variable. Diagnostics-gated.                                                                                                                                                                                                                                                                                                         |
 | `variableProvenance`                            | Where each propagated value came from. Diagnostics-gated.                                                                                                                                                                                                                                                                                                                                             |
 
-**Striking.** A premise is struck iff any expression in it carries `operatorAssignments[expressionId] === "rejected"`, with two exclusions: the **conclusion premise is never struck**, and **derivation premises are never struck** (engine wiring is not a user-authored inferential step). A rejection recorded against either is ignored — observably, because `struckPremiseIds` reports what was actually struck. A struck premise is excluded from the aggregates, from constraint propagation, and from the satisfiability search, but is **still evaluated and still returned** in `supportingPremises` / `constraintPremises`, so a consumer can render it crossed out.
+**Striking.** A premise is struck iff any expression in it carries `operatorAssignments[expressionId] === "rejected"`, with two exclusions: the **conclusion premise is never struck**, and **derivation premises are never struck** (engine wiring is not a user-authored inferential step). A rejection recorded against either is ignored — observably, because `struckPremiseIds` reports what was actually struck.
+
+**The conclusion step.** A rejection of the conclusion premise's **root** operator sets `conclusionInferenceRejected: true` and does nothing else. Formula (parenthesis) nodes at the root are looked through: when the root is a formula, the step is the operator just inside it. The conclusion premise is not struck and stays out of `struckPremiseIds`, its nested accepted operators keep propagating, and `conclusionTrue`, `premisesHoldConclusionFalse` and `conclusionAttribution` keep the values they have without the rejection — an operator decision is never a truth value. A rejection of a **nested** operator inside the conclusion premise is still ignored and sets nothing. A struck premise is excluded from the aggregates, from constraint propagation, and from the satisfiability search, but is **still evaluated and still returned** in `supportingPremises` / `constraintPremises`, so a consumer can render it crossed out.
 
 **Engine limitation.** Striking is per premise; the operator id is provenance for the objection, never a different evaluation rule. So a premise of the shape `A ∧ (B → C)` asserts `A` outright _and_ embodies a step, and striking it discards both. Placing inference operators at the root of a premise's tree avoids this; the engine imposes no such restriction, and a partial strike is not offered because it would leave a hole in a formula. (`(A ∧ B) → C` is unaffected — it asserts only the conditional.)
 
@@ -391,6 +403,8 @@ Options:
 ### `checkValidity(options?)` → `TValidityCheckResult`
 
 Runs a truth-table search over all 2ⁿ assignments (n = distinct referenced variable count). Returns `isValid` (`true`, `false`, or `undefined` if truncated), counterexamples, and statistics. Here `counterexample` genuinely denotes a countermodel — this is the exhaustive entailment check, distinct from the reader-relative `premisesHoldConclusionFalse` fact a single `evaluate()` reports.
+
+For a [response](#response-arguments), `checkValidity()` returns `ok: false` with the validation code `ARGUMENT_IS_RESPONSE`, as `evaluate()` does.
 
 Premise-set satisfiability is computed **once**, before the row loop, and threaded into each row's evaluation. The generated assignments carry no operator decisions, so nothing is ever struck and the premise set is identical on every row; recomputing it per row would make the search 2ⁿ × 2ⁿ.
 
@@ -428,11 +442,13 @@ Consumers key their state by `claimId`; translate with `getVariableIdForClaim` /
 
 ---
 
-### `evaluateWithDefaults(overrides?, options?)` → `TArgumentEvaluationResult` (since 3.1.0)
+### `evaluateWithDefaults(overrides?, options?, operatorAssignments?)` → `TArgumentEvaluationResult` (since 3.1.0)
 
-Convenience that merges caller `overrides` (`TCoreVariableAssignment`) over `deriveDefaultAssignment()` and calls `evaluate` in one step. Default-sourced **axiomatic-bound** keys are dropped before evaluation (the engine force-sets them `true`), so the defaults and the pre-pass agree without tripping `AXIOM_VARIABLE_ASSIGNMENT_FORBIDDEN`. An `override` that names an axiomatic variable is left intact, so `evaluate` still enforces the one-way rule. `options` is the same `TCoreArgumentEvaluationOptions` accepted by `evaluate`.
+Convenience that merges caller `overrides` (`TCoreVariableAssignment`) over `deriveDefaultAssignment()` and calls `evaluate` in one step. `operatorAssignments` (6.0.0) is passed to `evaluate` unchanged; without it no operator decision is made, as before. Default-sourced **axiomatic-bound** keys are dropped before evaluation (the engine force-sets them `true`), so the defaults and the pre-pass agree without tripping `AXIOM_VARIABLE_ASSIGNMENT_FORBIDDEN`. An `override` that names an axiomatic variable is left intact, so `evaluate` still enforces the one-way rule. `options` is the same `TCoreArgumentEvaluationOptions` accepted by `evaluate`.
 
 **Axiom vs. citation asymmetry (important for consumers).** Only **axiomatic**-bound variables are engine-forced: `evaluate` force-sets them `true` and rejects any explicit assignment for them. **Citation**-bound variables are _free_ — the engine does not force them and does not reject an explicit citation assignment. Both read as `true` under `deriveDefaultAssignment`, but the axiom `true` comes from the engine while the **citation `true` is supplied by the map** and is therefore _kept_ (never dropped) when evaluating — dropping it would leave the citation unknown. Consequence for a consumer building its own effective assignment and calling `evaluate` directly: strip axiomatic-bound keys, but **keep** citation-bound keys. Because citations are not locked, a citation default is reviewer-overridable; an axiom is not.
+
+**With values carried from a response** (see "Carrying a reader's answers"), the order is defaults, then carried values, then the reader's own: `evaluateWithDefaults(merged.variables, options, merged.operatorAssignments)`, where `merged = mergeCarriedInput(explicit, carried)` and `explicit` is the reader's explicit input only. Passing defaults as the reader's own input would let a citation's default `true` outrank a carried "the citation is false".
 
 ---
 
@@ -460,13 +476,13 @@ Returns the `claimId` a claim-bound variable is bound to, or `undefined` when th
 
 ### `getExtras()` → `Record<string, unknown>`
 
-Returns the argument's extra metadata (all fields except `id`, `version`, and checksums).
+Returns the argument's extra metadata (all fields except `id`, `version`, `respondsTo`, and checksums). `respondsTo` belongs to the engine, not to the extras; see [Response arguments](#response-arguments).
 
 ---
 
 ### `setExtras(extras)` → `TCoreMutationResult<Record<string, unknown>>`
 
-Replaces all extra metadata on the argument. Structural fields (`id`, `version`, checksums) are preserved and cannot be overwritten. Returns the new extras and a changeset with the updated argument in `changes.argument`.
+Replaces all extra metadata on the argument. Structural fields (`id`, `version`, `respondsTo`, checksums) are preserved and cannot be overwritten. Throws if `extras` has a `respondsTo` key: dropping it would silently turn a response into a standard argument, and setting it would bypass every check a response is built under. Only `rebaseResponse` changes it. Returns the new extras and a changeset with the updated argument in `changes.argument`.
 
 A key whose value is `undefined` is **dropped**, not stored. Clearing a field
 therefore restores the exact shape — and the exact checksum — the entity had
@@ -514,7 +530,7 @@ Runs the four-tier grammar validator and returns every violation from the Struct
 
 ### `validateInvariants()` → `TInvariantValidationResult`
 
-Runs a comprehensive invariant validation sweep on the entire argument. Delegates to `VariableManager.validate()` and each `PremiseEngine.validate()` (which delegates to `ExpressionManager.validate()`), then checks argument-level invariants: schema conformance, argument ownership on all entities, claim-bound variable references, internal premise-bound variable references, circularity detection, conclusion premise existence, and checksum consistency. Returns `{ ok: boolean, violations: TInvariantViolation[] }`. Called automatically after every mutation via the `withValidation` bracket — can also be called explicitly at any time.
+Runs a comprehensive invariant validation sweep on the entire argument. Delegates to `VariableManager.validate()` and each `PremiseEngine.validate()` (which delegates to `ExpressionManager.validate()`), then checks argument-level invariants: schema conformance, argument ownership on all entities, claim-bound variable references, internal premise-bound variable references, circularity detection, conclusion premise existence, checksum consistency, and the response invariants (`ARG_RESPONDS_TO_ITSELF`, `ARG_EXPRESSION_BINDING_OUTSIDE_RESPONSE`, `VAR_BINDING_AMBIGUOUS`; see [Response arguments](#response-arguments)). Returns `{ ok: boolean, violations: TInvariantViolation[] }`. Called automatically after every mutation via the `withValidation` bracket — can also be called explicitly at any time.
 
 ---
 
@@ -573,7 +589,9 @@ Full fork orchestration:
 8. Registers the forked engine in `ArgumentLibrary`.
 9. Creates fork records in all five `ForkLibrary` namespaces.
 
-Options extend `TForkArgumentOptions` with per-namespace extras (`argumentForkExtras`, `premiseForkExtras`, `expressionForkExtras`, `variableForkExtras`, `claimForkExtras`) and an optional `forkId`.
+Options extend `TForkArgumentOptions` with per-namespace extras (`argumentForkExtras`, `premiseForkExtras`, `expressionForkExtras`, `variableForkExtras`, `claimForkExtras`), an optional `forkId`, and `respondsToSnapshot` (below).
+
+**Forking a response.** A response's checks read a claim it shares with the argument it answers as one proposition, so a clone would make it a second, independent one and change what they answer. A fork of a response therefore keeps every claim the argument it answers uses, at the version it answers: those claims stay out of the closure and out of `claimRemap`, the fork's variables keep binding them, and a cloned claim's connection to one points at the kept claim. The response's other claims are cloned as usual. The argument answered is read from `options.respondsToSnapshot` when it is that argument at that version, otherwise from `ArgumentLibrary` when it holds that version; if neither does, `forkArgument` throws rather than guess which claims are shared.
 
 Returns:
 
@@ -1420,6 +1438,485 @@ A typical "populate this derivation premise from whichever grounding kind exists
 
 ---
 
+## Response arguments
+
+A **response** is an argument that answers exactly one other argument, pinned to one version of it, and has no conclusion of its own. Every argument that is not a response is a **standard argument**. The argument a response answers is its **target**.
+
+This section writes versions as `{argument}.{version}`: `X.3` is argument X at version 3. Every reference from a response to another argument is an `(argumentId, argumentVersion)` pair.
+
+### What makes an argument a response
+
+An argument is a response exactly when it carries `respondsTo: { argumentId, argumentVersion }` (type `TCoreArgumentReference`). The field is optional on `CoreArgumentSchema`, and absent, never `null`, on a standard argument: a stored `null` fails the schema when the argument loads, and an engine built or rolled back directly from one leaves the key out, so it is a standard argument with the same checksum as one without the key. The engine keeps its own copy, taken by the constructor and by `rollback`, and `getArgument`, `snapshot` and `getRespondsTo` each return a fresh one, so mutating what they return changes nothing. A response is created by passing the field to the constructor:
+
+```typescript
+import { ArgumentEngine } from "@proposit/proposit-core"
+
+// Y.1 answers X.3.
+const response = new ArgumentEngine(
+    {
+        id: "y",
+        version: 1,
+        respondsTo: { argumentId: "x", argumentVersion: 3 },
+    },
+    claimLibrary
+)
+
+response.isResponse() // true
+response.getRespondsTo() // { argumentId: "x", argumentVersion: 3 }
+```
+
+`getRespondsTo()` returns `undefined` for a standard argument.
+
+`respondsTo` belongs to the engine, like `id` and `version`. It is fixed when the engine is built, and only `rebaseResponse` changes it. `getExtras()` leaves it out, `setExtras()` keeps it, and `setExtras()` throws if its input names it. `respondsTo.argumentId` must differ from the argument's own id (rule S-15).
+
+A response has no conclusion, and the engine never gives it one:
+
+- `createPremise` and `createPremiseWithId` do not make the first premise the conclusion;
+- `removePremise` promotes no other premise to conclusion;
+- `setConclusionPremise` throws;
+- `evaluate()` and `checkValidity()` return `ok: false` with the validation code `ARGUMENT_IS_RESPONSE`. A response is checked with `checkLink` and `checkResponseCoherent` instead.
+
+A response stored with a conclusion still loads, so that the data can be repaired, and rule E-8 reports it. `validateEvaluability()` does not report `ARGUMENT_NO_CONCLUSION` for a response, and rule E-7 passes for a response with no conclusion.
+
+Forking a response produces a response with the same `respondsTo`, and copies its expression-bound variables with their bindings unchanged. `diffArguments` reports a change to `respondsTo`, and a change to any expression-binding field of a variable.
+
+### Expression-bound variables and their two aspects
+
+An **expression-bound variable** is the third member of the variable union (type `TExpressionBoundVariable`, schema `CoreExpressionBoundVariableSchema`). It stands for one expression of the target. Besides the base variable fields it carries:
+
+| Field                  | Meaning                                                                           |
+| ---------------------- | --------------------------------------------------------------------------------- |
+| `boundExpressionId`    | The expression of the target it stands for.                                       |
+| `boundArgumentId`      | The target's id. Must equal `respondsTo.argumentId` (rule S-15).                  |
+| `boundArgumentVersion` | The target's version. Must equal `respondsTo.argumentVersion` (rule E-10).        |
+| `boundAspect`          | `"statement"` or `"inference"` (type `TBoundAspect`, schema `BoundAspectSchema`). |
+
+The **aspect** says which question about the expression the variable stands for:
+
+- **`"statement"`**: is the expression true? Any expression may be bound this way.
+- **`"inference"`**: does the step this operator makes hold? Only an operator expression may be bound this way: any operator, including `not`, and including operators inside derivation premises.
+
+`isExpressionBound(v)` narrows the union to this member; it recognises the member by the presence of `boundExpressionId`. Only a response may hold one (rule S-15).
+
+A variable's **raw referent** is the triple `(boundArgumentId, boundExpressionId, boundAspect)`. No two variables of one response may share a raw referent (rule E-9).
+
+### Links and the four moves
+
+A **link** is a premise of a response whose whole content is a single expression-bound variable `x`, or `NOT(x)`. A link makes one of four **moves** (type `TLinkMove`), read from its content alone. Nothing else is stored, so a link cannot disagree with its own content.
+
+|                                           | Attack                   | Support            |
+| ----------------------------------------- | ------------------------ | ------------------ |
+| **Statement aspect**: is it true?         | **contradict**: `NOT(x)` | **affirm**: `x`    |
+| **Inference aspect**: does the step hold? | **undercut**: `NOT(s)`   | **reinforce**: `s` |
+
+Every other premise of a response is an ordinary premise: claim-bound reasoning, a derivation premise, or a formula that uses an expression-bound variable inside a larger expression, such as `R → NOT(x)`.
+
+#### `bindVariableToExpression(variable)` → `TCoreMutationResult<TPropositionalVariable>`
+
+Adds an expression-bound variable to a response. Throws when:
+
+- the argument is not a response;
+- `boundArgumentId` or `boundArgumentVersion` differs from `respondsTo`;
+- `canBind(boundArgumentId, boundArgumentVersion)` returns `false`.
+
+When a variable with the same raw referent already exists, that variable is returned and nothing is added. The binder sees no target, so it cannot tell that two expressions are occurrences of one claim; the checks merge those (see below).
+
+```typescript
+const { result: x } = response.bindVariableToExpression({
+    id: "y-v-q",
+    argumentId: "y",
+    argumentVersion: 1,
+    symbol: "Lq",
+    boundExpressionId: "x-q", // an expression of X.3
+    boundArgumentId: "x",
+    boundArgumentVersion: 3,
+    boundAspect: "statement",
+})
+
+// The contradict link NOT(x).
+const { result: link } = response.createPremiseWithId("y-contradict-q")
+link.addExpression({
+    id: "y-not",
+    argumentId: "y",
+    argumentVersion: 1,
+    premiseId: "y-contradict-q",
+    parentId: null,
+    position: 0,
+    type: "operator",
+    operator: "not",
+})
+link.addExpression({
+    id: "y-q",
+    argumentId: "y",
+    argumentVersion: 1,
+    premiseId: "y-contradict-q",
+    parentId: "y-not",
+    position: 0,
+    type: "variable",
+    variableId: x.id,
+})
+```
+
+This example adds the `not` before its child, which needs an engine built with `behavior: "permissive"`. Under the default `"assistive"` behavior, auto-normalization removes an operator left without children.
+
+`updateVariable` refuses any change to an expression-bound variable's `boundExpressionId`, `boundAspect`, `boundArgumentId` or `boundArgumentVersion`, and refuses converting a variable to or from the expression-bound shape. Only `rebaseResponse` re-points a binding.
+
+When loading (`fromSnapshot`, `fromData`), the binder skips its version check and its duplicate check, so a stored version mismatch loads and is reported by E-10, and a stored duplicate loads and is reported by E-9. Both load paths build the base `ArgumentEngine`, so a subclass's `canBind` is not consulted, and a response whose target the consumer no longer offers still loads.
+
+#### `listLinks(response)` → `TResponseLink[]`
+
+Every link of a response, in premise order, each as `{ premiseId, variableId, boundExpressionId, boundAspect, move }`. Empty for a standard argument. A premise `p` whose variable is claim-bound is not a link.
+
+#### `validateLinks(response, targetSnapshot)` → `TLinkValidationResult`
+
+Checks a response's bindings against the snapshot of its target. Throws unless `targetSnapshot.argument` has the id and version `respondsTo` names. Returns `{ ok, violations }`, where `ok` is `true` when no violation has severity `"error"`. Each `TLinkViolation` is `{ code, severity, message, variableId?, premiseIds?, expressionId?, claimId? }`.
+
+| Code (`TLinkViolationCode`)      | Severity | Meaning                                                                                                                                                                                                         |
+| -------------------------------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `LINK_VERSION_MISMATCH`          | error    | A binding names another version of the target (rule E-10). The binding is not looked up in the snapshot supplied.                                                                                               |
+| `LINK_EXPRESSION_MISSING`        | error    | The bound expression is not in the target snapshot.                                                                                                                                                             |
+| `LINK_INFERENCE_ON_NON_OPERATOR` | error    | An inference-aspect binding names an expression that is not an operator.                                                                                                                                        |
+| `LINK_SAME_CLAIM`                | info     | Two or more links bind different occurrences of one claim in the same aspect. This is legal, and the checks treat them as one. A consumer that counts a response's links by claim must merge them the same way. |
+| `LINK_TARGET_MISMATCH`           | error    | Never returned by `validateLinks`, which throws instead. `checkLink` and `checkResponseCoherent` report it, in an `invalid` result, when the snapshot is not the target.                                        |
+
+#### `elementsWithinPremise(targetSnapshot, premiseId)` → `TPremiseElements`
+
+Every expression id in one premise of a snapshot, and the claim ids of its claim-bound variable expressions, as `{ expressionIds, claimIds }`. Bindings to other premises are not followed. Throws when the snapshot has no such premise.
+
+### Claims a response shares with the argument it answers
+
+A response's claim-bound variables may use any claim in the claim library, including claims the target uses. A claim means one proposition wherever it is used, so a response that reasons from P, or copies the target's derivation premise for P with the same cited sources, is asserting the same P the target uses:
+
+```
+X:  P → Q,  Q → R,  S → P (derivation, S cited)
+Y:  S → P (derivation, S cited),  P → NOT(r),  NOT(r)      r: R's expression in X
+```
+
+Only a link answers the target. `P → NOT(r)` and Y's copy of the derivation premise are Y's reasons, not moves against X; Y answers only through the link `NOT(r)`.
+
+- **Checks.** A shared claim is one column (step 2 and step 4 below use the same column key), so the checks read it as one proposition. `checkLink` on `NOT(r)` above `follows`, because S is held true and so P holds. Without the derivation premise it is `asserted`. A response that uses P and also contradicts the target's P is `incoherent`.
+- **Rebasing.** `classifyBindings` and `rebaseResponse` never look at claim-bound variables: a newer target version that starts or stops using a claim the response uses needs no decision.
+- **`LINK_SAME_CLAIM`** is unaffected. It is about two links, not about claim-bound variables.
+
+### Checking a response
+
+Two `ArgumentEngine` methods ask questions of a response's content. Each takes the target snapshot, which the consumer supplies; core never fetches one.
+
+#### `checkLink(linkPremiseId, targetSnapshot)` → `TLinkCheckResult`
+
+Asks whether a link follows from the response's other premises, derivation premises included. Throws when the argument is not a response, or when `linkPremiseId` is not one of its links.
+
+#### `checkResponseCoherent(targetSnapshot)` → `TResponseCoherenceResult`
+
+Asks whether all of the response's premises can be true at once. Throws when the argument is not a response.
+
+#### What the checks search
+
+The checks never treat a statement link as an opaque true-or-false value. Each builds a **combined premise set** in memory, used only for the search and never stored:
+
+1. The response's premises are copied, leaving out unpopulated (naked-Q) derivation premises.
+2. Each statement-aspect variable is **expanded**: replaced by a copy of the target subtree it names. Inside the copy, the target's variables become **columns**, the things the search assigns true or false:
+    - a claim-bound variable becomes one column per claim id, so two occurrences of one claim, in the target or across links, are the same column;
+    - a variable bound to another premise of the target is replaced, recursively, by a copy of that premise's formula;
+    - a variable bound to a premise of a third argument stays one column;
+    - when the target is itself a response, each of its own expression-bound variables stays one column.
+3. Each inference-aspect variable stays one column, keyed by its raw referent. Whether a step holds is not a function of its parts.
+4. The response's own claim-bound variables that share a claim id become one column.
+
+Because everything the search reads has been copied in, no premise reaches into another argument, and the satisfiability search's grouping by shared columns stays exact.
+
+**Seeding.** A column from the response's own citation- or axiom-bound variables is held true, as `checkValidity` holds them. Columns from the target are never held; the response may deny them.
+
+A link's **merged referent** is its content after expansion and merging, without the `NOT`. Two links with the same merged referent and the same polarity are one assertion written twice, and never support each other. Two with the same merged referent and opposite polarities contradict each other.
+
+**Preconditions.** Both checks answer `invalid`, with the problems and without searching, when the snapshot is not the target (`LINK_TARGET_MISMATCH`), or when `validateLinks` reports any violation of severity `"error"`.
+
+#### `checkLink` results
+
+The order of decision:
+
+1. Can the whole combined set, the link included, be true at once? If not, the result is `incoherent`: the response contradicts itself, so nothing is said about the link. This agrees with `checkResponseCoherent` for every link of an incoherent response. If the search cannot decide, the result is `undetermined`.
+2. Can the other premises be true while the link's content is false? The link itself, and every link with the same merged referent and polarity, are left out of "the other premises". If they cannot, the result is `follows`. If they can, it is `asserted`. If the search cannot decide, it is `undetermined`.
+
+| `status`       | Fields                                                 | Meaning                                                                                                                                                                                                                                                                                                                       |
+| -------------- | ------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `follows`      | `supportPremiseIds`, `restsOnlyOnLinks?`               | The link follows from the other premises. `supportPremiseIds` is a minimal set it follows from: no premise in it can be removed. It is not necessarily the smallest such set.                                                                                                                                                 |
+| `asserted`     | `attemptedSupport`, `counterexample`                   | The other premises can be true with the link's content false, so the link stands as a base assertion. `counterexample` is one such assignment, as `TColumnValue[]`: each `{ column, value }`, where `column` (`TColumnReference`) is a claim, an unexpanded expression of another argument, or a premise of another argument. |
+| `incoherent`   | none                                                   | The response's premises cannot all be true together.                                                                                                                                                                                                                                                                          |
+| `undetermined` | `reason: "too-many-variables"` (`TUndeterminedReason`) | A group of interacting columns is larger than the search ceiling. A check never throws for size.                                                                                                                                                                                                                              |
+| `invalid`      | `problems`                                             | A precondition failed; `problems` are the `TLinkViolation`s of severity `"error"`.                                                                                                                                                                                                                                            |
+
+**`attemptedSupport`** is `true` when another premise has the link's merged referent on its consequent side: to the right of `→`, or on either side of `↔`, at any depth, including below a `NOT` there. So `{R → NOT(x), NOT(x)}` gives `asserted` with `attemptedSupport: true` (an attempt at support whose antecedent `R` is not asserted), while `{NOT(x)}` alone gives `attemptedSupport: false`. Inference referents count.
+
+**`restsOnlyOnLinks`** is `true` when the link follows but is not **grounded**. A link is grounded when it is `asserted`, or when it follows from the premises that are not links together with links already grounded, repeated until nothing changes. Links sharing a merged referent and polarity count as one link here, and `incoherent`, `undetermined` and `invalid` links are never grounded. For example, in `{NOT(x), NOT(y), NOT(y) → NOT(x), NOT(x) → NOT(y)}` both links follow, each from the other, and both rest only on links; adding `R` and `R → NOT(y)` grounds both. The field is left out, rather than guessed, when any link of the response is `undetermined`. The analysis is computed once per response and target snapshot, and reused until the response changes.
+
+#### `checkResponseCoherent` results
+
+| Result                                                                | Meaning                                                                                                              |
+| --------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `{ status: "checked", coherent: true }`                               | The premises can all be true at once.                                                                                |
+| `{ status: "checked", coherent: false, unsatisfiablePremiseIds }`     | They cannot. `unsatisfiablePremiseIds` is a minimal set that cannot: removing any one of them lets the rest be true. |
+| `{ status: "checked", coherent: null, reason: "too-many-variables" }` | The search could not decide.                                                                                         |
+| `{ status: "invalid", problems }`                                     | A precondition failed.                                                                                               |
+
+The two checks use the same combined set and the same seeding, so they never disagree. For example, a response that contradicts `Q ∧ R` and affirms both `Q` and `R` is incoherent: coherence answers `false`, and `checkLink` answers `incoherent` for every one of its links.
+
+```typescript
+const target = x3.snapshot() // the consumer supplies X.3
+
+response.checkLink("y-contradict-q", target)
+// { status: "asserted", attemptedSupport: false,
+//   counterexample: [{ column: { kind: "claim", claimId: "claim-q" }, value: true }] }
+
+response.checkResponseCoherent(target)
+// { status: "checked", coherent: true }
+```
+
+#### The search ceiling
+
+The checks use the same grouped search as evaluation (`findSatisfyingAssignment`). Premises are split into groups that share no column, and each group is walked over its own columns. `SATISFIABILITY_VARIABLE_CEILING` (16) bounds the columns of the largest group, not the total: two independent groups of 10 columns each are decided, while a single group of 17 answers `undetermined` (or `coherent: null`). Finding a minimal support set, finding a minimal contradictory set, and grounding each run the search once per premise or link, so a response with many links in one large group is slow just under the ceiling.
+
+### Bringing a response up to a newer target version
+
+Publishing a newer version of a target changes nothing in a response that answers an older one. Telling the response's author that a newer version exists, and offering to answer it, is the consumer's job, since core does not know which versions exist.
+
+**Id stability, which rebasing relies on.** A consumer that copies an argument into a new version must keep the id of every entity that persists (every premise, expression and variable), and mint new ids only for what is new. This is the id-stability contract `diffArguments` already relies on. Classification matches a target's expressions across versions by id, so a target version whose ids were all regenerated reports every binding `removed`.
+
+**The unit of work is the expression-bound variable**, not the link premise. One variable can serve several premises (in `{R, R → NOT(x), NOT(x)}`, `x` is used by two), so classification and decisions are per variable, and each entry lists the premises that use it.
+
+#### Worked example
+
+Y.1 answers X.3. The author of X publishes X.4. Y.1 still answers X.3, and is never modified. The author of Y accepts the offer to answer X.4:
+
+1. The consumer copies Y.1 into a new draft version, Y.2, keeping every entity id, as it does for any new version. Y.2's `respondsTo` still names X.3, and its bindings still name version 3.
+2. It loads Y.2 into an engine and asks what happened to each binding between X.3 and X.4:
+
+    ```typescript
+    import { classifyBindings } from "@proposit/proposit-core"
+
+    const classification = classifyBindings(y2, x3Snapshot, x4Snapshot)
+    // classification.bindings: one entry per expression-bound variable
+    ```
+
+3. It shows the author every entry that needs a decision, and passes the answers to the mutation:
+
+    ```typescript
+    const { result, changes } = y2.rebaseResponse(x3Snapshot, x4Snapshot, {
+        bindings: {
+            "y-v-step": { action: "keep" }, // the step changed; answer the new one
+            "y-v-r": { action: "retarget", expressionId: "x-r2" },
+            "y-v-gone": { action: "drop" },
+        },
+    })
+    // `result` is the classification the rebase acted on. Persist `changes`:
+    // the argument with respondsTo = X.4, and every variable, premise and
+    // expression re-pointed, added or removed.
+    ```
+
+The same applies one level down. If Z.0 answers Y.1, it keeps answering Y.1 until Z's author chooses to make a Z.1 that answers Y.2.
+
+#### `classifyBindings(response, targetFrom, targetTo, options?)` → `TBindingClassificationResult`
+
+Classifies each expression-bound variable of `response` between two snapshots of its target, and returns `{ bindings }`. The response's claim-bound variables are not classified: a claim the response shares with either version is the same proposition in both (see "Claims a response shares with the argument it answers"), so rebasing never touches it. Throws when the argument is not a response, when the two snapshots are not versions of one argument, when the response answers neither version, or when a binding names any other version.
+
+Each variable is judged against the snapshot of the version it is bound to. One already bound to `targetTo`'s version is `alreadyRebased`, or `removed` when its expression is missing from `targetTo`; this is how a partly saved rebase is finished. Every other variable must be bound to `targetFrom`'s version.
+
+Each entry of `bindings` (`TBindingClassification`), in variable order, carries the fields of `TBindingClassificationBase` — `variableId`, `boundExpressionId`, `boundAspect`, `boundArgumentVersion`, `premises` — and one `status`:
+
+| `status`         | Meaning                                                                                                                                                                                                                             |
+| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `unchanged`      | The expression id is in `targetTo`, with the same structural fingerprint, the same position (below), and every reference it makes into a third argument either the same or re-pinned with no change. Re-pointed without a decision. |
+| `changed`        | The expression id is in `targetTo`, but something differs; `reasons` says what. Needs a decision.                                                                                                                                   |
+| `removed`        | The expression id is absent from `targetTo`. Needs a decision.                                                                                                                                                                      |
+| `alreadyRebased` | Already bound to `targetTo`, and its expression is there. Needs nothing.                                                                                                                                                            |
+
+`reasons` (`TBindingChangeReason[]`) holds one or more of:
+
+- `content`: the bound subtree's structure differs (an operator, a child order, a claim version), or something it references in a third argument differs between the two versions it is pinned to;
+- `position`: the expression's position differs: its position class (see `positionClassOf`), or, for a nested expression, whether its premise is the conclusion. For example an unchanged operator moved from a premise root to a nested place, or a nested expression's premise gained or lost the conclusion role. Carrying ignores an undercut nested in the conclusion but strikes the premise for one nested anywhere else, so either move changes what an answer on the link carries;
+- `outsideReferenceRepinned`: something the subtree references in a third argument is pinned to a different version in `targetTo`, and the snapshots needed to compare the two versions were not supplied.
+
+`premises` (`TBindingPremiseUse[]`) lists every premise that dropping the variable would remove, each as `{ premiseId, isLink, cascaded }`. `cascaded: true` marks a premise reached only because it uses a variable bound to another premise in the list: removing a premise removes the variables bound to it, and every expression that uses them.
+
+**`options.outsideSnapshots`** (type `TClassifyBindingsOptions`) supplies snapshots of other arguments, each identified by its own id and version. Suppose Z.0 answers Y.1, and Y.2 moved from X.3 to X.4, so Y's link expressions now reference X.4 instead of X.3. When Z is brought from Y.1 to Y.2:
+
+- with X.3 and X.4 both supplied, the referenced X element (the expression, with its aspect, or the root of an externally bound premise) is compared across them. When it exists in both with the same fingerprint, claim versions included, and the same position, judging its own outside references the same way, the re-pin counts as no change and the binding can be `unchanged`. Otherwise the binding is `changed` with reason `content`;
+- with either version missing, the binding is `changed` with reason `outsideReferenceRepinned`. Core cannot fetch the argument, so it never assumes the change does not matter.
+
+Classification therefore reaches as far back as the snapshots supplied. The checks above still reach one argument back.
+
+**Either version order works.** Nothing compares the two version numbers, so `targetTo` may be the older version: for example, to show the author of a response pinned to X.4 what differs from X.3. Every label then reads from `targetFrom` to `targetTo`. `removed` means "absent from `targetTo`", which in that direction means the expression was added in the newer version.
+
+#### `rebaseResponse(targetFrom, targetTo, decisions, options?)` → `TCoreMutationResult<TBindingClassificationResult>`
+
+An `ArgumentEngine` mutation that moves a response to `targetTo`. `decisions` is a `TRebaseDecisions`, `{ bindings? }`, keyed by variable id, and `options` is the same `TClassifyBindingsOptions` as above. The mutation computes the classification again, as `classifyBindings` does, and returns it as `result`. Then:
+
+- `respondsTo` becomes `targetTo`'s id and version;
+- every `unchanged` variable is re-pointed to `targetTo`'s version;
+- every `changed` or `removed` variable takes its decision from `decisions.bindings` (`TBindingDecision`):
+    - `{ action: "keep" }` re-points it to the same expression, accepting the new content. Not allowed for a `removed` variable;
+    - `{ action: "retarget", expressionId }` binds it, in the same aspect, to another expression of `targetTo`;
+    - `{ action: "drop" }` removes the variable and every premise its entry lists, links or not, since a premise cannot keep a variable that no longer means anything;
+- the response's claim-bound variables are left alone, whether or not either version uses their claims.
+
+It throws, and changes nothing, when:
+
+- this argument is not a response, or the snapshots are not versions of the argument it answers;
+- `canBind` refuses `targetTo`;
+- a binding that needs a decision has none, or a decision names a variable that needs none;
+- `keep` is given for a `removed` binding;
+- `retarget` names an expression absent from `targetTo`;
+- a `keep` or `retarget` would bind an expression another variable already binds in the same aspect, which rule E-9 forbids; drop one of the two instead.
+
+**Postcondition.** Before returning, it checks that every expression-bound variable is bound to `targetTo`'s version and names an expression present in `targetTo`, and that `validateLinks` against `targetTo` reports no error it did not report before the rebase (compared by code, variable id and expression id). If the check fails, the mutation throws and the whole rebase is rolled back.
+
+`changes` holds the argument with its new `respondsTo`, every variable re-pointed, added or removed, and every premise and expression the drops removed. The consumer persists it like the changeset of any other mutation.
+
+**A reader's answers do not follow a rebase.** `carryAnswers` keys a reader's answers by link premise id, and a rebase keeps premise ids. After a `keep` or `retarget`, a stored answer on that link speaks about the new content; after a `drop` it names no link, and an `agree` on it is reported `notALink`. Core cannot tell, because answers carry no version. Keep a reader's answers per version of the response, or invalidate those on links whose binding was `changed`, `removed` or retargeted.
+
+#### `structuralFingerprint(snapshot, expressionId)` → `string`
+
+A hash over the structure of the subtree rooted at one expression. Stored checksums cannot be used to compare versions, because an expression's checksum includes its argument version, parent id, premise id and variable id. The fingerprint covers each node's type, operator and child order, and for each variable its referent:
+
+- claim-bound: the claim id and claim version;
+- bound to a premise of the same argument: that premise's root structure, followed recursively;
+- bound to a premise of another argument: that argument's id and the premise id;
+- expression-bound: the argument id, expression id and aspect.
+
+It ignores the argument's own ids and versions, and leaves out the versions of other arguments, so moving another argument to a new version does not change it; those versions are compared separately, through `outsideSnapshots`. Throws when the snapshot has no such expression, or when bindings between its premises form a cycle.
+
+#### `positionClassOf(snapshot, expressionId)` → `TPositionClass`
+
+Where an expression sits in its argument: `"freeformRoot"` (the root of a premise that is neither the conclusion nor a derivation premise), `"conclusionRoot"`, `"nested"` (below the root of a premise that is not a derivation premise), or `"inDerivation"` (anywhere in a derivation premise). Formula (parenthesis) nodes above an expression are looked through: an operator whose only ancestors are formulas is its premise's root. Throws when the snapshot has no such expression.
+
+### Link references
+
+A `TLinkReference` names a link from outside the response that holds it: `{ argumentId, argumentVersion, premiseId }`, where the argument is the response and `premiseId` is the link premise.
+
+#### `linkTargetsElement(reference, response, targetSnapshot, element)` → `boolean`
+
+Whether a referenced link is about an element of the target. `element` (`TLinkElement`) is `{ kind: "claim", claimId }` or `{ kind: "expression", expressionId }`. True when the reference names a link of `response` and:
+
+- for a claim, the link binds a variable expression of that claim, at any version of the claim;
+- for an expression, the link binds that expression, or the root of the premise that contains it. The root is read through formula nodes, as `positionClassOf` reads it, so an undercut of the operator just inside a premise's root formula is about the whole premise.
+
+A reference to another argument, another version, or a premise that is not a link is never about anything. Throws when `targetSnapshot` is not the target of `response`.
+
+### Carrying a reader's answers
+
+A reader who agrees with a response's links has asserted what those links say about the argument answered. Carrying puts that into the reader's input for the argument answered, one step at a time along a chain of answers: Z answers Y, which answers X, is carried Z into Y, then Y into X.
+
+#### `carryAnswers(targetSnapshot, linkAnswers, targetClaims, options?)` → `TCarryResult`
+
+An `ArgumentEngine` method on the response. `linkAnswers` is `Record<premiseId, TLinkAnswer>`, where `TLinkAnswer` is `"agree" | "disagree"`; a link with no entry is unanswered. `targetClaims` is a `TClaimLookup` that resolves the answered argument's claims at the versions it binds, used to tell which are axioms; a snapshot carries no claims, and the response's own library need not hold them.
+
+It answers `{ status: "invalid", problems }` when the engine is not a response, the snapshot is not the argument and version `respondsTo` names (`LINK_TARGET_MISMATCH`), or `validateLinks` reports an error. Otherwise `{ status: "carried", into, sources, notCarried, ... }`:
+
+- into a standard argument, `intoResponse: false` with `variables: Record<variableId, boolean>` and `operatorAssignments: Record<expressionId, "accepted" | "rejected">`;
+- into another response, `intoResponse: true` with `linkAnswers: Record<premiseId, TLinkAnswer>`;
+- `sources`: one `TCarriedSource` per carried value, `{ kind: "variable" | "operator" | "linkAnswer", id, value, linkPremiseIds }`, naming every link the value came from;
+- `notCarried`: one `TNotCarried` per `agree` answer that carried nothing, `{ premiseId, reason, conflictsWith? }`;
+- `collisions`: one `TCarryCollision` per value a carried link would have carried that the reader's own links carry the other way (see **The reader's own answers** below). Empty unless `options.ownLinkPremiseIds` is given.
+
+Every `agree` answer appears in `sources` or `notCarried`. It never throws on an answer it cannot carry.
+
+**Only `agree` answers carry.** A disagreed or unanswered link carries nothing, and neither does a link that merely evaluates true. Only links carry, never a response's other premises: agreeing with a move is not agreeing with every reason given for it, even when a reason is a claim of the argument answered.
+
+**Statement links.** An affirm says its bound expression E is true, a contradict that it is false. E is expanded the way the checks expand it (claims become one column each, a variable bound to another premise of the argument expands into that premise, a premise of a third argument is one column), and read with **every column free**: nothing outside E enters, not the response's premises, not the claims the response grounds, not the target's axioms. The rows where E has the link's value then fall into one of four cases:
+
+- **a cube**: some columns each have one fixed value and the rest are free. The link carries exactly those fixed values. Affirming `Q ∧ R` carries Q and R true; contradicting `Q ∨ R` carries both false; contradicting `P → Q` carries P true and Q false.
+- **not a cube**, as with contradicting `Q ∧ R` or affirming `P → Q`: `notExpressible`;
+- **no rows**: `impossible`; **every row**: `vacuous`;
+- more columns than `SATISFIABILITY_VARIABLE_CEILING`: `tooLarge`.
+
+This deliberately differs from `checkLink` when the response grounds a claim E also uses: `checkLink` holds that claim true, but carrying does not, so a link's carried meaning never depends on the response's own reasons. A response that cites S and contradicts the target's `S ∧ Q` carries nothing (`notExpressible`).
+
+A fixed claim value goes onto **every** variable bound to that claim in the premises evaluation reads (an unpopulated naked-Q derivation premise is not one). When `targetClaims` cannot resolve such a variable's claim at its version, the whole link is `unknownClaim`: whether the claim is an axiom cannot be told, and `evaluate` throws on an assigned axiom. An axiom-bound variable, decided at its own claim version, is skipped when the value is `true`; a `false` value makes the whole link `axiom`, and so does a link whose every value is skipped. A citation-bound variable is carried: a reader may disagree with a source. A fixed value of a premise of a third argument goes onto the variable bound to it.
+
+**Inference links.** A reinforce carries `accepted` and an undercut `rejected`, following what evaluation does with the decision:
+
+| The bound operator                             | Reinforce carries              | Undercut carries                               |
+| ---------------------------------------------- | ------------------------------ | ---------------------------------------------- |
+| root of a freeform premise, `implies` or `iff` | `accepted`                     | `rejected`: the premise is struck              |
+| root of a freeform premise, any other operator | nothing (`nonConditionalRoot`) | `rejected`: the premise is struck              |
+| nested in a freeform premise                   | nothing (`nestedReinforce`)    | `rejected`: the premise is struck              |
+| root of the conclusion, `implies` or `iff`     | `accepted`                     | `rejected`: sets `conclusionInferenceRejected` |
+| root of the conclusion, any other operator     | nothing (`nonConditionalRoot`) | `rejected`: sets `conclusionInferenceRejected` |
+| nested in the conclusion                       | nothing (`nestedReinforce`)    | nothing (`ignoredInConclusion`)                |
+| root of a derivation premise                   | `accepted`                     | nothing (`derivationOperator`)                 |
+| nested in a derivation premise                 | nothing (`nestedReinforce`)    | nothing (`derivationOperator`)                 |
+
+"Root" is read through formula nodes, as `positionClassOf` reads it. Evaluation reads an accepted operator as "this subexpression is true": an accepted `and` forces its children true. That is what reinforcing a conditional's step means, but at any other root it asserts the premise outright, and below a root it asserts a subexpression; neither is what a reinforce says, and an outright assertion would also let attribution report a conclusion reached on the argument's own merits through a value the reader supplied. A rejection asserts nothing: it strikes the premise it lives in, so carrying one never asserts more than the link.
+
+**Into another response.** When the argument answered is itself a response, the result is answers on its links. Each of its links is `x` or `NOT(x)` for one of its expression-bound variables, and the expansion keeps `x` as a column, so whenever an agreed statement link fixes `x`, that value answers every link on `x`: `x` true agrees with an affirm or reinforce link on it and disagrees with a contradict or undercut link, and `x` false the reverse. Values of claims are dropped, since the response answered is never evaluated. A link fixing no `x` is `noLinkReached`; an inference link on a link's `NOT` is `linkStep`, and one on any other operator `noLinkReached`. Agreeing with a link that fixes `x` true when the answered response holds only the contradict link `NOT(x)` therefore disagrees with that link, and carries nothing further.
+
+**Conflicts.** When agreed links of one response fix one variable, decide one operator, or answer one link both ways, every link involved carries nothing (`conflict`, with `conflictsWith` naming the others): carrying only the uncontested part of a link would assert less than it says. This happens only in a response `checkResponseCoherent` calls incoherent; carrying does not require coherence.
+
+**The reader's own answers.** Partway along a chain, a response's answers are of two kinds: the reader's own, and those carried into it from a response answering it. `options.ownLinkPremiseIds` names the reader's own. They settle first, among themselves: two that disagree both carry nothing (`conflict`). A carried link that would carry a value the reader's surviving links carry the other way is then dropped, whole (`overriddenByOwn`, with `conflictsWith` naming the reader's links), and each value it disagreed on is reported in `collisions` with the reader's value as `own`. An own link dropped in a conflict of its own carries nothing, so it outranks nothing. The carried links left settle among themselves last. So the reader's value wins at every step of the chain, as `mergeCarriedInput` makes it win at the last. Without the option every answer counts as the reader's own, and a carried link and a reader's link that disagree both carry nothing.
+
+**Reasons a link carries nothing** (`TNotCarriedReason`): `axiom`, `unknownClaim`, `notExpressible`, `impossible`, `vacuous`, `tooLarge`, `nestedReinforce`, `nonConditionalRoot`, `ignoredInConclusion`, `derivationOperator`, `linkStep`, `noLinkReached`, `conflict`, `overriddenByOwn`, and `notALink` for an `agree` keyed by a premise id that is not a link of this response: a premise that is not a link, or an id the response does not hold at all, such as one from before a fork re-keyed its premises or a link a rebase dropped (a `disagree` there is not reported). Into a standard argument, `noLinkReached` means the link's values reach no variable evaluation reads, for example a claim used only in an unpopulated naked-Q derivation premise.
+
+#### `mergeCarriedInput(own, carried)` → `TMergedCarriedInput`
+
+Adds a `carried` result to the reader's own **explicit** input for the argument it was carried into: `own` is `{ variables?, operatorAssignments?, linkAnswers? }`. Returns `{ variables, operatorAssignments, linkAnswers, collisions }`. The reader's value wins every collision, and each `TCarryCollision` gives `kind`, `id`, `own`, `carried` and the source links. An explicit `null` ("not sure") is not a value: a carried value replaces it without a collision. A value the argument's accepted steps contradict comes out `CONTESTED` at evaluation, as any reader value does. The merged input never contains `CONTESTED`. It does not check that `own` is for `carried.into`. `collisions` also takes in the `carried` result's own `collisions`, the ones settled inside `carryAnswers`: one whose carried value the reader's explicit input here repeats is left out, since that link did not lose, and one the input overrules names the input's value as `own`. Each key has at most one collision.
+
+**Carried values are the reader's assertions.** They enter `variables` and `operatorAssignments`, so evaluation's attribution counts them exactly as the reader's own: `assertedByReader` and `claimAttribution` include them, and a conclusion reached through one is not reached without the reader's assertion. Which link a value came from lives in `sources`, not in the evaluation result.
+
+```typescript
+// Z answers Y, which answers X. The reader agreed with some of Z's links,
+// and answered some of Y's links themselves.
+const intoY = z.carryAnswers(ySnapshot, readerAnswersOnZ, claims)
+if (intoY.status === "carried" && intoY.intoResponse) {
+    const onY = mergeCarriedInput({ linkAnswers: readerAnswersOnY }, intoY)
+    // Name the reader's own answers on Y, so a value carried in from Z never
+    // cancels one: the carried link is dropped and reported in collisions.
+    const intoX = y.carryAnswers(xSnapshot, onY.linkAnswers, claims, {
+        ownLinkPremiseIds: Object.keys(readerAnswersOnY),
+    })
+    if (intoX.status === "carried" && !intoX.intoResponse) {
+        const merged = mergeCarriedInput(readerInputOnX, intoX)
+        const result = x.evaluateWithDefaults(
+            merged.variables,
+            undefined,
+            merged.operatorAssignments
+        )
+    }
+}
+```
+
+### Persisting responses: the cross-argument reference
+
+An expression-bound variable names an expression in another argument, through `(boundArgumentId, boundArgumentVersion, boundExpressionId)`, exactly as an externally premise-bound variable names a premise in another argument. A consumer adding a database foreign key for it should point the key at the stored expression of that argument version. `orderChangeset` orders operations within one argument only; since a target exists before any response to it, the ordering needs no change.
+
+### Validation
+
+The grammar rules responses add or change (see `docs/Proposit_Grammar.md` for the full inventory):
+
+| Rule   | Tier       | Meaning                                                                                                                                                                                                                                       |
+| ------ | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `S-3`  | Structural | **Widened.** Every variable has exactly one kind of reference: a claim, a premise, or an expression. Not two, and not none. The rule used to know only claims and premises, so a consumer that reacts to S-3 must now expect the third shape. |
+| `S-15` | Structural | A response's `respondsTo` names an argument other than itself; only a response holds expression-bound variables; and each binds into the argument the response answers.                                                                       |
+| `E-8`  | Evaluable  | A response has no conclusion premise.                                                                                                                                                                                                         |
+| `E-9`  | Evaluable  | No two expression-bound variables of a response share a raw referent.                                                                                                                                                                         |
+| `E-10` | Evaluable  | Every expression-bound variable of a response is bound to `respondsTo.argumentVersion`. A mismatch loads, so that a partly saved rebase can be finished.                                                                                      |
+
+S-15, and the more-than-one-kind case of S-3, are also invariants, checked by `validateInvariants()` on every mutation and on load, so data that breaks them never loads. Their invariant codes (`TInvariantViolation.code`):
+
+| Code                                      | Meaning                                                                                                  |
+| ----------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `ARG_RESPONDS_TO_ITSELF`                  | `respondsTo.argumentId` is the argument's own id.                                                        |
+| `ARG_EXPRESSION_BINDING_OUTSIDE_RESPONSE` | An expression-bound variable is in a standard argument, or binds into an argument other than the target. |
+| `VAR_BINDING_AMBIGUOUS`                   | A variable has more than one kind of reference.                                                          |
+
+A stored variable with more than one kind of reference fails to load through `fromSnapshot` or `fromData` with an `InvariantViolationError` carrying `VAR_BINDING_AMBIGUOUS`, which names that problem rather than a later one such as a duplicate symbol.
+
+### Limitations
+
+- **The checks reach one argument back.** Z, answering Y, sees only Y's snapshot. Two links of Y on two occurrences of one claim of X are two columns for Z, so Z may affirm one and contradict the other without being reported incoherent. Likewise, a response cannot deny a source cited two steps back: links reach only the immediate target, and rules D-4 and D-5 forbid placing the response's own citation variable under `NOT`. D-4 and D-5 do not restrict expression-bound variables, so a response may contradict or undercut anything in its target that rests on a source or an axiom.
+- **Responses are a library feature.** The CLI does not create or store them.
+
+---
+
 ## Error Codes
 
 ### Derivation premise errors
@@ -1586,6 +2083,21 @@ Every reduction is answer-preserving: the result matches a single flat walk over
 
 ---
 
+### `findSatisfyingAssignment(ctx, input)` → `TSatisfyingAssignmentResult`
+
+The same search as `isPremiseSetSatisfiable`, with the same `input`, answering with a **witness** — one satisfying assignment — when there is one:
+
+```typescript
+type TSatisfyingAssignmentResult =
+    | { satisfiable: true; assignment: Record<string, boolean> }
+    | { satisfiable: false }
+    | { satisfiable: null }
+```
+
+The witness merges the first satisfying row of each group. It holds a value for every variable the walk varied (every free variable some premise reaches) and `true` for every forced-true variable. A free variable no premise reaches is absent: no premise reads it, so any value satisfies. The answer is `{ satisfiable: null }` exactly where `isPremiseSetSatisfiable` returns `null`, including when a group exceeds `SATISFIABILITY_VARIABLE_CEILING`; no witness is offered for a set the search could not finish. `isPremiseSetSatisfiable` is this function's `satisfiable` field. The response checks (`checkLink`, `checkResponseCoherent`) use it to report a counterexample.
+
+---
+
 ### `composeChangesets(first, then)` → `TCoreChangeset`
 
 Combines two changesets made one after the other — the changesets of two successive mutations — into the one changeset that describes both. Each entity lands in one bucket: added then modified stays added (with the later value), added then removed disappears, modified then removed becomes removed, removed then added becomes modified, and otherwise the later entry wins. `roles` and `argument` take the later value when present. Use it to combine a sequence of mutations for one persistence call. `mergeChangesets` is for changesets that are independent of each other, and throws when an id lands in two buckets, which a sequence can legitimately produce.
@@ -1634,6 +2146,8 @@ const ast: TFormulaAST = parseFormula("(P and Q) implies R")
 ### `DEFAULT_CHECKSUM_CONFIG`
 
 Readonly default checksum configuration with `Set<string>` fields for each entity type (`expressionFields`, `variableFields`, `premiseFields`, `argumentFields`, `roleFields`, `claimFields`, `claimCitationFields`). Used by `ArgumentEngine`, `PremiseEngine`, `ClaimLibrary`, and `ClaimCitationLibrary` when no custom config is provided.
+
+**Fields hashed under every configuration.** Three fields are added to the field set in force whatever the configuration says: `respondsTo` among argument fields, and `boundExpressionId` and `boundAspect` among variable fields. The field set in force is the configured set when the configuration names one, and the default otherwise, together with these fields. This applies wherever a checksum is computed — creation, rollback, snapshot restore and `"strict"` verification — including under a configuration stored before the fields existed, or a partial one that omits `argumentFields` or `variableFields`. Each field is hashed only when present, and all three are absent on every standard argument and every claim- or premise-bound variable, so no existing checksum changes; a stored configuration still detects a rebase. `DEFAULT_CHECKSUM_CONFIG` itself lists all three, along with `boundArgumentId` and `boundArgumentVersion` (shared with premise-bound variables).
 
 ---
 
@@ -1705,11 +2219,11 @@ Or at runtime via `engine.setBehavior(...)`. Switching `permissive → assistive
 
 ### Wire-format types
 
-| Export             | Description                                                                                                                                |
-| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| `TGrammarTier`     | `'structural' \| 'evaluable' \| 'derivable' \| 'presentable'` (string-literal union).                                                      |
-| `TGrammarRuleCode` | Union of `'S-1'`..`'S-14'`, `'E-1'`+`'E-3'`..`'E-7'`, `'D-1'`..`'D-6'`, `'P-1'`..`'P-5'`. Codes `E-2` and `D-7` are reserved (not reused). |
-| `TViolation`       | `{ tier, code, message, argumentId?, premiseId?, expressionId?, variableId?, claimId?, … }`. Returned by `engine.validate(tier)`.          |
+| Export             | Description                                                                                                                                                                                                                                                                    |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `TGrammarTier`     | `'structural' \| 'evaluable' \| 'derivable' \| 'presentable'` (string-literal union).                                                                                                                                                                                          |
+| `TGrammarRuleCode` | Union of `'S-1'`..`'S-15'`, `'E-1'`+`'E-3'`..`'E-10'`, `'D-1'`..`'D-6'`, `'P-1'`..`'P-5'`. Codes `E-2` and `D-7` are reserved (not reused). S-15, E-8, E-9 and E-10 concern [response arguments](#response-arguments), and S-3 now accepts a third kind of variable reference. |
+| `TViolation`       | `{ tier, code, message, argumentId?, premiseId?, expressionId?, variableId?, claimId?, … }`. Returned by `engine.validate(tier)`.                                                                                                                                              |
 
 All three types are defined as TypeBox schemas + derived TS types in `src/lib/grammar/types.ts` and exported from the package root.
 
@@ -1884,6 +2398,7 @@ type TLlmRequest<T> = {
     maxOutputTokens?: number
     signal?: AbortSignal
     onResponseCreated?: (responseId: string) => void // fired the moment the id is known, before respond() resolves (mid-flight)
+    onTextDelta?: (text: string) => void // fired once per chunk of assistant output text as it streams, never accumulated
     _typeMarker?: T // phantom — always `undefined` at runtime
 }
 
@@ -1894,7 +2409,7 @@ type TLlmResponse<T> = {
 }
 ```
 
-`model` is a free-form `string` (not constrained to the `TLlmModel` literal union `"gpt-6-sol" | "gpt-6-luna" | "gpt-5.5" | "gpt-5.4" | "gpt-5.4-mini" | "gpt-5.4-nano"`) so callers can target any backend model — including a local model alias like `"local-coder"` — without a core change. `onResponseCreated` (since v1.10.0) is an optional callback a provider may invoke **mid-flight**, as soon as the upstream response id is known and before `respond()` resolves; the OpenAI provider fires it in background-stream mode from the first `response.created` SSE event so a caller can persist the id before a possible crash. It is invoked at most once per call; synchronous providers leave it uncalled and surface the id only via `TLlmResponse.rawResponseId` at completion. `TReasoningEffort` is `"none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max"`. Not every model takes every value: `minimal` is a GPT-5 setting that GPT-6 rejects, and `none`, `xhigh` and `max` are GPT-6 settings. The OpenAI provider and `submitBackgroundResponse` send `low` in place of `minimal` to any `gpt-6*` model, so a configured `minimal` never fails a run. `_typeMarker` is a phantom field with no runtime presence; it exists solely so the type system can carry the structured-output type `T` from `outputSchema` into `TLlmResponse<T>`. Providers and mocks ignore it.
+`model` is a free-form `string` (not constrained to the `TLlmModel` literal union `"gpt-6-sol" | "gpt-6-luna" | "gpt-5.5" | "gpt-5.4" | "gpt-5.4-mini" | "gpt-5.4-nano"`) so callers can target any backend model — including a local model alias like `"local-coder"` — without a core change. `onResponseCreated` (since v1.10.0) is an optional callback a provider may invoke **mid-flight**, as soon as the upstream response id is known and before `respond()` resolves; the OpenAI provider fires it in either streaming mode (the default foreground stream, and background-stream mode) from the first `response.created` SSE event so a caller can persist the id before a possible crash. A call with function tools makes one request per round and returns the last round's id, so the provider leaves the callback uncalled there and the id arrives at completion. It is invoked at most once per call; synchronous providers leave it uncalled and surface the id only via `TLlmResponse.rawResponseId` at completion. `onTextDelta` (since 6.0.0) is invoked once per chunk of assistant output text as it arrives, before `respond()` resolves. Chunks are passed as received and never accumulated; for a structured-output request they are pieces of the JSON envelope, not readable prose. The OpenAI provider invokes it in either streaming mode; the poll-only background path, the synchronous path and the chat-completions provider never do. A pipeline stage sets it itself and republishes each chunk as `stage:llm-text-delta`, so a pipeline caller listens to `onEvent` instead. `TReasoningEffort` is `"none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max"`. Not every model takes every value: `minimal` is a GPT-5 setting that GPT-6 rejects, and `none`, `xhigh` and `max` are GPT-6 settings. The OpenAI provider and `submitBackgroundResponse` send `low` in place of `minimal` to any `gpt-6*` model, so a configured `minimal` never fails a run. `_typeMarker` is a phantom field with no runtime presence; it exists solely so the type system can carry the structured-output type `T` from `outputSchema` into `TLlmResponse<T>`. Providers and mocks ignore it.
 
 `TToolSpec` is a discriminated union over `kind`:
 
@@ -1930,7 +2445,7 @@ Runs **one** stage of `pipeline` against a caller-supplied map of its upstream s
 - `upstream: Readonly<Record<string, TStageOutcomeRecord>>` — the upstream records keyed by stage id. Each is `{ outcome, output? }` (see `TStageOutcomeRecord`). The caller may pass a **superset**; `executeStage` uses the stage's own `dependsOn` to pick the relevant ones, and defensively drops `output` for any record whose `outcome !== "completed"` so a stale persisted output cannot leak into a skipped/failed dependency.
 - `input` is validated + parsed via `Value.Parse(pipeline.inputSchema, input)` and the **parsed** value seeds `ctx.input`, identical to what `executePipeline` seeds (a stage reading `ctx.input` sees the same value it would in the monolithic run). A schema mismatch throws (caller bug).
 
-`executeStage` emits the per-stage events only — `stage:start`, `stage:llm-request`, `stage:llm-response-created`, `stage:llm-call`, `stage:retry`, `stage:end` — and **no `pipeline:*` bookends** (run-level events are the orchestrator's concern). It throws `PipelineConfigurationError` (`UNKNOWN_STAGE`) when `stageId` is not in `pipeline.stages`, and throws a `PipelineConfigurationError` (`GET_OUTSIDE_DEPS` / `STATUS_OUTSIDE_DEPS`) **out directly** when the stage reads a non-dependency — both are caller bugs surfaced rather than swallowed into the result's `failures`. It does **not** decide whether the stage _should_ run given its upstream outcomes: a `failed`/`skipped` required upstream just means `ctx.get` returns `undefined` for it; the "required dep failed → skip this stage" decision belongs to the caller's scheduler.
+`executeStage` emits the per-stage events only — `stage:start`, `stage:llm-request`, `stage:llm-response-created`, `stage:llm-text-delta`, `stage:llm-call`, `stage:retry`, `stage:end` — and **no `pipeline:*` bookends** (run-level events are the orchestrator's concern). It throws `PipelineConfigurationError` (`UNKNOWN_STAGE`) when `stageId` is not in `pipeline.stages`, and throws a `PipelineConfigurationError` (`GET_OUTSIDE_DEPS` / `STATUS_OUTSIDE_DEPS`) **out directly** when the stage reads a non-dependency — both are caller bugs surfaced rather than swallowed into the result's `failures`. It does **not** decide whether the stage _should_ run given its upstream outcomes: a `failed`/`skipped` required upstream just means `ctx.get` returns `undefined` for it; the "required dep failed → skip this stage" decision belongs to the caller's scheduler.
 
 ### `executeFinalize(pipeline, upstream, input, deps)` → `Promise<TExecuteFinalizeResult<TOutput>>` (since v1.11.0)
 
@@ -1993,7 +2508,7 @@ The predicate keys on the **carrier of the returned stage**, not on whether a st
 | `TStageContext`                   | Passed to each stage's `run`: `input`, `get<T>(stageId)`, `stageStatus(stageId)`, `llm`, `generateId`, `signal`, `emit(event)`, `addFailure(f)`.                                                                                                                                                                                                                                                                                                                         |
 | `TProcessingFailure`              | `{ stage, code, message, severity: "warning" \| "error", context? }`. The structured failure record. `code` is a bare `string` — match it against the exported failure-code constants.                                                                                                                                                                                                                                                                                   |
 | `TPipelineResult<TOutput>`        | `{ output: TOutput \| null, failures, stageOutcomes, tokenUsage? }`. `output` is `null` when finalize was bypassed.                                                                                                                                                                                                                                                                                                                                                      |
-| `TPipelineEvent`                  | Discriminated union over `kind`: `pipeline:start` / `pipeline:end` / `stage:start` / `stage:end` / `stage:retry` / `stage:llm-request` / `stage:llm-response-created` / `stage:llm-call`.                                                                                                                                                                                                                                                                                |
+| `TPipelineEvent`                  | Discriminated union over `kind`: `pipeline:start` / `pipeline:end` / `stage:start` / `stage:end` / `stage:retry` / `stage:llm-request` / `stage:llm-response-created` / `stage:llm-text-delta` / `stage:llm-call`.                                                                                                                                                                                                                                                       |
 | `TDepSpec` / `TOptionalDep`       | A dependency is a bare stage-id `string` or an `optional(id)` wrapper. `optional(id)`, `isOptionalDep`, `depId` are exported helpers.                                                                                                                                                                                                                                                                                                                                    |
 | `TRetryPolicy` / `TRetryReason`   | Retry configuration; `TRetryReason` is `"schema_validation" \| "transient" \| "rate_limit" \| "quota_exhausted"`.                                                                                                                                                                                                                                                                                                                                                        |
 | `TStageOutcomeRecord`             | The rehydration unit for one upstream stage: `{ outcome: TStageStatus, output? }`. `output` is present iff `outcome === "completed"` and is JSON round-trippable. Consumed by `executeStage` / `executeFinalize` / `launchStage`.                                                                                                                                                                                                                                        |
@@ -2005,9 +2520,11 @@ The predicate keys on the **carrier of the returned stage**, not on whether a st
 | `TResponseStatus`                 | `"queued" \| "in_progress" \| "completed" \| "failed" \| "incomplete" \| "cancelled"`. The framework-side mirror of the provider's response-status union (structurally identical to the OpenAI extension's `TResponseStatus`).                                                                                                                                                                                                                                           |
 | `TRetrievedResponse`              | The framework-side structural shape `completeStage` consumes: `{ status, output?, tokenUsage?, rawResponseId, incompleteReason?, errorMessage? }`. `output` is the **raw assistant text**. The OpenAI extension's `retrieveResponse` returns a structurally-compatible object.                                                                                                                                                                                           |
 
-The `stage:llm-request` event (since v1.8.0) fires from `llmStage` **before** each LLM-call attempt resolves — emitted inside the retry loop after the attempt counter increments and the request is built, immediately before the provider call. It carries `{ stageId, attempt, prompts: { system, user }, at }`, where `prompts.user` is the message as-sent on this attempt (including any retry-suffix appended after a prior schema-validation failure). It lets a consumer surface a stage's Input the instant the call starts, without waiting for the post-call `stage:llm-call`. A retried attempt fires a second `stage:llm-request` with the incremented `attempt`; deterministic stages emit none. Per-attempt ordering is `stage:start → stage:llm-request → [stage:llm-response-created] → stage:llm-call → stage:end`.
+The `stage:llm-request` event (since v1.8.0) fires from `llmStage` **before** each LLM-call attempt resolves — emitted inside the retry loop after the attempt counter increments and the request is built, immediately before the provider call. It carries `{ stageId, attempt, prompts: { system, user }, at }`, where `prompts.user` is the message as-sent on this attempt (including any retry-suffix appended after a prior schema-validation failure). It lets a consumer surface a stage's Input the instant the call starts, without waiting for the post-call `stage:llm-call`. A retried attempt fires a second `stage:llm-request` with the incremented `attempt`; deterministic stages emit none. Per-attempt ordering is `stage:start → stage:llm-request → [stage:llm-response-created] → stage:llm-text-delta* → stage:llm-call → stage:end`.
 
-The `stage:llm-response-created` event (since v1.10.0) carries `{ stageId, attempt, responseId, at }` and fires from `llmStage` as soon as a provider surfaces a response id, always **before** `stage:llm-call` on the same attempt. **In background+stream mode the event fires _mid-flight_ — while the LLM call is still streaming, before it resolves** — driven by the provider's `onResponseCreated` callback (wired from the first `response.created` SSE event; see the OpenAI provider below). This is the load-bearing recovery guarantee: a consumer persists the id _before_ a possible crash, so a call interrupted mid-generation can be re-fetched from the upstream's stored copy (`retrieveResponse`) rather than blindly re-run (which would double-spend). In synchronous / poll modes the provider does not invoke the mid-flight callback, so the id surfaces only at completion (still on the same attempt, just before `stage:llm-call`) — a strictly weaker guarantee: a sync call crashing mid-generation loses its id and must re-run. The event fires on every attempt whose id is learned — including schema-validation retries — with the id belonging to that specific attempt, at most once per attempt.
+The `stage:llm-response-created` event (since v1.10.0) carries `{ stageId, attempt, responseId, at }` and fires from `llmStage` as soon as a provider surfaces a response id, always **before** `stage:llm-call` on the same attempt. **In either streaming mode, for a call that makes a single request (no function tools), the event fires _mid-flight_ — while the LLM call is still streaming, before it resolves** — driven by the provider's `onResponseCreated` callback (wired from the first `response.created` SSE event; see the OpenAI provider below). In background+stream mode this is the load-bearing recovery guarantee: a consumer persists the id _before_ a possible crash, so a call interrupted mid-generation can be re-fetched from the upstream's stored copy (`retrieveResponse`) rather than blindly re-run (which would double-spend). A foreground stream learns its id just as early, but its response is not guaranteed to keep generating once the caller disconnects. In synchronous / poll modes, and for a function-tool loop, the provider does not invoke the mid-flight callback, so the id surfaces only at completion (still on the same attempt, just before `stage:llm-call`) — a strictly weaker guarantee: a sync call crashing mid-generation loses its id and must re-run. The event fires on every attempt whose id is learned — including schema-validation retries — with the id belonging to that specific attempt, at most once per attempt.
+
+The `stage:llm-text-delta` event (since 6.0.0) carries `{ stageId, attempt, delta, at }` and fires from `llmStage` once per chunk of assistant output text, while the call is still streaming, in the order the provider delivered them — after `stage:llm-request` and before `stage:llm-call` on the same attempt. `delta` is one chunk, never accumulated; joined in order, an attempt's chunks are the raw text the model wrote, which for a structured-output stage is JSON, not prose. A stage with function tools makes one request per round within an attempt, and every round's text streams, so text the model wrote before calling a tool precedes the final answer under the same `attempt`. **A retried attempt streams its text again from the beginning**, so a consumer accumulating text must start over whenever `attempt` changes. Once the caller's signal aborts, no further delta is emitted. It fires only where the provider holds a live stream: the OpenAI provider's default foreground stream and background-stream mode. The poll-only background path, the synchronous path, the chat-completions provider and `launchStage` (which never holds the stream) emit none. Inside a `subPipelineStage`, its `stageId` is prefixed like every other per-stage event.
 
 The `stage:llm-call` event (since v1.2.0) fires after every LLM-call attempt, carrying the actual `prompts` sent (including the retry-suffix appended on attempt 2+), the raw `output`, the call's `tokenUsage`, an optional `validationError` set whenever the output failed `outputSchema` validation, and (since v1.10.0) an optional `rawResponseId` when the provider surfaces one. Its presence is the validation-fail signal; the payload shape is otherwise identical on success and failure. Deterministic stages and the thrown-error branch do not emit it.
 
@@ -2293,6 +2810,51 @@ Every scholar and scribe stage defaults to `gpt-6-sol` when no override is suppl
 
 ---
 
+## Citation dates
+
+A reference date in the IEEE citation extension (`@proposit/proposit-core/extensions/citations/ieee`) is one of two kinds.
+
+- **A calendar date**: a day, month or year as written, with no time of day or zone. Every reference date except an access date is one, including each type's `year`.
+- **An instant**: the six `accessedDate` fields (Website, OnlineDocument, Blog, SocialMedia, Video, Podcast) stay `EncodableDate`, a JavaScript `Date`, and render by their UTC day.
+
+### `CalendarDate` and `calendarDateType(options?)`
+
+`CalendarDate` is the TypeBox schema of a calendar date, exported from the package root: an ISO 8601 string at one of three precisions, `"1787"`, `"1787-11"` or `"1787-11-22"`. Its static type is `string`. It needs no codec: it encodes, decodes, hashes and round-trips through JSON as itself.
+
+The whole check is a refinement: the shape, a month of 01-12, and a day that exists in that month and year, leap years included. The relaxed IEEE schemas, which strip `pattern`, therefore still refuse `"87"`, `"1787-13"` or an ISO timestamp.
+
+`calendarDateType(options)` builds the same schema with extra schema options, such as a `description`.
+
+### `parseCalendarDate(value)` → `TCalendarDateParts`
+
+Reads a calendar date into `{ year, month?, day?, precision }` (`TCalendarDateParts`), where `precision` is a `TCalendarDatePrecision`: `"year" | "month" | "day"`. Throws a `TypeError` naming the value if it is not a calendar date.
+
+### `calendarDateFromInstant(value, precision?, timeZone?)` → `string`
+
+The calendar date of an instant: `value` is a `Date`, or the ISO string `JSON.stringify` writes one as, which names its zone (`Z` or an offset). It is read in `timeZone`, default `"UTC"`, and cut to `precision`, default `"day"`.
+
+- **Already converted.** A string that is already a calendar date comes back unchanged, cut to `precision` only when it is longer: `"1787-11"` stays `"1787-11"` even at `"day"`. A conversion can therefore run over a partly converted store, or twice, without inventing a month or day.
+
+- **Converting stored instants.** Dates stored as 5.4.2 advised, midnight UTC of the day meant, convert with the default zone.
+- **Data from before 5.4.2.** Data stored at local midnight converts with the zone it was written in. The UTC rule would give the previous day east of UTC.
+- **Errors.** It throws a `RangeError` for a year outside 0000-9999 or an unknown zone, and a `TypeError` for something that is not an instant, including a date-time string that names no zone (`"1787-11-22T00:00:00"`), which would otherwise be read in the process's own zone.
+
+### Fields
+
+| Kind                      | Fields                                                                                                                                                                                                                                                            |
+| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Calendar date             | `date` on Standard, Patent, NewspaperArticle, ConferencePaper, ConferenceProceedings, Blog, Presentation, Interview, PersonalCommunication, Email, CourtCase and GovernmentPublication; SocialMedia `postDate`; Video `releaseDate` (optional); Law `dateEnacted` |
+| Optional calendar date    | `year` on Book, BookChapter, Handbook, TechnicalReport, Thesis, Dictionary, Encyclopedia, JournalArticle, MagazineArticle, Dataset, Software, Preprint, Course, Datasheet and ProductManual                                                                       |
+| Instant (`EncodableDate`) | `accessedDate` on Website, OnlineDocument, Blog, SocialMedia (optional), Video and Podcast                                                                                                                                                                        |
+
+### Rendering
+
+`formatCitationParts` renders a calendar date at its stored precision: "1787", "Nov. 1787" or "Nov. 22, 1787". `formatCalendarDate(value)` does the same for a bare value. No `Date` is built, so the process time zone never moves the day. The month abbreviations follow IEEE's current Reference Guide ("Sep.", "Jun.", "Jul.").
+
+- **A `year`** prints whatever precision is stored. IEEE's own examples print "Oct. 2011" for a journal article and "1964" for a book; the formatter does not cut a stored month or day to suit the type.
+- **An undated source**, with no `year`, renders "(n.d.)" in the year's place, as the guide asks. The segment role is `year` either way.
+- **An invalid value fails at formatting.** Core never checks a citation against the IEEE schema when it loads one, so an unconverted value can reach the formatter. A calendar-date field holding anything that is not a calendar date — a `Date`, an ISO timestamp, `"c. 1787"` — throws a `TypeError` naming the field, for example `Citation field "year" is not a calendar date: "c. 1787"`.
+
 ## Types
 
 ### `TExpressionInput`
@@ -2470,16 +3032,23 @@ Each snapshot captures only what the class **owns**. Dependencies (e.g., variabl
 
 ### Variable Types
 
-Variables are a discriminated union (`TCorePropositionalVariable = TClaimBoundVariable | TPremiseBoundVariable`). Type guards `isClaimBound(v)` and `isPremiseBound(v)` narrow the union.
+Variables are a union of three members (`TCorePropositionalVariable = TClaimBoundVariable | TPremiseBoundVariable | TExpressionBoundVariable`). The union has no discriminator field: members are told apart by which keys are present, through the type guards `isClaimBound(v)`, `isPremiseBound(v)` and `isExpressionBound(v)`. Rule S-3 requires exactly one kind of reference per variable. Code that handles only the first two members must now expect the third.
 
-| Type                             | Description                                                                                                       |
-| -------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| `TClaimBoundVariable`            | Claim-bound variable with `claimId`/`claimVersion` referencing a global claim                                     |
-| `TPremiseBoundVariable`          | Premise-bound variable with `boundPremiseId`/`boundArgumentId`/`boundArgumentVersion`; resolved during evaluation |
-| `CoreClaimBoundVariableSchema`   | Typebox schema for claim-bound variables                                                                          |
-| `CorePremiseBoundVariableSchema` | Typebox schema for premise-bound variables                                                                        |
-| `isClaimBound(v)`                | Type guard — returns `true` if variable has `claimId`                                                             |
-| `isPremiseBound(v)`              | Type guard — returns `true` if variable has `boundPremiseId`                                                      |
+| Type                                | Description                                                                                                                                                                           |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `TClaimBoundVariable`               | Claim-bound variable with `claimId`/`claimVersion` referencing a global claim                                                                                                         |
+| `TPremiseBoundVariable`             | Premise-bound variable with `boundPremiseId`/`boundArgumentId`/`boundArgumentVersion`; resolved during evaluation                                                                     |
+| `TExpressionBoundVariable`          | Expression-bound variable with `boundExpressionId`/`boundArgumentId`/`boundArgumentVersion`/`boundAspect`; only in a response, standing for one expression of the argument it answers |
+| `TBoundAspect`                      | `"statement" \| "inference"`: what an expression-bound variable stands for                                                                                                            |
+| `CoreClaimBoundVariableSchema`      | Typebox schema for claim-bound variables                                                                                                                                              |
+| `CorePremiseBoundVariableSchema`    | Typebox schema for premise-bound variables                                                                                                                                            |
+| `CoreExpressionBoundVariableSchema` | Typebox schema for expression-bound variables                                                                                                                                         |
+| `BoundAspectSchema`                 | Typebox schema for `TBoundAspect`                                                                                                                                                     |
+| `isClaimBound(v)`                   | Type guard — returns `true` if variable has `claimId`                                                                                                                                 |
+| `isPremiseBound(v)`                 | Type guard — returns `true` if variable has `boundPremiseId`                                                                                                                          |
+| `isExpressionBound(v)`              | Type guard — returns `true` if variable has `boundExpressionId`                                                                                                                       |
+
+An expression-bound variable is never evaluated by `evaluate()` or `checkValidity()`, which refuse a response; only the response checks read it. See [Response arguments](#response-arguments).
 
 Premise-bound variables enable hierarchical argument structure: variable Q bound to premise P1 derives its truth value from P1's evaluation. **Internal bindings** (same argument) are resolved lazily during `evaluate()` and `checkValidity()` — they are NOT free variables. **External bindings** (different argument, created via `bindVariableToExternalPremise`) are evaluator-assigned and ARE included in truth-table generation as free variables. `isExternallyBound(v, argumentId)` distinguishes the two at runtime. Circular bindings (direct or transitive) are rejected at bind time for internal bindings; external bindings have no cycle concern since they're evaluator-assigned.
 

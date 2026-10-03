@@ -1,0 +1,659 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`citations dated by a four-digit year > Book renders as it did 1`] = `
+[
+  {
+    "role": "authors",
+    "style": "plain",
+    "text": "J. Smith",
+  },
+  {
+    "role": "separator",
+    "text": ", ",
+  },
+  {
+    "role": "title",
+    "style": "italic",
+    "text": "Artificial Intelligence",
+  },
+  {
+    "role": "separator",
+    "text": ": ",
+  },
+  {
+    "role": "publisher",
+    "text": "MIT Press",
+  },
+  {
+    "role": "separator",
+    "text": ", ",
+  },
+  {
+    "role": "year",
+    "text": "2024",
+  },
+  {
+    "role": "separator",
+    "text": ".",
+  },
+]
+`;
+
+exports[`citations dated by a four-digit year > BookChapter renders as it did 1`] = `
+[
+  {
+    "role": "authors",
+    "style": "plain",
+    "text": "A. Brown",
+  },
+  {
+    "role": "separator",
+    "text": ", ",
+  },
+  {
+    "role": "title",
+    "style": "quoted",
+    "text": "Ch 1",
+  },
+  {
+    "role": "separator",
+    "text": ", in ",
+  },
+  {
+    "role": "bookTitle",
+    "style": "italic",
+    "text": "Book",
+  },
+  {
+    "role": "separator",
+    "text": ". ",
+  },
+  {
+    "role": "location",
+    "text": "NYC",
+  },
+  {
+    "role": "separator",
+    "text": ": ",
+  },
+  {
+    "role": "publisher",
+    "text": "Pub",
+  },
+  {
+    "role": "separator",
+    "text": ", ",
+  },
+  {
+    "role": "year",
+    "text": "2024",
+  },
+  {
+    "role": "separator",
+    "text": ".",
+  },
+]
+`;
+
+exports[`citations dated by a four-digit year > Course renders as it did 1`] = `
+[
+  {
+    "role": "authors",
+    "style": "plain",
+    "text": "A. Brown",
+  },
+  {
+    "role": "separator",
+    "text": ", ",
+  },
+  {
+    "role": "title",
+    "style": "italic",
+    "text": "Intro to CS",
+  },
+  {
+    "role": "separator",
+    "text": ", ",
+  },
+  {
+    "role": "institution",
+    "text": "MIT",
+  },
+  {
+    "role": "separator",
+    "text": ", ",
+  },
+  {
+    "role": "misc",
+    "text": "Fall 2024",
+  },
+  {
+    "role": "separator",
+    "text": ", ",
+  },
+  {
+    "role": "year",
+    "text": "2024",
+  },
+  {
+    "role": "separator",
+    "text": ".",
+  },
+]
+`;
+
+exports[`citations dated by a four-digit year > Dataset renders as it did 1`] = `
+[
+  {
+    "role": "title",
+    "style": "quoted",
+    "text": "Climate Data 2024",
+  },
+  {
+    "role": "separator",
+    "text": ", ",
+  },
+  {
+    "role": "misc",
+    "text": "Zenodo",
+  },
+  {
+    "role": "separator",
+    "text": ", ",
+  },
+  {
+    "role": "year",
+    "text": "2024",
+  },
+  {
+    "role": "separator",
+    "text": ", doi: ",
+  },
+  {
+    "role": "doi",
+    "text": "10.5281/zenodo.12345",
+  },
+  {
+    "role": "separator",
+    "text": ". ",
+  },
+  {
+    "role": "prefix",
+    "text": "[Online]. Available: ",
+  },
+  {
+    "role": "url",
+    "style": "link",
+    "text": "https://zenodo.org/record/12345",
+  },
+]
+`;
+
+exports[`citations dated by a four-digit year > Datasheet renders as it did 1`] = `
+[
+  {
+    "role": "title",
+    "style": "italic",
+    "text": "Processor Specs",
+  },
+  {
+    "role": "separator",
+    "text": ", ",
+  },
+  {
+    "role": "publisher",
+    "text": "Intel",
+  },
+  {
+    "role": "separator",
+    "text": ", ",
+  },
+  {
+    "role": "misc",
+    "text": "i7-12700K",
+  },
+  {
+    "role": "separator",
+    "text": ", ",
+  },
+  {
+    "role": "year",
+    "text": "2024",
+  },
+  {
+    "role": "separator",
+    "text": ". ",
+  },
+  {
+    "role": "prefix",
+    "text": "[Online]. Available: ",
+  },
+  {
+    "role": "url",
+    "style": "link",
+    "text": "https://intel.com",
+  },
+]
+`;
+
+exports[`citations dated by a four-digit year > Dictionary renders as it did 1`] = `
+[
+  {
+    "role": "title",
+    "style": "italic",
+    "text": "English Dictionary",
+  },
+  {
+    "role": "separator",
+    "text": ". ",
+  },
+  {
+    "role": "publisher",
+    "text": "OUP",
+  },
+  {
+    "role": "separator",
+    "text": ", ",
+  },
+  {
+    "role": "year",
+    "text": "2024",
+  },
+  {
+    "role": "separator",
+    "text": ".",
+  },
+]
+`;
+
+exports[`citations dated by a four-digit year > Encyclopedia renders as it did 1`] = `
+[
+  {
+    "role": "title",
+    "style": "italic",
+    "text": "World Encyclopedia",
+  },
+  {
+    "role": "separator",
+    "text": ". ",
+  },
+  {
+    "role": "publisher",
+    "text": "Britannica",
+  },
+  {
+    "role": "separator",
+    "text": ", ",
+  },
+  {
+    "role": "year",
+    "text": "2024",
+  },
+  {
+    "role": "separator",
+    "text": ".",
+  },
+]
+`;
+
+exports[`citations dated by a four-digit year > Handbook renders as it did 1`] = `
+[
+  {
+    "role": "title",
+    "style": "italic",
+    "text": "Engineering Handbook",
+  },
+  {
+    "role": "separator",
+    "text": ". ",
+  },
+  {
+    "role": "location",
+    "text": "NYC",
+  },
+  {
+    "role": "separator",
+    "text": ": ",
+  },
+  {
+    "role": "publisher",
+    "text": "Pub",
+  },
+  {
+    "role": "separator",
+    "text": ", ",
+  },
+  {
+    "role": "year",
+    "text": "2024",
+  },
+  {
+    "role": "separator",
+    "text": ".",
+  },
+]
+`;
+
+exports[`citations dated by a four-digit year > JournalArticle renders as it did 1`] = `
+[
+  {
+    "role": "authors",
+    "style": "plain",
+    "text": "A. Johnson",
+  },
+  {
+    "role": "separator",
+    "text": ", ",
+  },
+  {
+    "role": "title",
+    "style": "quoted",
+    "text": "Quantum computing advances",
+  },
+  {
+    "role": "separator",
+    "text": ", ",
+  },
+  {
+    "role": "misc",
+    "style": "italic",
+    "text": "Nature",
+  },
+  {
+    "role": "separator",
+    "text": ", ",
+  },
+  {
+    "role": "year",
+    "text": "2024",
+  },
+  {
+    "role": "separator",
+    "text": ", doi: ",
+  },
+  {
+    "role": "doi",
+    "text": "10.1038/s41586-024-00001-1",
+  },
+  {
+    "role": "separator",
+    "text": ".",
+  },
+]
+`;
+
+exports[`citations dated by a four-digit year > MagazineArticle renders as it did 1`] = `
+[
+  {
+    "role": "authors",
+    "style": "plain",
+    "text": "A. Brown",
+  },
+  {
+    "role": "separator",
+    "text": ", ",
+  },
+  {
+    "role": "title",
+    "style": "quoted",
+    "text": "Tech Trends",
+  },
+  {
+    "role": "separator",
+    "text": ", ",
+  },
+  {
+    "role": "misc",
+    "style": "italic",
+    "text": "Mag",
+  },
+  {
+    "role": "separator",
+    "text": ", ",
+  },
+  {
+    "role": "year",
+    "text": "2024",
+  },
+  {
+    "role": "separator",
+    "text": ".",
+  },
+]
+`;
+
+exports[`citations dated by a four-digit year > Preprint renders as it did 1`] = `
+[
+  {
+    "role": "authors",
+    "style": "plain",
+    "text": "A. Brown",
+  },
+  {
+    "role": "separator",
+    "text": ", ",
+  },
+  {
+    "role": "title",
+    "style": "quoted",
+    "text": "Early Results",
+  },
+  {
+    "role": "separator",
+    "text": ", ",
+  },
+  {
+    "role": "misc",
+    "style": "italic",
+    "text": "arXiv",
+  },
+  {
+    "role": "separator",
+    "text": ", ",
+  },
+  {
+    "role": "year",
+    "text": "2024",
+  },
+  {
+    "role": "separator",
+    "text": ". ",
+  },
+  {
+    "role": "prefix",
+    "text": "[Online]. Available: ",
+  },
+  {
+    "role": "url",
+    "style": "link",
+    "text": "https://arxiv.org",
+  },
+]
+`;
+
+exports[`citations dated by a four-digit year > ProductManual renders as it did 1`] = `
+[
+  {
+    "role": "title",
+    "style": "italic",
+    "text": "User Guide",
+  },
+  {
+    "role": "separator",
+    "text": ", ",
+  },
+  {
+    "role": "publisher",
+    "text": "Dell",
+  },
+  {
+    "role": "separator",
+    "text": ", ",
+  },
+  {
+    "role": "misc",
+    "text": "XPS 15",
+  },
+  {
+    "role": "separator",
+    "text": ", ",
+  },
+  {
+    "role": "year",
+    "text": "2024",
+  },
+  {
+    "role": "separator",
+    "text": ".",
+  },
+]
+`;
+
+exports[`citations dated by a four-digit year > Software renders as it did 1`] = `
+[
+  {
+    "role": "title",
+    "style": "italic",
+    "text": "MyApp",
+  },
+  {
+    "role": "separator",
+    "text": ", ",
+  },
+  {
+    "role": "year",
+    "text": "2024",
+  },
+  {
+    "role": "separator",
+    "text": ". ",
+  },
+  {
+    "role": "prefix",
+    "text": "[Online]. Available: ",
+  },
+  {
+    "role": "url",
+    "style": "link",
+    "text": "https://example.com",
+  },
+]
+`;
+
+exports[`citations dated by a four-digit year > TechnicalReport renders as it did 1`] = `
+[
+  {
+    "role": "authors",
+    "style": "plain",
+    "text": "A. Brown",
+  },
+  {
+    "role": "separator",
+    "text": ", ",
+  },
+  {
+    "role": "title",
+    "style": "quoted",
+    "text": "Report on Systems",
+  },
+  {
+    "role": "separator",
+    "text": ", ",
+  },
+  {
+    "role": "institution",
+    "text": "MIT",
+  },
+  {
+    "role": "separator",
+    "text": ", ",
+  },
+  {
+    "role": "location",
+    "text": "Cambridge",
+  },
+  {
+    "role": "separator",
+    "text": ", ",
+  },
+  {
+    "role": "prefix",
+    "text": "Rep. ",
+  },
+  {
+    "role": "reportNumber",
+    "text": "TR-1",
+  },
+  {
+    "role": "separator",
+    "text": ", ",
+  },
+  {
+    "role": "year",
+    "text": "2024",
+  },
+  {
+    "role": "separator",
+    "text": ".",
+  },
+]
+`;
+
+exports[`citations dated by a four-digit year > Thesis renders as it did 1`] = `
+[
+  {
+    "role": "authors",
+    "style": "plain",
+    "text": "A. Brown",
+  },
+  {
+    "role": "separator",
+    "text": ", ",
+  },
+  {
+    "role": "title",
+    "style": "quoted",
+    "text": "On Computation",
+  },
+  {
+    "role": "separator",
+    "text": ", ",
+  },
+  {
+    "role": "degree",
+    "text": "Ph.D.",
+  },
+  {
+    "role": "suffix",
+    "text": " thesis",
+  },
+  {
+    "role": "separator",
+    "text": ", ",
+  },
+  {
+    "role": "institution",
+    "text": "MIT",
+  },
+  {
+    "role": "separator",
+    "text": ", ",
+  },
+  {
+    "role": "location",
+    "text": "Cambridge",
+  },
+  {
+    "role": "separator",
+    "text": ", ",
+  },
+  {
+    "role": "year",
+    "text": "2024",
+  },
+  {
+    "role": "separator",
+    "text": ".",
+  },
+]
+`;

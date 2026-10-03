@@ -18,6 +18,8 @@ import { VariableManager } from "../../src/lib/core/variable-manager"
 import type { TOptionalChecksum } from "../../src/lib/schemata/shared"
 import { POSITION_INITIAL } from "../../src/lib/utils/position"
 import { ARG, aLib, makeVarExpr, VAR_P } from "./fixtures"
+import { at, build, not, v, x } from "./response-fixtures"
+import { listLinks } from "../../src/lib/index"
 
 describe("ArgumentLibrary", () => {
     const makeArgument = (): TOptionalChecksum<TCoreArgument> => ({
@@ -905,5 +907,141 @@ describe("generateId injection — PropositCore", () => {
         expect(pm.getId()).toMatch(
             /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
         )
+    })
+})
+
+describe("PropositCore.forkArgument of a response", () => {
+    // Y answers X.3, holds X's claim P as a premise, and contradicts X's P
+    // through a link: incoherent, because the shared claim is one
+    // proposition. A fork must keep it so.
+    function setUp(registerTarget: boolean) {
+        const core = new PropositCore()
+        const target = build({
+            id: "x",
+            version: 3,
+            lib: core.claims,
+            conclusion: at("c", v("C")),
+            premises: [at("p", v("P"))],
+        })
+        const response = build({
+            id: "y",
+            version: 1,
+            lib: core.claims,
+            respondsTo: target,
+            premises: [v("P"), not(x("p"))],
+        })
+        core.arguments.register(response.engine)
+        if (registerTarget) core.arguments.register(target.engine)
+        return { core, target, response }
+    }
+
+    it("keeps the claims it shares with the argument it answers, so its checks answer as before", () => {
+        const { core, target } = setUp(true)
+        const targetSnapshot = target.engine.snapshot()
+        const { engine: fork, claimRemap } = core.forkArgument("y", "y-fork")
+        expect(claimRemap.has("claim-P")).toBe(false)
+        expect(fork.checkResponseCoherent(targetSnapshot)).toMatchObject({
+            coherent: false,
+        })
+        const [link] = listLinks(fork)
+        const linkId = link.premiseId
+        expect(fork.checkLink(linkId, targetSnapshot).status).toBe("incoherent")
+    })
+
+    it("still clones a claim of its own that the argument answered does not use", () => {
+        const { core } = setUp(true)
+        core.claims.create({ id: "claim-own", type: "normal" } as never)
+        const own = core.arguments.get("y")!
+        own.addVariable({
+            id: "y-own",
+            symbol: "Own",
+            argumentId: "y",
+            argumentVersion: 1,
+            claimId: "claim-own",
+            claimVersion: 0,
+        } as never)
+        const { claimRemap } = core.forkArgument("y", "y-fork")
+        expect(claimRemap.has("claim-own")).toBe(true)
+        expect(claimRemap.has("claim-P")).toBe(false)
+    })
+
+    it("points a cloned claim's citation of a kept claim at the kept claim", () => {
+        const core = new PropositCore()
+        // K, a citation claim, is used by both arguments; O is the
+        // response's own and cites K.
+        core.claims.create({ id: "claim-K", type: "citation" } as never)
+        core.claims.create({ id: "claim-O", type: "normal" } as never)
+        core.citations.add({
+            id: "cite-O-K",
+            claimId: "claim-O",
+            claimVersion: 0,
+            supportingClaimId: "claim-K",
+            supportingClaimVersion: 0,
+        })
+        const target = build({
+            id: "x",
+            version: 3,
+            lib: core.claims,
+            conclusion: at("c", v("C")),
+            premises: [at("k", v("K"))],
+        })
+        const response = build({
+            id: "y",
+            version: 1,
+            lib: core.claims,
+            respondsTo: target,
+            premises: [v("O"), not(x("k"))],
+        })
+        core.arguments.register(response.engine)
+        core.arguments.register(target.engine)
+        const { claimRemap } = core.forkArgument("y", "y-fork")
+        expect(claimRemap.has("claim-K")).toBe(false)
+        const clonedO = claimRemap.get("claim-O")!
+        expect(core.citations.getConnectionsForClaim(clonedO)).toEqual([
+            expect.objectContaining({
+                claimId: clonedO,
+                supportingClaimId: "claim-K",
+                supportingClaimVersion: 0,
+            }),
+        ])
+    })
+
+    it("takes the argument answered from the options when the library does not hold it", () => {
+        const { core, target } = setUp(false)
+        const targetSnapshot = target.engine.snapshot()
+        const { engine: fork, claimRemap } = core.forkArgument("y", "y-fork", {
+            respondsToSnapshot: targetSnapshot,
+        })
+        expect(claimRemap.has("claim-P")).toBe(false)
+        expect(fork.checkResponseCoherent(targetSnapshot)).toMatchObject({
+            coherent: false,
+        })
+    })
+
+    it("refuses to fork a response when the argument it answers cannot be found", () => {
+        const { core } = setUp(false)
+        expect(() => core.forkArgument("y", "y-fork")).toThrow(
+            'it answers "x" version 3, but the argument library does not hold "x"'
+        )
+    })
+
+    it("says which version the library and the snapshot hold when neither is the one answered", () => {
+        const { core, target } = setUp(false)
+        const later = build({
+            id: "x",
+            version: 4,
+            lib: core.claims,
+            conclusion: at("c", v("C")),
+            premises: [at("p", v("P"))],
+        })
+        core.arguments.register(later.engine)
+        expect(() =>
+            core.forkArgument("y", "y-fork", {
+                respondsToSnapshot: later.engine.snapshot(),
+            })
+        ).toThrow(
+            'the argument library holds "x" at version 4, and respondsToSnapshot is "x" version 4'
+        )
+        expect(target.engine.getArgument().version).toBe(3)
     })
 })

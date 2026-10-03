@@ -16,6 +16,17 @@ import type {
 // engine only through its public methods.
 
 /**
+ * Whether a stored checksum field agrees with the recomputed one. An absent
+ * stored value is not checked. Values are compared as they are, not as
+ * strings: a `descendantChecksum` is `null` for an argument with no premises
+ * or a premise with no expressions, and a stored `null` must match a computed
+ * `null`.
+ */
+function storedChecksumAgrees(stored: unknown, computed: unknown): boolean {
+    return stored === undefined || stored === computed
+}
+
+/**
  * Verifies that all checksum fields in the snapshot match the recomputed
  * checksums on the restored engine. Throws on the first mismatch.
  */
@@ -46,15 +57,11 @@ export function verifySnapshotChecksums<
             )
             if (exprSnap) {
                 for (const field of checksumFields) {
-                    const stored = String(
-                        (exprSnap as Record<string, unknown>)[field]
-                    )
-                    const computed = String(
-                        (expr as Record<string, unknown>)[field]
-                    )
-                    if (stored !== "undefined" && stored !== computed) {
+                    const stored = (exprSnap as Record<string, unknown>)[field]
+                    const computed = (expr as Record<string, unknown>)[field]
+                    if (!storedChecksumAgrees(stored, computed)) {
                         throw new Error(
-                            `Checksum mismatch on expression "${expr.id}" field "${field}": stored="${stored}", computed="${computed}"`
+                            `Checksum mismatch on expression "${expr.id}" field "${field}": stored="${String(stored)}", computed="${String(computed)}"`
                         )
                     }
                 }
@@ -87,11 +94,11 @@ export function verifySnapshotChecksums<
         if (premiseSnap?.premise) {
             const sp = premiseSnap.premise as Record<string, unknown>
             for (const field of checksumFields) {
-                const stored = String(sp[field])
+                const stored = sp[field]
                 const computed = pe[field]()
-                if (stored !== "undefined" && stored !== computed) {
+                if (!storedChecksumAgrees(stored, computed)) {
                     throw new Error(
-                        `Checksum mismatch on premise "${pe.getId()}" field "${field}": stored="${stored}", computed="${computed}"`
+                        `Checksum mismatch on premise "${pe.getId()}" field "${field}": stored="${String(stored)}", computed="${String(computed)}"`
                     )
                 }
             }
@@ -101,11 +108,11 @@ export function verifySnapshotChecksums<
     // Verify argument checksums
     const sa = snapshot.argument as Record<string, unknown>
     for (const field of checksumFields) {
-        const stored = String(sa[field])
+        const stored = sa[field]
         const computed = engine[field]()
-        if (stored !== "undefined" && stored !== computed) {
+        if (!storedChecksumAgrees(stored, computed)) {
             throw new Error(
-                `Checksum mismatch on argument "${engine.getArgument().id}" field "${field}": stored="${stored}", computed="${computed}"`
+                `Checksum mismatch on argument "${engine.getArgument().id}" field "${field}": stored="${String(stored)}", computed="${String(computed)}"`
             )
         }
     }
@@ -156,11 +163,11 @@ export function verifyDataChecksums<
         if (inputPremise) {
             const sp = inputPremise as Record<string, unknown>
             for (const field of checksumFields) {
-                const stored = String(sp[field])
+                const stored = sp[field]
                 const computed = pe[field]()
-                if (stored !== "undefined" && stored !== computed) {
+                if (!storedChecksumAgrees(stored, computed)) {
                     throw new Error(
-                        `Checksum mismatch on premise "${pe.getId()}" field "${field}": stored="${stored}", computed="${computed}"`
+                        `Checksum mismatch on premise "${pe.getId()}" field "${field}": stored="${String(stored)}", computed="${String(computed)}"`
                     )
                 }
             }
@@ -170,11 +177,11 @@ export function verifyDataChecksums<
     // Verify argument checksums
     const sa = argument as Record<string, unknown>
     for (const field of checksumFields) {
-        const stored = String(sa[field])
+        const stored = sa[field]
         const computed = engine[field]()
-        if (stored !== "undefined" && stored !== computed) {
+        if (!storedChecksumAgrees(stored, computed)) {
             throw new Error(
-                `Checksum mismatch on argument "${engine.getArgument().id}" field "${field}": stored="${stored}", computed="${computed}"`
+                `Checksum mismatch on argument "${engine.getArgument().id}" field "${field}": stored="${String(stored)}", computed="${String(computed)}"`
             )
         }
     }

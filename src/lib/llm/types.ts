@@ -70,14 +70,36 @@ export type TLlmRequest<T> = {
      * recovered from the upstream's stored copy.
      *
      * Only providers that can surface an id mid-flight invoke it (the
-     * OpenAI provider in background-stream mode, from the first
-     * `response.created` SSE event). Synchronous providers leave it
+     * OpenAI provider in either streaming mode, from the first
+     * `response.created` SSE event, when the call makes a single request:
+     * with function tools it makes one per round, and the id it returns is
+     * the last round's, so it leaves this uncalled). Recovery after an interruption is
+     * guaranteed only in background-stream mode, where the response keeps
+     * generating upstream after the caller disconnects. Synchronous and
+     * poll-only providers leave it
      * uncalled and surface the id only at completion via
      * {@link TLlmResponse.rawResponseId}. Optional: callers that don't
      * set it are unaffected. Invoked at most once per
      * provider call (per attempt).
      */
     onResponseCreated?: (responseId: string) => void
+    /**
+     * Optional callback a provider invokes **once per chunk of assistant
+     * output text, as it arrives**, before the call resolves. Lets a caller
+     * show a reply as it is generated.
+     *
+     * Chunks are passed as received and never accumulated. For a
+     * structured-output request they are pieces of the JSON envelope, not
+     * readable prose. The OpenAI provider invokes it in either streaming
+     * mode; it is never invoked on the poll-only background path, the
+     * synchronous path, or by the chat-completions provider. Each call to
+     * `respond()` streams from the beginning, so a pipeline retry streams
+     * its text again: a caller accumulating text must start over per
+     * attempt. With function tools, one call makes a request per round and
+     * every round's text is passed on, so text a model wrote before calling
+     * a tool precedes the final answer.
+     */
+    onTextDelta?: (text: string) => void
     /**
      * The provider response id to chain this request against. When set,
      * the provider should continue from the specified prior response

@@ -39,7 +39,11 @@ import type {
     TCoreOriginAnchor,
 } from "../schemata/origin.js"
 import { ArgumentLibrary } from "./argument-library.js"
-import { ArgumentEngine, defaultGenerateId } from "./argument-engine.js"
+import {
+    ArgumentEngine,
+    defaultGenerateId,
+    type TArgumentEngineSnapshot,
+} from "./argument-engine.js"
 import { ForkLibrary } from "./fork-library.js"
 import { forkArgumentEngine } from "./fork.js"
 import { diffArguments as standaloneDiffArguments } from "./diff.js"
@@ -496,6 +500,12 @@ export class PropositCore<
             claimForkExtras?: Partial<
                 Omit<TClaimFork, keyof TCoreClaimForkRecord>
             >
+            /**
+             * For a response, the argument it answers at the version it
+             * answers, when this instance's argument library does not hold
+             * that version.
+             */
+            respondsToSnapshot?: TArgumentEngineSnapshot
         }
     ): {
         engine: ArgumentEngine<TArg, TPremise, TExpr, TVar, TClaim>
@@ -522,17 +532,29 @@ export class PropositCore<
 
         const exprToPremiseMap = this.mapExpressionIdsToPremiseIds(engine)
 
-        // Step 3: Determine the closure of claims to clone
+        // Step 3: Determine the closure of claims to clone. A response keeps
+        // every claim the argument it answers uses: the checks read a claim
+        // the two share as one proposition, so a clone would turn it into a
+        // second, independent one and change what they answer.
+        const kept = this.claimsSharedWithAnswered(
+            engine,
+            options?.respondsToSnapshot
+        )
         const { uniqueClaimIds, citationsToClone, axiomsToClone } =
-            this.collectClaimClosure(engine)
+            this.collectClaimClosure(engine, kept)
 
         // Step 4: Clone every claim in the closure
         const { claimRemap, claimVersionMap } =
             this.cloneClaimClosure(uniqueClaimIds)
 
         // Step 5: Clone citation and axiom edges between the cloned claims
-        this.cloneConnections(this.citations, citationsToClone, claimRemap)
-        this.cloneConnections(this.axioms, axiomsToClone, claimRemap)
+        this.cloneConnections(
+            this.citations,
+            citationsToClone,
+            claimRemap,
+            kept
+        )
+        this.cloneConnections(this.axioms, axiomsToClone, claimRemap, kept)
 
         // Step 6: Fork engine
         const { engine: forkedEngine, remapTable } = forkArgumentEngine<
@@ -601,6 +623,61 @@ export class PropositCore<
     }
 
     /**
+     * The claims bound in the argument a response answers, at the version it
+     * answers; empty for a standard argument.
+     *
+     * @throws When `engine` is a response and neither `respondsToSnapshot` nor
+     * this instance's argument library holds the argument it answers at that
+     * version.
+     */
+    private claimsSharedWithAnswered(
+        engine: ArgumentEngine<TArg, TPremise, TExpr, TVar, TClaim>,
+        respondsToSnapshot: TArgumentEngineSnapshot | undefined
+    ): Set<string> {
+        const respondsTo = engine.getRespondsTo()
+        if (respondsTo === undefined) return new Set()
+        const isAnswered = (argument: {
+            id: string
+            version: number
+        }): boolean =>
+            argument.id === respondsTo.argumentId &&
+            argument.version === respondsTo.argumentVersion
+        let variables: readonly TCorePropositionalVariable[] | undefined
+        if (
+            respondsToSnapshot !== undefined &&
+            isAnswered(respondsToSnapshot.argument)
+        ) {
+            variables = respondsToSnapshot.variables.variables
+        }
+        const held = this.arguments.get(respondsTo.argumentId)
+        if (
+            variables === undefined &&
+            held !== undefined &&
+            isAnswered(held.getArgument())
+        ) {
+            variables = held.getVariables()
+        }
+        if (variables === undefined) {
+            const answered = `"${respondsTo.argumentId}" version ${String(respondsTo.argumentVersion)}`
+            const inLibrary =
+                held === undefined
+                    ? `the argument library does not hold "${respondsTo.argumentId}"`
+                    : `the argument library holds "${respondsTo.argumentId}" at version ${String(held.getArgument().version)}`
+            const passed =
+                respondsToSnapshot === undefined
+                    ? ""
+                    : `, and respondsToSnapshot is "${respondsToSnapshot.argument.id}" version ${String(respondsToSnapshot.argument.version)}`
+            throw new Error(
+                `Cannot fork response "${engine.getArgument().id}": it answers ${answered}, but ${inLibrary}${passed}. Pass that version as respondsToSnapshot, so the claims the two share are kept rather than cloned.`
+            )
+        }
+        const claimIds = new Set<string>()
+        for (const variable of variables)
+            if (isClaimBound(variable)) claimIds.add(variable.claimId)
+        return claimIds
+    }
+
+    /**
      * Determines the closure of claims a fork clones — start from
      * claim-bound variables, then transitively pull in any source-side
      * claim referenced by a citation whose citing-side is already in the
@@ -608,7 +685,8 @@ export class PropositCore<
      * with every citation and axiom edge walked on the way.
      */
     private collectClaimClosure(
-        engine: ArgumentEngine<TArg, TPremise, TExpr, TVar, TClaim>
+        engine: ArgumentEngine<TArg, TPremise, TExpr, TVar, TClaim>,
+        kept: ReadonlySet<string>
     ): {
         uniqueClaimIds: Set<string>
         citationsToClone: TCitation[]
@@ -617,7 +695,7 @@ export class PropositCore<
         const variables = engine.getVariables()
         const uniqueClaimIds = new Set<string>()
         for (const v of variables) {
-            if (isClaimBound(v)) {
+            if (isClaimBound(v) && !kept.has(v.claimId)) {
                 uniqueClaimIds.add(v.claimId)
             }
         }
@@ -645,6 +723,7 @@ export class PropositCore<
                 this.citations.getConnectionsForClaim(currentId)
             for (const citation of outgoingCitations) {
                 citationsToClone.push(citation)
+                if (kept.has(citation.supportingClaimId)) continue
                 if (!uniqueClaimIds.has(citation.supportingClaimId)) {
                     uniqueClaimIds.add(citation.supportingClaimId)
                     connectionFrontier.push(citation.supportingClaimId)
@@ -654,6 +733,7 @@ export class PropositCore<
             const outgoingAxioms = this.axioms.getConnectionsForClaim(currentId)
             for (const axiom of outgoingAxioms) {
                 axiomsToClone.push(axiom)
+                if (kept.has(axiom.supportingClaimId)) continue
                 if (!uniqueClaimIds.has(axiom.supportingClaimId)) {
                     uniqueClaimIds.add(axiom.supportingClaimId)
                     connectionFrontier.push(axiom.supportingClaimId)
@@ -702,29 +782,41 @@ export class PropositCore<
 
     /**
      * Adds a copy of each connection to `library` between the cloned
-     * claims, skipping any connection whose ends were not both cloned.
+     * claims. A connection from a cloned claim to a kept one points at the
+     * kept claim as it was; any other connection whose ends were not both
+     * cloned is skipped.
      */
     private cloneConnections<TConnection extends TCoreClaimConnection>(
         library: {
             add(connection: Omit<TConnection, "checksum">): TConnection
         },
         connections: TConnection[],
-        claimRemap: Map<string, string>
+        claimRemap: Map<string, string>,
+        kept: ReadonlySet<string>
     ): void {
         for (const connection of connections) {
             const remappedClaimId = claimRemap.get(connection.claimId)
+            if (!remappedClaimId) continue
             const remappedSupportingId = claimRemap.get(
                 connection.supportingClaimId
             )
-            if (!remappedClaimId || !remappedSupportingId) continue
-            library.add({
-                ...connection,
-                id: this.generateId(),
-                claimId: remappedClaimId,
-                claimVersion: 0,
-                supportingClaimId: remappedSupportingId,
-                supportingClaimVersion: 0,
-            } as Omit<TConnection, "checksum">)
+            if (remappedSupportingId) {
+                library.add({
+                    ...connection,
+                    id: this.generateId(),
+                    claimId: remappedClaimId,
+                    claimVersion: 0,
+                    supportingClaimId: remappedSupportingId,
+                    supportingClaimVersion: 0,
+                } as Omit<TConnection, "checksum">)
+            } else if (kept.has(connection.supportingClaimId)) {
+                library.add({
+                    ...connection,
+                    id: this.generateId(),
+                    claimId: remappedClaimId,
+                    claimVersion: 0,
+                } as Omit<TConnection, "checksum">)
+            }
         }
     }
 

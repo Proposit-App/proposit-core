@@ -2,6 +2,7 @@ import { Value } from "typebox/value"
 import {
     CoreArgumentSchema,
     isClaimBound,
+    isExpressionBound,
     isPremiseBound,
     type TClaimBoundVariable,
     type TPremiseBoundVariable,
@@ -18,6 +19,9 @@ import type {
     TInvariantViolation,
 } from "../types/validation.js"
 import {
+    ARG_EXPRESSION_BINDING_OUTSIDE_RESPONSE,
+    ARG_RESPONDS_TO_ITSELF,
+    VAR_BINDING_AMBIGUOUS,
     ARG_SCHEMA_INVALID,
     ARG_OWNERSHIP_MISMATCH,
     ARG_CLAIM_REF_NOT_FOUND,
@@ -224,6 +228,51 @@ export function validateArgument(
         })
     }
 
+    // A response names the argument it answers; that argument is never itself.
+    const respondsTo = (arg as unknown as TCoreArgument).respondsTo
+    if (respondsTo?.argumentId === arg.id) {
+        violations.push({
+            code: ARG_RESPONDS_TO_ITSELF,
+            message: `Argument "${arg.id}" cannot respond to itself.`,
+            entityType: "argument",
+            entityId: arg.id,
+        })
+    }
+
+    // Each variable has exactly one kind of reference, and an expression-bound
+    // one lives only in a response and binds into the argument it answers.
+    for (const v of ctx.getVariables()) {
+        const kinds = [
+            isClaimBound(v),
+            isPremiseBound(v),
+            isExpressionBound(v),
+        ].filter(Boolean).length
+        if (kinds > 1) {
+            violations.push({
+                code: VAR_BINDING_AMBIGUOUS,
+                message: `Variable "${v.id}" has more than one kind of reference.`,
+                entityType: "variable",
+                entityId: v.id,
+            })
+        }
+        if (!isExpressionBound(v)) continue
+        if (respondsTo === undefined) {
+            violations.push({
+                code: ARG_EXPRESSION_BINDING_OUTSIDE_RESPONSE,
+                message: `Variable "${v.id}" is bound to another argument's expression, but argument "${arg.id}" is not a response.`,
+                entityType: "variable",
+                entityId: v.id,
+            })
+        } else if (v.boundArgumentId !== respondsTo.argumentId) {
+            violations.push({
+                code: ARG_EXPRESSION_BINDING_OUTSIDE_RESPONSE,
+                message: `Variable "${v.id}" is bound into argument "${v.boundArgumentId}", but the response answers "${respondsTo.argumentId}".`,
+                entityType: "variable",
+                entityId: v.id,
+            })
+        }
+    }
+
     // 2. Delegate to VariableManager.validate()
     const varResult = ctx.validateVariables()
     violations.push(...varResult.violations)
@@ -398,14 +447,19 @@ export function validateArgumentEvaluability(
     ctx: TArgumentValidationContext
 ): TCoreValidationResult {
     const issues: TCoreValidationIssue[] = []
+    // A response has no conclusion, so its absence is not a fault there.
+    const isResponse =
+        (ctx.getArgument() as unknown as TCoreArgument).respondsTo !== undefined
 
     if (ctx.conclusionPremiseId === undefined) {
-        issues.push(
-            makeErrorIssue({
-                code: "ARGUMENT_NO_CONCLUSION",
-                message: "Argument has no designated conclusion premise.",
-            })
-        )
+        if (!isResponse) {
+            issues.push(
+                makeErrorIssue({
+                    code: "ARGUMENT_NO_CONCLUSION",
+                    message: "Argument has no designated conclusion premise.",
+                })
+            )
+        }
     } else if (!ctx.hasPremise(ctx.conclusionPremiseId)) {
         issues.push(
             makeErrorIssue({

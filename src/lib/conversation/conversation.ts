@@ -11,7 +11,7 @@
 import type { TStage } from "../pipelines/types.js"
 import type { TLlmTokenUsage, TResponseId } from "../llm/types.js"
 import type { TExecuteTurnDeps, TTurnInput, TTurnResult } from "./turn.js"
-import { executeTurn } from "./turn.js"
+import { runTurn } from "./turn.js"
 
 // -- Public types ----------------------------------------------------------
 
@@ -82,12 +82,15 @@ export function createConversation(deps: TExecuteTurnDeps): TConversation {
                     opts?.branchFrom ?? lastResponseId ?? undefined,
             }
 
-            const result = await executeTurn(stage, turnInput, {
+            const { result, completed } = await runTurn(stage, turnInput, {
                 ...deps,
                 onComplete: opts?.onComplete,
             })
 
-            lastResponseId = result.responseId
+            // A failed turn leaves the chain where it was: its id, when it
+            // has one, belongs to a response the stage rejected or never
+            // finished, and no id would drop the whole conversation.
+            if (completed) lastResponseId = result.responseId
             cumulativeTokens = {
                 input: cumulativeTokens.input + result.tokenUsage.input,
                 output: cumulativeTokens.output + result.tokenUsage.output,

@@ -3,7 +3,8 @@
 import {
     separator,
     stringField,
-    dateField,
+    yearOrUndated,
+    calendarDateField,
     authorsLead,
     doiIfPresent,
     pagesIfPresent,
@@ -20,7 +21,7 @@ export const JOURNAL_ARTICLE_TEMPLATE: TSegmentInstruction[] = [
     stringField("journalTitle", "misc", "italic"),
     ...volumeIssuePagesIfPresent(),
     separator(", "),
-    stringField("year", "year"),
+    yearOrUndated(),
     doiIfPresent(),
     separator("."),
 ]
@@ -34,7 +35,7 @@ export const MAGAZINE_ARTICLE_TEMPLATE: TSegmentInstruction[] = [
     stringField("magazineTitle", "misc", "italic"),
     ...volumeIssuePagesIfPresent(),
     separator(", "),
-    stringField("year", "year"),
+    yearOrUndated(),
     separator("."),
 ]
 
@@ -46,7 +47,7 @@ export const NEWSPAPER_ARTICLE_TEMPLATE: TSegmentInstruction[] = [
     separator(", "),
     stringField("newspaperTitle", "misc", "italic"),
     separator(", "),
-    dateField("date", "date"),
+    calendarDateField("date", "date"),
     pagesIfPresent(),
     separator("."),
 ]

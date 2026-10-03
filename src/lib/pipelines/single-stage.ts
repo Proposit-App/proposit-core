@@ -203,7 +203,7 @@ function buildSingleShotState(
  * `ctx.input`.
  *
  * Emits the per-stage events only (`stage:start`, `stage:llm-request`,
- * `stage:llm-response-created`, `stage:llm-call`, `stage:retry`,
+ * `stage:llm-response-created`, `stage:llm-text-delta`, `stage:llm-call`, `stage:retry`,
  * `stage:end`) — no `pipeline:*` bookends. Throws `PipelineConfigurationError`
  * (`UNKNOWN_STAGE`) when `stageId` is not in `pipeline.stages`, and throws a
  * `PipelineConfigurationError` (`GET_OUTSIDE_DEPS` / `STATUS_OUTSIDE_DEPS`)

@@ -19,9 +19,14 @@ const SSE_TERMINAL_EVENTS = new Set([
 // streaming consumer learns the id while the call is still in flight.
 const SSE_CREATED_EVENT = "response.created"
 
+// One chunk of assistant output text, carried in a top-level `delta` string.
+// By far the most frequent event, so it is matched last.
+const SSE_TEXT_DELTA_EVENT = "response.output_text.delta"
+
 type TParsedSseEvent =
     | { kind: "terminal"; envelope: TOpenAiResponsesEnvelope }
     | { kind: "created"; responseId: string }
+    | { kind: "delta"; text: string }
     | undefined
 
 /**
@@ -33,6 +38,8 @@ type TParsedSseEvent =
  *   * `{ kind: "created", responseId }` for the lifecycle
  *     `response.created` event, surfacing the response id the moment
  *     it is known (before any output);
+ *   * `{ kind: "delta", text }` for a `response.output_text.delta`
+ *     event, carrying one chunk of assistant output text;
  *   * `undefined` for every intermediate / unrecognized event.
  *
  * The events carry a `type` field inside the data JSON, so we key off
@@ -50,12 +57,13 @@ function parseSseEvent(raw: string): TParsedSseEvent {
         }
     }
     if (dataLines.length === 0) return undefined
-    let parsed: { type?: string; response?: TOpenAiResponsesEnvelope }
+    let parsed: {
+        type?: string
+        response?: TOpenAiResponsesEnvelope
+        delta?: unknown
+    }
     try {
-        parsed = JSON.parse(dataLines.join("\n")) as {
-            type?: string
-            response?: TOpenAiResponsesEnvelope
-        }
+        parsed = JSON.parse(dataLines.join("\n")) as typeof parsed
     } catch {
         return undefined
     }
@@ -71,6 +79,9 @@ function parseSseEvent(raw: string): TParsedSseEvent {
     if (type === SSE_CREATED_EVENT && parsed.response?.id) {
         return { kind: "created", responseId: parsed.response.id }
     }
+    if (type === SSE_TEXT_DELTA_EVENT && typeof parsed.delta === "string") {
+        return { kind: "delta", text: parsed.delta }
+    }
     return undefined
 }
 
@@ -83,10 +94,14 @@ function parseSseEvent(raw: string): TParsedSseEvent {
  *
  * `onResponseId`, when supplied, fires the moment the `response.created`
  * lifecycle event is parsed — i.e. while the call is still streaming,
- * before the terminal event arrives. This is the load-bearing seam for
- * background-stream mode: it lets a caller persist the response id
+ * before the terminal event arrives. Both streaming modes pass it. It is
+ * load-bearing for background-stream mode: it lets a caller persist the response id
  * mid-flight so an in-flight call interrupted before completion can be
  * recovered from the upstream's stored copy. Invoked at most once.
+ *
+ * `onTextDelta`, when supplied, fires once per chunk of assistant output
+ * text, in stream order, as each arrives. Chunks are passed as received and
+ * never accumulated.
  *
  * Note: the event-separator scan assumes LF (`\n\n`) framing, which the
  * OpenAI Responses API emits. Reuse against a strict CRLF-only SSE
@@ -94,7 +109,8 @@ function parseSseEvent(raw: string): TParsedSseEvent {
  */
 export async function readSseEnvelope(
     response: Response,
-    onResponseId?: (responseId: string) => void
+    onResponseId?: (responseId: string) => void,
+    onTextDelta?: (text: string) => void
 ): Promise<TOpenAiResponsesEnvelope> {
     const body = response.body
     if (!body) {
@@ -114,34 +130,49 @@ export async function readSseEnvelope(
             terminal = parsedEvent.envelope
             return
         }
+        if (parsedEvent.kind === "delta") {
+            onTextDelta?.(parsedEvent.text)
+            return
+        }
         // kind === "created": surface the id once, the moment it's known.
         if (!idSurfaced) {
             idSurfaced = true
             onResponseId?.(parsedEvent.responseId)
         }
     }
-    try {
-        for (;;) {
-            const chunk = await reader.read()
-            if (chunk.done) break
-            buffer += decoder.decode(chunk.value, { stream: true })
-            let sep = buffer.indexOf("\n\n")
-            while (sep !== -1) {
-                const rawEvent = buffer.slice(0, sep)
-                buffer = buffer.slice(sep + 2)
-                handleEvent(rawEvent)
-                sep = buffer.indexOf("\n\n")
+    // Only a failed read is the transport's fault. A callback runs outside
+    // that try, so an error the caller's own code throws reaches the caller
+    // as it was thrown, is not retried as a network failure, and closes the
+    // connection rather than leaving it open unread. (A background response
+    // keeps generating on the server after its connection closes.)
+    for (;;) {
+        let chunk: Awaited<ReturnType<typeof reader.read>>
+        try {
+            chunk = await reader.read()
+        } catch (err) {
+            if (isAbortError(err)) {
+                throw err
             }
+            throw new TransientLlmError({
+                message: `OpenAI streaming read failed: ${
+                    err instanceof Error ? err.message : String(err)
+                }`,
+            })
         }
-    } catch (err) {
-        if (isAbortError(err)) {
-            throw err
+        if (chunk.done) break
+        buffer += decoder.decode(chunk.value, { stream: true })
+        let sep = buffer.indexOf("\n\n")
+        while (sep !== -1) {
+            const rawEvent = buffer.slice(0, sep)
+            buffer = buffer.slice(sep + 2)
+            try {
+                handleEvent(rawEvent)
+            } catch (err) {
+                void reader.cancel().catch(() => undefined)
+                throw err
+            }
+            sep = buffer.indexOf("\n\n")
         }
-        throw new TransientLlmError({
-            message: `OpenAI streaming read failed: ${
-                err instanceof Error ? err.message : String(err)
-            }`,
-        })
     }
     // Flush any bytes the streaming decoder is still holding (an
     // incomplete multi-byte UTF-8 sequence at the final chunk boundary),

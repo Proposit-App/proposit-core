@@ -34,7 +34,17 @@ import {
 import { createScribePipeline } from "../../src/extensions/pipelines/ingestion/scribe/index.js"
 import { basicsExtension } from "../../src/extensions/pipelines/base/index.js"
 import type { TExecuteTurnDeps } from "../../src/lib/conversation/turn.js"
-import { createMockLlmProvider, type TMockResponse } from "../mocks/llm.js"
+import type { TPipelineEvent } from "../../src/lib/pipelines/types.js"
+import {
+    createMockLlmProvider,
+    makeTransientError,
+    type TMockResponse,
+} from "../mocks/llm.js"
+import type {
+    TLlmProvider,
+    TLlmRequest,
+    TLlmResponse,
+} from "../../src/lib/llm/types.js"
 import { ParsedArgumentResponseSchema } from "../../src/lib/parsing/schemata.js"
 import { Value } from "typebox/value"
 
@@ -167,6 +177,99 @@ describe("executeTurn", () => {
 
         // Token usage is 0 for deterministic stages (no LLM call)
         expect(result.tokenUsage).toEqual({ input: 0, output: 0 })
+    })
+    function streamingStage() {
+        return llmStage({
+            id: "stream-stage",
+            dependsOn: [],
+            outputSchema: ParsedArgumentResponseSchema,
+            model: "mock",
+            buildPrompt: () => ({
+                system: "<!--stage-id: stream-stage--> system",
+                user: "user",
+            }),
+        })
+    }
+
+    it("passes the stage's text deltas to onEvent as they stream", async () => {
+        const events: TPipelineEvent[] = []
+        const result = await executeTurn(
+            streamingStage(),
+            { userMessage: "hello" },
+            {
+                ...mockDeps({
+                    "stream-stage": [
+                        {
+                            kind: "ok",
+                            output: mockOutput(),
+                            deltas: ["{", '"argument":'],
+                        },
+                    ],
+                }),
+                onEvent: (e) => events.push(e),
+            }
+        )
+        expect(result.output).toEqual(mockOutput())
+        const kinds = events.map((e) => e.kind)
+        expect(
+            events.flatMap((e) =>
+                e.kind === "stage:llm-text-delta"
+                    ? [[e.stageId, e.attempt, e.delta]]
+                    : []
+            )
+        ).toEqual([
+            ["stream-stage", 1, "{"],
+            ["stream-stage", 1, '"argument":'],
+        ])
+        expect(kinds.indexOf("stage:llm-text-delta")).toBeGreaterThan(
+            kinds.indexOf("stage:llm-request")
+        )
+        expect(kinds.lastIndexOf("stage:llm-text-delta")).toBeLessThan(
+            kinds.indexOf("stage:llm-call")
+        )
+    })
+
+    it("emits no text delta once the turn is aborted, and the stage is skipped", async () => {
+        const events: TPipelineEvent[] = []
+        const controller = new AbortController()
+        const pending = executeTurn(
+            streamingStage(),
+            { userMessage: "hello" },
+            {
+                llm: createMockLlmProvider({
+                    responses: {
+                        "stream-stage": [
+                            {
+                                kind: "ok",
+                                output: mockOutput(),
+                                deltas: ["before"],
+                                lateDeltas: ["after"],
+                            },
+                        ],
+                    },
+                    responseDelayMs: 50,
+                }),
+                signal: controller.signal,
+                onEvent: (e) => events.push(e),
+            }
+        )
+        await new Promise((resolve) => setTimeout(resolve, 10))
+        controller.abort()
+        const result = await pending
+
+        expect(result.output).toBeNull()
+        expect(
+            events.flatMap((e) =>
+                e.kind === "stage:llm-text-delta" ? [e.delta] : []
+            )
+        ).toEqual(["before"])
+        expect(events).toContainEqual(
+            expect.objectContaining({
+                kind: "stage:end",
+                stageId: "stream-stage",
+                status: "skipped",
+            })
+        )
     })
 })
 
@@ -531,5 +634,89 @@ describe("e2e: distill → scribe pipeline", () => {
         expect(
             Value.Check(ParsedArgumentResponseSchema, pipelineResult.output)
         ).toBe(true)
+    })
+})
+
+// ---------------- turns and the chain they build ---------------------------
+
+describe("turns and the chain they build", () => {
+    type TCall = { userMessage: string; previousResponseId?: string }
+
+    // A provider that records every request, answers each with a fresh id,
+    // and can be told to fail or to hold a call open.
+    function scriptedProvider(script: {
+        fail?: (call: TCall, index: number) => boolean
+        hold?: Promise<void>
+    }) {
+        const calls: TCall[] = []
+        const llm: TLlmProvider = {
+            async respond<T>(req: TLlmRequest<T>): Promise<TLlmResponse<T>> {
+                const call = {
+                    userMessage: req.userMessage,
+                    previousResponseId: req.previousResponseId,
+                }
+                const index = calls.push(call) - 1
+                if (index === 0 && script.hold !== undefined) await script.hold
+                if (script.fail?.(call, index) === true)
+                    throw makeTransientError("connection reset")
+                return {
+                    output: mockOutput() as T,
+                    tokenUsage: mockTokenUsage(),
+                    rawResponseId: `resp-${String(index)}`,
+                }
+            },
+        }
+        return { llm, calls }
+    }
+
+    const stage = () =>
+        llmStage({
+            id: "chat",
+            dependsOn: [],
+            outputSchema: ParsedArgumentResponseSchema,
+            model: "gpt-5.5",
+            buildPrompt: () => ({ system: "Chat", user: "" }),
+            retry: { backoffMs: 0 },
+        })
+
+    it("sends each turn's own user message on its retries, when turns run at once", async () => {
+        let release!: () => void
+        const hold = new Promise<void>((resolve) => {
+            release = resolve
+        })
+        // Turn A's first attempt is held open and then fails, so A retries
+        // after turn B has started and finished.
+        const { llm, calls } = scriptedProvider({
+            hold,
+            fail: (_, index) => index === 0,
+        })
+        const turnA = executeTurn(stage(), { userMessage: "from A" }, { llm })
+        await new Promise((resolve) => setTimeout(resolve, 0))
+        const turnB = executeTurn(stage(), { userMessage: "from B" }, { llm })
+        await turnB
+        release()
+        await turnA
+        expect(calls.map((call) => call.userMessage)).toEqual([
+            "from A",
+            "from B",
+            "from A",
+        ])
+    })
+
+    it("a failed turn leaves the conversation chained where it was", async () => {
+        let failing = false
+        const { llm, calls } = scriptedProvider({ fail: () => failing })
+        const convo = createConversation({ llm })
+        await convo.turn(stage(), { userMessage: "first" })
+        expect(convo.lastResponseId).toBe("resp-0")
+
+        failing = true
+        const failed = await convo.turn(stage(), { userMessage: "second" })
+        expect(failed.output).toBeNull()
+        expect(convo.lastResponseId).toBe("resp-0")
+
+        failing = false
+        await convo.turn(stage(), { userMessage: "third" })
+        expect(calls.at(-1)?.previousResponseId).toBe("resp-0")
     })
 })

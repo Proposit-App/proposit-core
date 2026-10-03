@@ -76,6 +76,7 @@ Function extensions/chat-completions.classifyFetchError (1)
 Function extensions/chat-completions.classifyHttpError (1)
 Function extensions/chat-completions.createChatCompletionsProvider (1)
 Function extensions/chat-completions.typeboxToJsonSchema (1)
+Function extensions/citations/ieee.formatCalendarDate (1)
 Function extensions/citations/ieee.formatCitationParts (1)
 Function extensions/citations/ieee.formatDate (1)
 Function extensions/citations/ieee.formatNamesInCitation (1)
@@ -116,9 +117,12 @@ Function lib.buildCodePointIndex (1)
 Function lib.buildParsingPrompt (1)
 Function lib.buildParsingResponseSchema (1)
 Function lib.buildPremiseProfile (1)
+Function lib.calendarDateFromInstant (1)
+Function lib.calendarDateType (1)
 Function lib.canonicalSerialize (1)
 Function lib.canonicalizeOperatorAssignments (1)
 Function lib.checkArgumentValidity (1)
+Function lib.classifyBindings (1)
 Function lib.closeUnderAcceptedOperators (1)
 Function lib.codePointLength (1)
 Function lib.collectArgumentReferencedClaims (1)
@@ -137,6 +141,7 @@ Function lib.defaultCompareVariable (1)
 Function lib.defaultGenerateId (1)
 Function lib.deterministicStage (1)
 Function lib.diffArguments (1)
+Function lib.elementsWithinPremise (1)
 Function lib.emptyClaimConnectionLookup (1)
 Function lib.entityChecksum (1)
 Function lib.evaluateArgument (1)
@@ -144,10 +149,12 @@ Function lib.executeFinalize (1)
 Function lib.executePipeline (1)
 Function lib.executeStage (1)
 Function lib.executeTurn (1)
+Function lib.findSatisfyingAssignment (1)
 Function lib.forkArgumentEngine (1)
 Function lib.getParsingResponseSchema (1)
 Function lib.isClaimBound (1)
 Function lib.isContested (1)
+Function lib.isExpressionBound (1)
 Function lib.isExternallyBound (1)
 Function lib.isLlmStage (1)
 Function lib.isNakedQDerivationPremise (1)
@@ -155,25 +162,32 @@ Function lib.isNakedQTree (1)
 Function lib.isPremiseBound (1)
 Function lib.isPremiseSetSatisfiable (1)
 Function lib.launchStage (1)
+Function lib.linkTargetsElement (1)
+Function lib.listLinks (1)
 Function lib.llmStage (1)
+Function lib.mergeCarriedInput (1)
 Function lib.mergeChangesets (1)
 Function lib.midpoint (1)
 Function lib.normalizeChecksumConfig (1)
 Function lib.normalizeOriginText (1)
 Function lib.optional (1)
 Function lib.orderChangeset (1)
+Function lib.parseCalendarDate (1)
 Function lib.parseFormula (1)
+Function lib.positionClassOf (1)
 Function lib.propagateOperatorConstraints (1)
 Function lib.serializeChecksumConfig (1)
 Function lib.sha256Hex (1)
 Function lib.sliceByCodePoints (1)
 Function lib.sliceByCodePointsIndexed (1)
+Function lib.structuralFingerprint (1)
 Function lib.subPipelineStage (1)
 Function lib.validateArgument (1)
 Function lib.validateArgumentAfterPremiseMutation (1)
 Function lib.validateArgumentEvaluability (1)
 Function lib.validateDerivationStructure (1)
 Function lib.validateGrammar (1)
+Function lib.validateLinks (1)
 Function lib/pipelines/scheduling.computeDagProgress (1)
 Function lib/pipelines/scheduling.depId (1)
 Function lib/pipelines/scheduling.hasRequiredFailureUpstream (1)
@@ -192,12 +206,19 @@ Interface lib.TArgumentIdentity
 Interface lib.TArgumentLifecycle
 Interface lib.TArgumentRoleState
 Interface lib.TArgumentValidationContext
+Interface lib.TBindingClassificationBase
+Interface lib.TBindingClassificationResult
+Interface lib.TBindingPremiseUse
+Interface lib.TCalendarDateParts
 Interface lib.TCanonicalizeOperatorAssignmentsInput
+Interface lib.TCarryAnswersOptions
 Interface lib.TClaimConnectionLibraryManagement
 Interface lib.TClaimConnectionLookup
 Interface lib.TClaimLibraryManagement
 Interface lib.TClaimLookup
+Interface lib.TClassifyBindingsOptions
 Interface lib.TCollectArgumentReferencedClaimsResult
+Interface lib.TColumnValue
 Interface lib.TCoreArgumentDiff
 Interface lib.TCoreArgumentEvaluationOptions
 Interface lib.TCoreArgumentEvaluationResult
@@ -239,14 +260,22 @@ Interface lib.TForkRemapTable
 Interface lib.TFormulaTreeVisitor
 Interface lib.TFormulaTreeWalking
 Interface lib.THierarchicalChecksummable
+Interface lib.TLinkReference
+Interface lib.TLinkValidationResult
+Interface lib.TLinkViolation
+Interface lib.TMergedCarriedInput
+Interface lib.TNotCarried
 Interface lib.TOriginLibraryManagement
 Interface lib.TOriginLookup
 Interface lib.TPremiseClassification
 Interface lib.TPremiseCrud
+Interface lib.TPremiseElements
 Interface lib.TPremiseEvaluation
 Interface lib.TPremiseIdentity
 Interface lib.TPremiseLifecycle
 Interface lib.TPremiseSetSatisfiabilityInput
+Interface lib.TRebaseDecisions
+Interface lib.TResponseLink
 Interface lib.TValidatablePremise
 Interface lib.TVariableManagement
 Interface lib.TVariableReferences
@@ -284,12 +313,16 @@ Method extensions/openai.TransientLlmError.captureStackTrace (1)
 Method extensions/openai.TransientLlmError.prepareStackTrace (1)
 Method lib.ArgumentEngine.addVariable (1)
 Method lib.ArgumentEngine.bindVariableToArgument (1)
+Method lib.ArgumentEngine.bindVariableToExpression (1)
 Method lib.ArgumentEngine.bindVariableToExternalPremise (1)
 Method lib.ArgumentEngine.bindVariableToPremise (1)
 Method lib.ArgumentEngine.buildReactiveSnapshot (1)
 Method lib.ArgumentEngine.buildVariableIndex (1)
 Method lib.ArgumentEngine.canBind (1)
 Method lib.ArgumentEngine.canFork (1)
+Method lib.ArgumentEngine.carryAnswers (1)
+Method lib.ArgumentEngine.checkLink (1)
+Method lib.ArgumentEngine.checkResponseCoherent (1)
 Method lib.ArgumentEngine.checkValidity (1)
 Method lib.ArgumentEngine.checksum (1)
 Method lib.ArgumentEngine.clearConclusionPremise (1)
@@ -318,6 +351,7 @@ Method lib.ArgumentEngine.getExpressionPremiseId (1)
 Method lib.ArgumentEngine.getExpressionsByVariableId (1)
 Method lib.ArgumentEngine.getExtras (1)
 Method lib.ArgumentEngine.getPremise (1)
+Method lib.ArgumentEngine.getRespondsTo (1)
 Method lib.ArgumentEngine.getRoleState (1)
 Method lib.ArgumentEngine.getSnapshot (1)
 Method lib.ArgumentEngine.getVariable (1)
@@ -329,6 +363,7 @@ Method lib.ArgumentEngine.getVariablesBoundToPremise (1)
 Method lib.ArgumentEngine.hasExpression (1)
 Method lib.ArgumentEngine.hasPremise (1)
 Method lib.ArgumentEngine.hasVariable (1)
+Method lib.ArgumentEngine.isResponse (1)
 Method lib.ArgumentEngine.listPremiseIds (1)
 Method lib.ArgumentEngine.listPremises (1)
 Method lib.ArgumentEngine.listRootExpressions (1)
@@ -338,6 +373,7 @@ Method lib.ArgumentEngine.notifySubscribers (1)
 Method lib.ArgumentEngine.patchExpressionAppFields (1)
 Method lib.ArgumentEngine.populateFromAxioms (1)
 Method lib.ArgumentEngine.populateFromCitations (1)
+Method lib.ArgumentEngine.rebaseResponse (1)
 Method lib.ArgumentEngine.removeDuplicateDerivationPremises (1)
 Method lib.ArgumentEngine.removeOrphanOperators (1)
 Method lib.ArgumentEngine.removePremise (1)
@@ -501,6 +537,9 @@ Method lib.StageAbortedError.captureStackTrace (1)
 Method lib.StageAbortedError.prepareStackTrace (1)
 Method lib.SubPipelineFailedError.captureStackTrace (1)
 Method lib.SubPipelineFailedError.prepareStackTrace (1)
+Method lib.TArgumentEvaluation.carryAnswers (1)
+Method lib.TArgumentEvaluation.checkLink (1)
+Method lib.TArgumentEvaluation.checkResponseCoherent (1)
 Method lib.TArgumentEvaluation.checkValidity (1)
 Method lib.TArgumentEvaluation.deriveDefaultAssignment (1)
 Method lib.TArgumentEvaluation.evaluate (1)
@@ -526,6 +565,8 @@ Method lib.TArgumentExpressionQueries.listRootExpressions (1)
 Method lib.TArgumentExpressionQueries.patchExpressionAppFields (1)
 Method lib.TArgumentIdentity.getArgument (1)
 Method lib.TArgumentIdentity.getExtras (1)
+Method lib.TArgumentIdentity.getRespondsTo (1)
+Method lib.TArgumentIdentity.isResponse (1)
 Method lib.TArgumentIdentity.setExtras (1)
 Method lib.TArgumentIdentity.updateExtras (1)
 Method lib.TArgumentLifecycle.getSnapshot (1)
@@ -661,6 +702,7 @@ Method lib.TValidatablePremise.getVariables (1)
 Method lib.TValidatablePremise.validate (1)
 Method lib.TValidatablePremise.validateEvaluability (1)
 Method lib.TVariableManagement.addVariable (1)
+Method lib.TVariableManagement.bindVariableToExpression (1)
 Method lib.TVariableManagement.bindVariableToPremise (1)
 Method lib.TVariableManagement.buildVariableIndex (1)
 Method lib.TVariableManagement.ensureClaimBoundVariable (1)
@@ -669,6 +711,7 @@ Method lib.TVariableManagement.getVariableBySymbol (1)
 Method lib.TVariableManagement.getVariables (1)
 Method lib.TVariableManagement.getVariablesBoundToPremise (1)
 Method lib.TVariableManagement.hasVariable (1)
+Method lib.TVariableManagement.rebaseResponse (1)
 Method lib.TVariableManagement.removeVariable (1)
 Method lib.TVariableManagement.updateVariable (1)
 Method lib.TVariableReferences.deleteExpressionsUsingVariable (1)
@@ -712,6 +755,8 @@ Property extensions/basics.BasicsArgumentParser.build.argumentId
 Property extensions/basics.BasicsArgumentParser.build.argumentId
 Property extensions/basics.BasicsArgumentParser.build.argumentId
 Property extensions/basics.BasicsArgumentParser.build.argumentId
+Property extensions/basics.BasicsArgumentParser.build.argumentId
+Property extensions/basics.BasicsArgumentParser.build.argumentVersion
 Property extensions/basics.BasicsArgumentParser.build.argumentVersion
 Property extensions/basics.BasicsArgumentParser.build.argumentVersion
 Property extensions/basics.BasicsArgumentParser.build.argumentVersion
@@ -719,8 +764,13 @@ Property extensions/basics.BasicsArgumentParser.build.argumentVersion
 Property extensions/basics.BasicsArgumentParser.build.axiom
 Property extensions/basics.BasicsArgumentParser.build.body
 Property extensions/basics.BasicsArgumentParser.build.boundArgumentId
+Property extensions/basics.BasicsArgumentParser.build.boundArgumentId
 Property extensions/basics.BasicsArgumentParser.build.boundArgumentVersion
+Property extensions/basics.BasicsArgumentParser.build.boundArgumentVersion
+Property extensions/basics.BasicsArgumentParser.build.boundAspect
+Property extensions/basics.BasicsArgumentParser.build.boundExpressionId
 Property extensions/basics.BasicsArgumentParser.build.boundPremiseId
+Property extensions/basics.BasicsArgumentParser.build.checksum
 Property extensions/basics.BasicsArgumentParser.build.checksum
 Property extensions/basics.BasicsArgumentParser.build.checksum
 Property extensions/basics.BasicsArgumentParser.build.checksum
@@ -758,6 +808,10 @@ Property extensions/basics.BasicsArgumentParser.build.id
 Property extensions/basics.BasicsArgumentParser.build.id
 Property extensions/basics.BasicsArgumentParser.build.id
 Property extensions/basics.BasicsArgumentParser.build.id
+Property extensions/basics.BasicsArgumentParser.build.id
+Property extensions/basics.BasicsArgumentParser.build.respondsTo
+Property extensions/basics.BasicsArgumentParser.build.respondsTo.argumentId
+Property extensions/basics.BasicsArgumentParser.build.respondsTo.argumentVersion
 Property extensions/basics.BasicsArgumentParser.build.response.argument
 Property extensions/basics.BasicsArgumentParser.build.response.argument.claims
 Property extensions/basics.BasicsArgumentParser.build.response.argument.claims.miniId
@@ -781,6 +835,7 @@ Property extensions/basics.BasicsArgumentParser.build.supportingClaimId
 Property extensions/basics.BasicsArgumentParser.build.supportingClaimId
 Property extensions/basics.BasicsArgumentParser.build.supportingClaimVersion
 Property extensions/basics.BasicsArgumentParser.build.supportingClaimVersion
+Property extensions/basics.BasicsArgumentParser.build.symbol
 Property extensions/basics.BasicsArgumentParser.build.symbol
 Property extensions/basics.BasicsArgumentParser.build.symbol
 Property extensions/basics.BasicsArgumentParser.build.title
@@ -859,6 +914,9 @@ Property extensions/basics.BasicsArgumentSchema.checksum
 Property extensions/basics.BasicsArgumentSchema.combinedChecksum
 Property extensions/basics.BasicsArgumentSchema.descendantChecksum
 Property extensions/basics.BasicsArgumentSchema.id
+Property extensions/basics.BasicsArgumentSchema.respondsTo
+Property extensions/basics.BasicsArgumentSchema.respondsTo.argumentId
+Property extensions/basics.BasicsArgumentSchema.respondsTo.argumentVersion
 Property extensions/basics.BasicsArgumentSchema.title
 Property extensions/basics.BasicsArgumentSchema.version
 Property extensions/basics.BasicsClaimSchema.axiom
@@ -3426,6 +3484,24 @@ Property lib.ArgumentEngine.bindVariableToArgument.variable.boundPremiseId
 Property lib.ArgumentEngine.bindVariableToArgument.variable.checksum
 Property lib.ArgumentEngine.bindVariableToArgument.variable.id
 Property lib.ArgumentEngine.bindVariableToArgument.variable.symbol
+Property lib.ArgumentEngine.bindVariableToExpression.variable.argumentId
+Property lib.ArgumentEngine.bindVariableToExpression.variable.argumentId
+Property lib.ArgumentEngine.bindVariableToExpression.variable.argumentVersion
+Property lib.ArgumentEngine.bindVariableToExpression.variable.argumentVersion
+Property lib.ArgumentEngine.bindVariableToExpression.variable.boundArgumentId
+Property lib.ArgumentEngine.bindVariableToExpression.variable.boundArgumentId
+Property lib.ArgumentEngine.bindVariableToExpression.variable.boundArgumentVersion
+Property lib.ArgumentEngine.bindVariableToExpression.variable.boundArgumentVersion
+Property lib.ArgumentEngine.bindVariableToExpression.variable.boundAspect
+Property lib.ArgumentEngine.bindVariableToExpression.variable.boundAspect
+Property lib.ArgumentEngine.bindVariableToExpression.variable.boundExpressionId
+Property lib.ArgumentEngine.bindVariableToExpression.variable.boundExpressionId
+Property lib.ArgumentEngine.bindVariableToExpression.variable.checksum
+Property lib.ArgumentEngine.bindVariableToExpression.variable.checksum
+Property lib.ArgumentEngine.bindVariableToExpression.variable.id
+Property lib.ArgumentEngine.bindVariableToExpression.variable.id
+Property lib.ArgumentEngine.bindVariableToExpression.variable.symbol
+Property lib.ArgumentEngine.bindVariableToExpression.variable.symbol
 Property lib.ArgumentEngine.bindVariableToExternalPremise.variable.argumentId
 Property lib.ArgumentEngine.bindVariableToExternalPremise.variable.argumentId
 Property lib.ArgumentEngine.bindVariableToExternalPremise.variable.argumentVersion
@@ -3474,6 +3550,9 @@ Property lib.ArgumentEngine.constructor.TArg.checksum
 Property lib.ArgumentEngine.constructor.TArg.combinedChecksum
 Property lib.ArgumentEngine.constructor.TArg.descendantChecksum
 Property lib.ArgumentEngine.constructor.TArg.id
+Property lib.ArgumentEngine.constructor.TArg.respondsTo
+Property lib.ArgumentEngine.constructor.TArg.respondsTo.argumentId
+Property lib.ArgumentEngine.constructor.TArg.respondsTo.argumentVersion
 Property lib.ArgumentEngine.constructor.TArg.version
 Property lib.ArgumentEngine.constructor.TClaim.checksum
 Property lib.ArgumentEngine.constructor.TClaim.frozen
@@ -3497,17 +3576,26 @@ Property lib.ArgumentEngine.constructor.TPremise.type
 Property lib.ArgumentEngine.constructor.TPremise.type
 Property lib.ArgumentEngine.constructor.TVar.argumentId
 Property lib.ArgumentEngine.constructor.TVar.argumentId
+Property lib.ArgumentEngine.constructor.TVar.argumentId
+Property lib.ArgumentEngine.constructor.TVar.argumentVersion
 Property lib.ArgumentEngine.constructor.TVar.argumentVersion
 Property lib.ArgumentEngine.constructor.TVar.argumentVersion
 Property lib.ArgumentEngine.constructor.TVar.boundArgumentId
+Property lib.ArgumentEngine.constructor.TVar.boundArgumentId
 Property lib.ArgumentEngine.constructor.TVar.boundArgumentVersion
+Property lib.ArgumentEngine.constructor.TVar.boundArgumentVersion
+Property lib.ArgumentEngine.constructor.TVar.boundAspect
+Property lib.ArgumentEngine.constructor.TVar.boundExpressionId
 Property lib.ArgumentEngine.constructor.TVar.boundPremiseId
+Property lib.ArgumentEngine.constructor.TVar.checksum
 Property lib.ArgumentEngine.constructor.TVar.checksum
 Property lib.ArgumentEngine.constructor.TVar.checksum
 Property lib.ArgumentEngine.constructor.TVar.claimId
 Property lib.ArgumentEngine.constructor.TVar.claimVersion
 Property lib.ArgumentEngine.constructor.TVar.id
 Property lib.ArgumentEngine.constructor.TVar.id
+Property lib.ArgumentEngine.constructor.TVar.id
+Property lib.ArgumentEngine.constructor.TVar.symbol
 Property lib.ArgumentEngine.constructor.TVar.symbol
 Property lib.ArgumentEngine.constructor.TVar.symbol
 Property lib.ArgumentEngine.createPremise.options.derivedClaimId
@@ -3537,6 +3625,9 @@ Property lib.ArgumentEngine.fromData.TArg.checksum
 Property lib.ArgumentEngine.fromData.TArg.combinedChecksum
 Property lib.ArgumentEngine.fromData.TArg.descendantChecksum
 Property lib.ArgumentEngine.fromData.TArg.id
+Property lib.ArgumentEngine.fromData.TArg.respondsTo
+Property lib.ArgumentEngine.fromData.TArg.respondsTo.argumentId
+Property lib.ArgumentEngine.fromData.TArg.respondsTo.argumentVersion
 Property lib.ArgumentEngine.fromData.TArg.version
 Property lib.ArgumentEngine.fromData.TClaim.checksum
 Property lib.ArgumentEngine.fromData.TClaim.frozen
@@ -3560,17 +3651,26 @@ Property lib.ArgumentEngine.fromData.TPremise.type
 Property lib.ArgumentEngine.fromData.TPremise.type
 Property lib.ArgumentEngine.fromData.TVar.argumentId
 Property lib.ArgumentEngine.fromData.TVar.argumentId
+Property lib.ArgumentEngine.fromData.TVar.argumentId
+Property lib.ArgumentEngine.fromData.TVar.argumentVersion
 Property lib.ArgumentEngine.fromData.TVar.argumentVersion
 Property lib.ArgumentEngine.fromData.TVar.argumentVersion
 Property lib.ArgumentEngine.fromData.TVar.boundArgumentId
+Property lib.ArgumentEngine.fromData.TVar.boundArgumentId
 Property lib.ArgumentEngine.fromData.TVar.boundArgumentVersion
+Property lib.ArgumentEngine.fromData.TVar.boundArgumentVersion
+Property lib.ArgumentEngine.fromData.TVar.boundAspect
+Property lib.ArgumentEngine.fromData.TVar.boundExpressionId
 Property lib.ArgumentEngine.fromData.TVar.boundPremiseId
+Property lib.ArgumentEngine.fromData.TVar.checksum
 Property lib.ArgumentEngine.fromData.TVar.checksum
 Property lib.ArgumentEngine.fromData.TVar.checksum
 Property lib.ArgumentEngine.fromData.TVar.claimId
 Property lib.ArgumentEngine.fromData.TVar.claimVersion
 Property lib.ArgumentEngine.fromData.TVar.id
 Property lib.ArgumentEngine.fromData.TVar.id
+Property lib.ArgumentEngine.fromData.TVar.id
+Property lib.ArgumentEngine.fromData.TVar.symbol
 Property lib.ArgumentEngine.fromData.TVar.symbol
 Property lib.ArgumentEngine.fromData.TVar.symbol
 Property lib.ArgumentEngine.fromData.roles.conclusionPremiseId
@@ -3578,6 +3678,9 @@ Property lib.ArgumentEngine.fromSnapshot.TArg.checksum
 Property lib.ArgumentEngine.fromSnapshot.TArg.combinedChecksum
 Property lib.ArgumentEngine.fromSnapshot.TArg.descendantChecksum
 Property lib.ArgumentEngine.fromSnapshot.TArg.id
+Property lib.ArgumentEngine.fromSnapshot.TArg.respondsTo
+Property lib.ArgumentEngine.fromSnapshot.TArg.respondsTo.argumentId
+Property lib.ArgumentEngine.fromSnapshot.TArg.respondsTo.argumentVersion
 Property lib.ArgumentEngine.fromSnapshot.TArg.version
 Property lib.ArgumentEngine.fromSnapshot.TClaim.checksum
 Property lib.ArgumentEngine.fromSnapshot.TClaim.frozen
@@ -3601,19 +3704,30 @@ Property lib.ArgumentEngine.fromSnapshot.TPremise.type
 Property lib.ArgumentEngine.fromSnapshot.TPremise.type
 Property lib.ArgumentEngine.fromSnapshot.TVar.argumentId
 Property lib.ArgumentEngine.fromSnapshot.TVar.argumentId
+Property lib.ArgumentEngine.fromSnapshot.TVar.argumentId
+Property lib.ArgumentEngine.fromSnapshot.TVar.argumentVersion
 Property lib.ArgumentEngine.fromSnapshot.TVar.argumentVersion
 Property lib.ArgumentEngine.fromSnapshot.TVar.argumentVersion
 Property lib.ArgumentEngine.fromSnapshot.TVar.boundArgumentId
+Property lib.ArgumentEngine.fromSnapshot.TVar.boundArgumentId
 Property lib.ArgumentEngine.fromSnapshot.TVar.boundArgumentVersion
+Property lib.ArgumentEngine.fromSnapshot.TVar.boundArgumentVersion
+Property lib.ArgumentEngine.fromSnapshot.TVar.boundAspect
+Property lib.ArgumentEngine.fromSnapshot.TVar.boundExpressionId
 Property lib.ArgumentEngine.fromSnapshot.TVar.boundPremiseId
+Property lib.ArgumentEngine.fromSnapshot.TVar.checksum
 Property lib.ArgumentEngine.fromSnapshot.TVar.checksum
 Property lib.ArgumentEngine.fromSnapshot.TVar.checksum
 Property lib.ArgumentEngine.fromSnapshot.TVar.claimId
 Property lib.ArgumentEngine.fromSnapshot.TVar.claimVersion
 Property lib.ArgumentEngine.fromSnapshot.TVar.id
 Property lib.ArgumentEngine.fromSnapshot.TVar.id
+Property lib.ArgumentEngine.fromSnapshot.TVar.id
 Property lib.ArgumentEngine.fromSnapshot.TVar.symbol
 Property lib.ArgumentEngine.fromSnapshot.TVar.symbol
+Property lib.ArgumentEngine.fromSnapshot.TVar.symbol
+Property lib.ArgumentEngine.getRespondsTo.argumentId
+Property lib.ArgumentEngine.getRespondsTo.argumentVersion
 Property lib.ArgumentEngine.getRoleState.conclusionPremiseId
 Property lib.ArgumentEngine.populateFromAxioms.TConn.checksum
 Property lib.ArgumentEngine.populateFromAxioms.TConn.claimId
@@ -3664,6 +3778,9 @@ Property lib.ArgumentLibrary.constructor.TArg.checksum
 Property lib.ArgumentLibrary.constructor.TArg.combinedChecksum
 Property lib.ArgumentLibrary.constructor.TArg.descendantChecksum
 Property lib.ArgumentLibrary.constructor.TArg.id
+Property lib.ArgumentLibrary.constructor.TArg.respondsTo
+Property lib.ArgumentLibrary.constructor.TArg.respondsTo.argumentId
+Property lib.ArgumentLibrary.constructor.TArg.respondsTo.argumentVersion
 Property lib.ArgumentLibrary.constructor.TArg.version
 Property lib.ArgumentLibrary.constructor.TClaim.checksum
 Property lib.ArgumentLibrary.constructor.TClaim.frozen
@@ -3687,23 +3804,35 @@ Property lib.ArgumentLibrary.constructor.TPremise.type
 Property lib.ArgumentLibrary.constructor.TPremise.type
 Property lib.ArgumentLibrary.constructor.TVar.argumentId
 Property lib.ArgumentLibrary.constructor.TVar.argumentId
+Property lib.ArgumentLibrary.constructor.TVar.argumentId
+Property lib.ArgumentLibrary.constructor.TVar.argumentVersion
 Property lib.ArgumentLibrary.constructor.TVar.argumentVersion
 Property lib.ArgumentLibrary.constructor.TVar.argumentVersion
 Property lib.ArgumentLibrary.constructor.TVar.boundArgumentId
+Property lib.ArgumentLibrary.constructor.TVar.boundArgumentId
 Property lib.ArgumentLibrary.constructor.TVar.boundArgumentVersion
+Property lib.ArgumentLibrary.constructor.TVar.boundArgumentVersion
+Property lib.ArgumentLibrary.constructor.TVar.boundAspect
+Property lib.ArgumentLibrary.constructor.TVar.boundExpressionId
 Property lib.ArgumentLibrary.constructor.TVar.boundPremiseId
+Property lib.ArgumentLibrary.constructor.TVar.checksum
 Property lib.ArgumentLibrary.constructor.TVar.checksum
 Property lib.ArgumentLibrary.constructor.TVar.checksum
 Property lib.ArgumentLibrary.constructor.TVar.claimId
 Property lib.ArgumentLibrary.constructor.TVar.claimVersion
 Property lib.ArgumentLibrary.constructor.TVar.id
 Property lib.ArgumentLibrary.constructor.TVar.id
+Property lib.ArgumentLibrary.constructor.TVar.id
+Property lib.ArgumentLibrary.constructor.TVar.symbol
 Property lib.ArgumentLibrary.constructor.TVar.symbol
 Property lib.ArgumentLibrary.constructor.TVar.symbol
 Property lib.ArgumentLibrary.fromSnapshot.TArg.checksum
 Property lib.ArgumentLibrary.fromSnapshot.TArg.combinedChecksum
 Property lib.ArgumentLibrary.fromSnapshot.TArg.descendantChecksum
 Property lib.ArgumentLibrary.fromSnapshot.TArg.id
+Property lib.ArgumentLibrary.fromSnapshot.TArg.respondsTo
+Property lib.ArgumentLibrary.fromSnapshot.TArg.respondsTo.argumentId
+Property lib.ArgumentLibrary.fromSnapshot.TArg.respondsTo.argumentVersion
 Property lib.ArgumentLibrary.fromSnapshot.TArg.version
 Property lib.ArgumentLibrary.fromSnapshot.TClaim.checksum
 Property lib.ArgumentLibrary.fromSnapshot.TClaim.frozen
@@ -3727,17 +3856,26 @@ Property lib.ArgumentLibrary.fromSnapshot.TPremise.type
 Property lib.ArgumentLibrary.fromSnapshot.TPremise.type
 Property lib.ArgumentLibrary.fromSnapshot.TVar.argumentId
 Property lib.ArgumentLibrary.fromSnapshot.TVar.argumentId
+Property lib.ArgumentLibrary.fromSnapshot.TVar.argumentId
+Property lib.ArgumentLibrary.fromSnapshot.TVar.argumentVersion
 Property lib.ArgumentLibrary.fromSnapshot.TVar.argumentVersion
 Property lib.ArgumentLibrary.fromSnapshot.TVar.argumentVersion
 Property lib.ArgumentLibrary.fromSnapshot.TVar.boundArgumentId
+Property lib.ArgumentLibrary.fromSnapshot.TVar.boundArgumentId
 Property lib.ArgumentLibrary.fromSnapshot.TVar.boundArgumentVersion
+Property lib.ArgumentLibrary.fromSnapshot.TVar.boundArgumentVersion
+Property lib.ArgumentLibrary.fromSnapshot.TVar.boundAspect
+Property lib.ArgumentLibrary.fromSnapshot.TVar.boundExpressionId
 Property lib.ArgumentLibrary.fromSnapshot.TVar.boundPremiseId
+Property lib.ArgumentLibrary.fromSnapshot.TVar.checksum
 Property lib.ArgumentLibrary.fromSnapshot.TVar.checksum
 Property lib.ArgumentLibrary.fromSnapshot.TVar.checksum
 Property lib.ArgumentLibrary.fromSnapshot.TVar.claimId
 Property lib.ArgumentLibrary.fromSnapshot.TVar.claimVersion
 Property lib.ArgumentLibrary.fromSnapshot.TVar.id
 Property lib.ArgumentLibrary.fromSnapshot.TVar.id
+Property lib.ArgumentLibrary.fromSnapshot.TVar.id
+Property lib.ArgumentLibrary.fromSnapshot.TVar.symbol
 Property lib.ArgumentLibrary.fromSnapshot.TVar.symbol
 Property lib.ArgumentLibrary.fromSnapshot.TVar.symbol
 Property lib.ArgumentParser.build.response.argument
@@ -3763,6 +3901,9 @@ Property lib.ArgumentParser.constructor.TArg.checksum
 Property lib.ArgumentParser.constructor.TArg.combinedChecksum
 Property lib.ArgumentParser.constructor.TArg.descendantChecksum
 Property lib.ArgumentParser.constructor.TArg.id
+Property lib.ArgumentParser.constructor.TArg.respondsTo
+Property lib.ArgumentParser.constructor.TArg.respondsTo.argumentId
+Property lib.ArgumentParser.constructor.TArg.respondsTo.argumentVersion
 Property lib.ArgumentParser.constructor.TArg.version
 Property lib.ArgumentParser.constructor.TAxiom.checksum
 Property lib.ArgumentParser.constructor.TAxiom.claimId
@@ -3798,17 +3939,26 @@ Property lib.ArgumentParser.constructor.TPremise.type
 Property lib.ArgumentParser.constructor.TPremise.type
 Property lib.ArgumentParser.constructor.TVar.argumentId
 Property lib.ArgumentParser.constructor.TVar.argumentId
+Property lib.ArgumentParser.constructor.TVar.argumentId
+Property lib.ArgumentParser.constructor.TVar.argumentVersion
 Property lib.ArgumentParser.constructor.TVar.argumentVersion
 Property lib.ArgumentParser.constructor.TVar.argumentVersion
 Property lib.ArgumentParser.constructor.TVar.boundArgumentId
+Property lib.ArgumentParser.constructor.TVar.boundArgumentId
 Property lib.ArgumentParser.constructor.TVar.boundArgumentVersion
+Property lib.ArgumentParser.constructor.TVar.boundArgumentVersion
+Property lib.ArgumentParser.constructor.TVar.boundAspect
+Property lib.ArgumentParser.constructor.TVar.boundExpressionId
 Property lib.ArgumentParser.constructor.TVar.boundPremiseId
+Property lib.ArgumentParser.constructor.TVar.checksum
 Property lib.ArgumentParser.constructor.TVar.checksum
 Property lib.ArgumentParser.constructor.TVar.checksum
 Property lib.ArgumentParser.constructor.TVar.claimId
 Property lib.ArgumentParser.constructor.TVar.claimVersion
 Property lib.ArgumentParser.constructor.TVar.id
 Property lib.ArgumentParser.constructor.TVar.id
+Property lib.ArgumentParser.constructor.TVar.id
+Property lib.ArgumentParser.constructor.TVar.symbol
 Property lib.ArgumentParser.constructor.TVar.symbol
 Property lib.ArgumentParser.constructor.TVar.symbol
 Property lib.ArgumentParser.mapArgument._parsed.claims
@@ -3942,6 +4092,9 @@ Property lib.CoreArgumentSchema.checksum
 Property lib.CoreArgumentSchema.combinedChecksum
 Property lib.CoreArgumentSchema.descendantChecksum
 Property lib.CoreArgumentSchema.id
+Property lib.CoreArgumentSchema.respondsTo
+Property lib.CoreArgumentSchema.respondsTo.argumentId
+Property lib.CoreArgumentSchema.respondsTo.argumentVersion
 Property lib.CoreArgumentSchema.version
 Property lib.CoreClaimBoundVariableSchema.argumentId
 Property lib.CoreClaimBoundVariableSchema.argumentVersion
@@ -3980,6 +4133,15 @@ Property lib.CoreEntityForkRecordSchema.forkId
 Property lib.CoreEntityForkRecordSchema.forkedFromArgumentId
 Property lib.CoreEntityForkRecordSchema.forkedFromArgumentVersion
 Property lib.CoreEntityForkRecordSchema.forkedFromEntityId
+Property lib.CoreExpressionBoundVariableSchema.argumentId
+Property lib.CoreExpressionBoundVariableSchema.argumentVersion
+Property lib.CoreExpressionBoundVariableSchema.boundArgumentId
+Property lib.CoreExpressionBoundVariableSchema.boundArgumentVersion
+Property lib.CoreExpressionBoundVariableSchema.boundAspect
+Property lib.CoreExpressionBoundVariableSchema.boundExpressionId
+Property lib.CoreExpressionBoundVariableSchema.checksum
+Property lib.CoreExpressionBoundVariableSchema.id
+Property lib.CoreExpressionBoundVariableSchema.symbol
 Property lib.CoreExpressionForkRecordSchema.entityId
 Property lib.CoreExpressionForkRecordSchema.forkId
 Property lib.CoreExpressionForkRecordSchema.forkedFromArgumentId
@@ -4115,17 +4277,26 @@ Property lib.CorePropositionalVariableExpressionSchema.type
 Property lib.CorePropositionalVariableExpressionSchema.variableId
 Property lib.CorePropositionalVariableSchema.argumentId
 Property lib.CorePropositionalVariableSchema.argumentId
+Property lib.CorePropositionalVariableSchema.argumentId
+Property lib.CorePropositionalVariableSchema.argumentVersion
 Property lib.CorePropositionalVariableSchema.argumentVersion
 Property lib.CorePropositionalVariableSchema.argumentVersion
 Property lib.CorePropositionalVariableSchema.boundArgumentId
+Property lib.CorePropositionalVariableSchema.boundArgumentId
 Property lib.CorePropositionalVariableSchema.boundArgumentVersion
+Property lib.CorePropositionalVariableSchema.boundArgumentVersion
+Property lib.CorePropositionalVariableSchema.boundAspect
+Property lib.CorePropositionalVariableSchema.boundExpressionId
 Property lib.CorePropositionalVariableSchema.boundPremiseId
+Property lib.CorePropositionalVariableSchema.checksum
 Property lib.CorePropositionalVariableSchema.checksum
 Property lib.CorePropositionalVariableSchema.checksum
 Property lib.CorePropositionalVariableSchema.claimId
 Property lib.CorePropositionalVariableSchema.claimVersion
 Property lib.CorePropositionalVariableSchema.id
 Property lib.CorePropositionalVariableSchema.id
+Property lib.CorePropositionalVariableSchema.id
+Property lib.CorePropositionalVariableSchema.symbol
 Property lib.CorePropositionalVariableSchema.symbol
 Property lib.CorePropositionalVariableSchema.symbol
 Property lib.CoreVariableForkRecordSchema.entityId
@@ -4360,6 +4531,9 @@ Property lib.PremiseEngine.constructor.TArg.checksum
 Property lib.PremiseEngine.constructor.TArg.combinedChecksum
 Property lib.PremiseEngine.constructor.TArg.descendantChecksum
 Property lib.PremiseEngine.constructor.TArg.id
+Property lib.PremiseEngine.constructor.TArg.respondsTo
+Property lib.PremiseEngine.constructor.TArg.respondsTo.argumentId
+Property lib.PremiseEngine.constructor.TArg.respondsTo.argumentVersion
 Property lib.PremiseEngine.constructor.TArg.version
 Property lib.PremiseEngine.constructor.TPremise.argumentId
 Property lib.PremiseEngine.constructor.TPremise.argumentId
@@ -4378,17 +4552,26 @@ Property lib.PremiseEngine.constructor.TPremise.type
 Property lib.PremiseEngine.constructor.TPremise.type
 Property lib.PremiseEngine.constructor.TVar.argumentId
 Property lib.PremiseEngine.constructor.TVar.argumentId
+Property lib.PremiseEngine.constructor.TVar.argumentId
+Property lib.PremiseEngine.constructor.TVar.argumentVersion
 Property lib.PremiseEngine.constructor.TVar.argumentVersion
 Property lib.PremiseEngine.constructor.TVar.argumentVersion
 Property lib.PremiseEngine.constructor.TVar.boundArgumentId
+Property lib.PremiseEngine.constructor.TVar.boundArgumentId
 Property lib.PremiseEngine.constructor.TVar.boundArgumentVersion
+Property lib.PremiseEngine.constructor.TVar.boundArgumentVersion
+Property lib.PremiseEngine.constructor.TVar.boundAspect
+Property lib.PremiseEngine.constructor.TVar.boundExpressionId
 Property lib.PremiseEngine.constructor.TVar.boundPremiseId
+Property lib.PremiseEngine.constructor.TVar.checksum
 Property lib.PremiseEngine.constructor.TVar.checksum
 Property lib.PremiseEngine.constructor.TVar.checksum
 Property lib.PremiseEngine.constructor.TVar.claimId
 Property lib.PremiseEngine.constructor.TVar.claimVersion
 Property lib.PremiseEngine.constructor.TVar.id
 Property lib.PremiseEngine.constructor.TVar.id
+Property lib.PremiseEngine.constructor.TVar.id
+Property lib.PremiseEngine.constructor.TVar.symbol
 Property lib.PremiseEngine.constructor.TVar.symbol
 Property lib.PremiseEngine.constructor.TVar.symbol
 Property lib.PremiseEngine.constructor.deps.argument
@@ -4402,6 +4585,9 @@ Property lib.PremiseEngine.fromSnapshot.TArg.checksum
 Property lib.PremiseEngine.fromSnapshot.TArg.combinedChecksum
 Property lib.PremiseEngine.fromSnapshot.TArg.descendantChecksum
 Property lib.PremiseEngine.fromSnapshot.TArg.id
+Property lib.PremiseEngine.fromSnapshot.TArg.respondsTo
+Property lib.PremiseEngine.fromSnapshot.TArg.respondsTo.argumentId
+Property lib.PremiseEngine.fromSnapshot.TArg.respondsTo.argumentVersion
 Property lib.PremiseEngine.fromSnapshot.TArg.version
 Property lib.PremiseEngine.fromSnapshot.TPremise.argumentId
 Property lib.PremiseEngine.fromSnapshot.TPremise.argumentId
@@ -4420,17 +4606,26 @@ Property lib.PremiseEngine.fromSnapshot.TPremise.type
 Property lib.PremiseEngine.fromSnapshot.TPremise.type
 Property lib.PremiseEngine.fromSnapshot.TVar.argumentId
 Property lib.PremiseEngine.fromSnapshot.TVar.argumentId
+Property lib.PremiseEngine.fromSnapshot.TVar.argumentId
+Property lib.PremiseEngine.fromSnapshot.TVar.argumentVersion
 Property lib.PremiseEngine.fromSnapshot.TVar.argumentVersion
 Property lib.PremiseEngine.fromSnapshot.TVar.argumentVersion
 Property lib.PremiseEngine.fromSnapshot.TVar.boundArgumentId
+Property lib.PremiseEngine.fromSnapshot.TVar.boundArgumentId
 Property lib.PremiseEngine.fromSnapshot.TVar.boundArgumentVersion
+Property lib.PremiseEngine.fromSnapshot.TVar.boundArgumentVersion
+Property lib.PremiseEngine.fromSnapshot.TVar.boundAspect
+Property lib.PremiseEngine.fromSnapshot.TVar.boundExpressionId
 Property lib.PremiseEngine.fromSnapshot.TVar.boundPremiseId
+Property lib.PremiseEngine.fromSnapshot.TVar.checksum
 Property lib.PremiseEngine.fromSnapshot.TVar.checksum
 Property lib.PremiseEngine.fromSnapshot.TVar.checksum
 Property lib.PremiseEngine.fromSnapshot.TVar.claimId
 Property lib.PremiseEngine.fromSnapshot.TVar.claimVersion
 Property lib.PremiseEngine.fromSnapshot.TVar.id
 Property lib.PremiseEngine.fromSnapshot.TVar.id
+Property lib.PremiseEngine.fromSnapshot.TVar.id
+Property lib.PremiseEngine.fromSnapshot.TVar.symbol
 Property lib.PremiseEngine.fromSnapshot.TVar.symbol
 Property lib.PremiseEngine.fromSnapshot.TVar.symbol
 Property lib.PremiseEngine.premise
@@ -4449,6 +4644,9 @@ Property lib.PropositCore.constructor.TArg.checksum
 Property lib.PropositCore.constructor.TArg.combinedChecksum
 Property lib.PropositCore.constructor.TArg.descendantChecksum
 Property lib.PropositCore.constructor.TArg.id
+Property lib.PropositCore.constructor.TArg.respondsTo
+Property lib.PropositCore.constructor.TArg.respondsTo.argumentId
+Property lib.PropositCore.constructor.TArg.respondsTo.argumentVersion
 Property lib.PropositCore.constructor.TArg.version
 Property lib.PropositCore.constructor.TArgFork.entityId
 Property lib.PropositCore.constructor.TArgFork.forkId
@@ -4532,17 +4730,26 @@ Property lib.PropositCore.constructor.TPremiseFork.forkedFromArgumentVersion
 Property lib.PropositCore.constructor.TPremiseFork.forkedFromEntityId
 Property lib.PropositCore.constructor.TVar.argumentId
 Property lib.PropositCore.constructor.TVar.argumentId
+Property lib.PropositCore.constructor.TVar.argumentId
+Property lib.PropositCore.constructor.TVar.argumentVersion
 Property lib.PropositCore.constructor.TVar.argumentVersion
 Property lib.PropositCore.constructor.TVar.argumentVersion
 Property lib.PropositCore.constructor.TVar.boundArgumentId
+Property lib.PropositCore.constructor.TVar.boundArgumentId
 Property lib.PropositCore.constructor.TVar.boundArgumentVersion
+Property lib.PropositCore.constructor.TVar.boundArgumentVersion
+Property lib.PropositCore.constructor.TVar.boundAspect
+Property lib.PropositCore.constructor.TVar.boundExpressionId
 Property lib.PropositCore.constructor.TVar.boundPremiseId
+Property lib.PropositCore.constructor.TVar.checksum
 Property lib.PropositCore.constructor.TVar.checksum
 Property lib.PropositCore.constructor.TVar.checksum
 Property lib.PropositCore.constructor.TVar.claimId
 Property lib.PropositCore.constructor.TVar.claimVersion
 Property lib.PropositCore.constructor.TVar.id
 Property lib.PropositCore.constructor.TVar.id
+Property lib.PropositCore.constructor.TVar.id
+Property lib.PropositCore.constructor.TVar.symbol
 Property lib.PropositCore.constructor.TVar.symbol
 Property lib.PropositCore.constructor.TVar.symbol
 Property lib.PropositCore.constructor.TVarFork.entityId
@@ -4558,6 +4765,7 @@ Property lib.PropositCore.forkArgument.options.claimForkExtras
 Property lib.PropositCore.forkArgument.options.expressionForkExtras
 Property lib.PropositCore.forkArgument.options.forkId
 Property lib.PropositCore.forkArgument.options.premiseForkExtras
+Property lib.PropositCore.forkArgument.options.respondsToSnapshot
 Property lib.PropositCore.forkArgument.options.variableForkExtras
 Property lib.PropositCore.forkArgument.remapTable
 Property lib.PropositCore.forks
@@ -4565,6 +4773,9 @@ Property lib.PropositCore.fromSnapshot.TArg.checksum
 Property lib.PropositCore.fromSnapshot.TArg.combinedChecksum
 Property lib.PropositCore.fromSnapshot.TArg.descendantChecksum
 Property lib.PropositCore.fromSnapshot.TArg.id
+Property lib.PropositCore.fromSnapshot.TArg.respondsTo
+Property lib.PropositCore.fromSnapshot.TArg.respondsTo.argumentId
+Property lib.PropositCore.fromSnapshot.TArg.respondsTo.argumentVersion
 Property lib.PropositCore.fromSnapshot.TArg.version
 Property lib.PropositCore.fromSnapshot.TArgFork.entityId
 Property lib.PropositCore.fromSnapshot.TArgFork.forkId
@@ -4648,17 +4859,26 @@ Property lib.PropositCore.fromSnapshot.TPremiseFork.forkedFromArgumentVersion
 Property lib.PropositCore.fromSnapshot.TPremiseFork.forkedFromEntityId
 Property lib.PropositCore.fromSnapshot.TVar.argumentId
 Property lib.PropositCore.fromSnapshot.TVar.argumentId
+Property lib.PropositCore.fromSnapshot.TVar.argumentId
+Property lib.PropositCore.fromSnapshot.TVar.argumentVersion
 Property lib.PropositCore.fromSnapshot.TVar.argumentVersion
 Property lib.PropositCore.fromSnapshot.TVar.argumentVersion
 Property lib.PropositCore.fromSnapshot.TVar.boundArgumentId
+Property lib.PropositCore.fromSnapshot.TVar.boundArgumentId
 Property lib.PropositCore.fromSnapshot.TVar.boundArgumentVersion
+Property lib.PropositCore.fromSnapshot.TVar.boundArgumentVersion
+Property lib.PropositCore.fromSnapshot.TVar.boundAspect
+Property lib.PropositCore.fromSnapshot.TVar.boundExpressionId
 Property lib.PropositCore.fromSnapshot.TVar.boundPremiseId
+Property lib.PropositCore.fromSnapshot.TVar.checksum
 Property lib.PropositCore.fromSnapshot.TVar.checksum
 Property lib.PropositCore.fromSnapshot.TVar.checksum
 Property lib.PropositCore.fromSnapshot.TVar.claimId
 Property lib.PropositCore.fromSnapshot.TVar.claimVersion
 Property lib.PropositCore.fromSnapshot.TVar.id
 Property lib.PropositCore.fromSnapshot.TVar.id
+Property lib.PropositCore.fromSnapshot.TVar.id
+Property lib.PropositCore.fromSnapshot.TVar.symbol
 Property lib.PropositCore.fromSnapshot.TVar.symbol
 Property lib.PropositCore.fromSnapshot.TVar.symbol
 Property lib.PropositCore.fromSnapshot.TVarFork.entityId
@@ -4697,19 +4917,29 @@ Property lib.TArgumentEvaluationContext.argumentId
 Property lib.TArgumentEvaluationContext.conclusionPremiseId
 Property lib.TArgumentEvaluationContext.getVariable.argumentId
 Property lib.TArgumentEvaluationContext.getVariable.argumentId
+Property lib.TArgumentEvaluationContext.getVariable.argumentId
+Property lib.TArgumentEvaluationContext.getVariable.argumentVersion
 Property lib.TArgumentEvaluationContext.getVariable.argumentVersion
 Property lib.TArgumentEvaluationContext.getVariable.argumentVersion
 Property lib.TArgumentEvaluationContext.getVariable.boundArgumentId
+Property lib.TArgumentEvaluationContext.getVariable.boundArgumentId
 Property lib.TArgumentEvaluationContext.getVariable.boundArgumentVersion
+Property lib.TArgumentEvaluationContext.getVariable.boundArgumentVersion
+Property lib.TArgumentEvaluationContext.getVariable.boundAspect
+Property lib.TArgumentEvaluationContext.getVariable.boundExpressionId
 Property lib.TArgumentEvaluationContext.getVariable.boundPremiseId
+Property lib.TArgumentEvaluationContext.getVariable.checksum
 Property lib.TArgumentEvaluationContext.getVariable.checksum
 Property lib.TArgumentEvaluationContext.getVariable.checksum
 Property lib.TArgumentEvaluationContext.getVariable.claimId
 Property lib.TArgumentEvaluationContext.getVariable.claimVersion
 Property lib.TArgumentEvaluationContext.getVariable.id
 Property lib.TArgumentEvaluationContext.getVariable.id
+Property lib.TArgumentEvaluationContext.getVariable.id
 Property lib.TArgumentEvaluationContext.getVariable.symbol
 Property lib.TArgumentEvaluationContext.getVariable.symbol
+Property lib.TArgumentEvaluationContext.getVariable.symbol
+Property lib.TArgumentEvaluationContext.isResponse
 Property lib.TArgumentExpressionQueries.collectReferencedVariables.byId
 Property lib.TArgumentExpressionQueries.collectReferencedVariables.byId.premiseIds
 Property lib.TArgumentExpressionQueries.collectReferencedVariables.byId.symbol
@@ -4717,6 +4947,8 @@ Property lib.TArgumentExpressionQueries.collectReferencedVariables.bySymbol
 Property lib.TArgumentExpressionQueries.collectReferencedVariables.bySymbol.premiseIds
 Property lib.TArgumentExpressionQueries.collectReferencedVariables.bySymbol.variableIds
 Property lib.TArgumentExpressionQueries.collectReferencedVariables.variableIds
+Property lib.TArgumentIdentity.getRespondsTo.argumentId
+Property lib.TArgumentIdentity.getRespondsTo.argumentVersion
 Property lib.TArgumentLibraryLibraries.claimLibrary
 Property lib.TArgumentLibrarySnapshot.arguments
 Property lib.TArgumentLifecycle.validate.argumentId
@@ -4748,30 +4980,101 @@ Property lib.TArgumentValidationContext.getArgument.checksum
 Property lib.TArgumentValidationContext.getArgument.combinedChecksum
 Property lib.TArgumentValidationContext.getArgument.descendantChecksum
 Property lib.TArgumentValidationContext.getArgument.id
+Property lib.TArgumentValidationContext.getArgument.respondsTo
+Property lib.TArgumentValidationContext.getArgument.respondsTo.argumentId
+Property lib.TArgumentValidationContext.getArgument.respondsTo.argumentVersion
 Property lib.TArgumentValidationContext.getArgument.version
 Property lib.TArgumentValidationContext.getVariables.argumentId
 Property lib.TArgumentValidationContext.getVariables.argumentId
+Property lib.TArgumentValidationContext.getVariables.argumentId
+Property lib.TArgumentValidationContext.getVariables.argumentVersion
 Property lib.TArgumentValidationContext.getVariables.argumentVersion
 Property lib.TArgumentValidationContext.getVariables.argumentVersion
 Property lib.TArgumentValidationContext.getVariables.boundArgumentId
+Property lib.TArgumentValidationContext.getVariables.boundArgumentId
 Property lib.TArgumentValidationContext.getVariables.boundArgumentVersion
+Property lib.TArgumentValidationContext.getVariables.boundArgumentVersion
+Property lib.TArgumentValidationContext.getVariables.boundAspect
+Property lib.TArgumentValidationContext.getVariables.boundExpressionId
 Property lib.TArgumentValidationContext.getVariables.boundPremiseId
+Property lib.TArgumentValidationContext.getVariables.checksum
 Property lib.TArgumentValidationContext.getVariables.checksum
 Property lib.TArgumentValidationContext.getVariables.checksum
 Property lib.TArgumentValidationContext.getVariables.claimId
 Property lib.TArgumentValidationContext.getVariables.claimVersion
 Property lib.TArgumentValidationContext.getVariables.id
 Property lib.TArgumentValidationContext.getVariables.id
+Property lib.TArgumentValidationContext.getVariables.id
 Property lib.TArgumentValidationContext.getVariables.symbol
 Property lib.TArgumentValidationContext.getVariables.symbol
+Property lib.TArgumentValidationContext.getVariables.symbol
+Property lib.TBindingClassification.reasons
+Property lib.TBindingClassification.status
+Property lib.TBindingClassification.status
+Property lib.TBindingClassification.status
+Property lib.TBindingClassification.status
+Property lib.TBindingClassificationBase.boundArgumentVersion
+Property lib.TBindingClassificationBase.boundAspect
+Property lib.TBindingClassificationBase.boundExpressionId
+Property lib.TBindingClassificationBase.premises
+Property lib.TBindingClassificationBase.variableId
+Property lib.TBindingClassificationResult.bindings
+Property lib.TBindingDecision.action
+Property lib.TBindingDecision.action
+Property lib.TBindingDecision.action
+Property lib.TBindingDecision.expressionId
+Property lib.TBindingPremiseUse.cascaded
+Property lib.TBindingPremiseUse.isLink
+Property lib.TBindingPremiseUse.premiseId
+Property lib.TCalendarDateParts.day
+Property lib.TCalendarDateParts.month
+Property lib.TCalendarDateParts.precision
+Property lib.TCalendarDateParts.year
 Property lib.TCanonicalizeOperatorAssignmentsInput.expressionOverrides
 Property lib.TCanonicalizeOperatorAssignmentsInput.premiseScope
+Property lib.TCarriedSource.id
+Property lib.TCarriedSource.id
+Property lib.TCarriedSource.id
+Property lib.TCarriedSource.kind
+Property lib.TCarriedSource.kind
+Property lib.TCarriedSource.kind
+Property lib.TCarriedSource.linkPremiseIds
+Property lib.TCarriedSource.value
+Property lib.TCarriedSource.value
+Property lib.TCarriedSource.value
+Property lib.TCarryAnswersOptions.ownLinkPremiseIds
+Property lib.TCarryCollision.carried
+Property lib.TCarryCollision.carried
+Property lib.TCarryCollision.carried
+Property lib.TCarryCollision.id
+Property lib.TCarryCollision.id
+Property lib.TCarryCollision.id
+Property lib.TCarryCollision.kind
+Property lib.TCarryCollision.kind
+Property lib.TCarryCollision.kind
+Property lib.TCarryCollision.linkPremiseIds
+Property lib.TCarryCollision.own
+Property lib.TCarryCollision.own
+Property lib.TCarryCollision.own
+Property lib.TCarryResult.collisions
+Property lib.TCarryResult.into
+Property lib.TCarryResult.intoResponse
+Property lib.TCarryResult.intoResponse
+Property lib.TCarryResult.linkAnswers
+Property lib.TCarryResult.notCarried
+Property lib.TCarryResult.operatorAssignments
+Property lib.TCarryResult.problems
+Property lib.TCarryResult.sources
+Property lib.TCarryResult.status
+Property lib.TCarryResult.status
+Property lib.TCarryResult.variables
 Property lib.TClaimConnectionLibrarySnapshot.connections
 Property lib.TClaimCreateInput.id
 Property lib.TClaimLibraryManagement.create.claim.id
 Property lib.TClaimLibraryManagement.freeze.current
 Property lib.TClaimLibraryManagement.freeze.frozen
 Property lib.TClaimLibrarySnapshot.claims
+Property lib.TClassifyBindingsOptions.outsideSnapshots
 Property lib.TCodePointIndex.offsets
 Property lib.TCodePointIndex.text
 Property lib.TCollectArgumentReferencedClaimsResult.byId
@@ -4779,6 +5082,18 @@ Property lib.TCollectArgumentReferencedClaimsResult.byId.claimVersion
 Property lib.TCollectArgumentReferencedClaimsResult.byId.premiseIds
 Property lib.TCollectArgumentReferencedClaimsResult.byId.variableIds
 Property lib.TCollectArgumentReferencedClaimsResult.claimIds
+Property lib.TColumnReference.argumentId
+Property lib.TColumnReference.argumentId
+Property lib.TColumnReference.argumentVersion
+Property lib.TColumnReference.aspect
+Property lib.TColumnReference.claimId
+Property lib.TColumnReference.expressionId
+Property lib.TColumnReference.kind
+Property lib.TColumnReference.kind
+Property lib.TColumnReference.kind
+Property lib.TColumnReference.premiseId
+Property lib.TColumnValue.column
+Property lib.TColumnValue.value
 Property lib.TConversation.closed
 Property lib.TConversation.lastResponseId
 Property lib.TConversation.tokenUsage
@@ -4799,6 +5114,7 @@ Property lib.TCoreArgumentEvaluationResult.assignment
 Property lib.TCoreArgumentEvaluationResult.claimAttribution
 Property lib.TCoreArgumentEvaluationResult.conclusion
 Property lib.TCoreArgumentEvaluationResult.conclusionAttribution
+Property lib.TCoreArgumentEvaluationResult.conclusionInferenceRejected
 Property lib.TCoreArgumentEvaluationResult.conclusionTrue
 Property lib.TCoreArgumentEvaluationResult.constraintPremises
 Property lib.TCoreArgumentEvaluationResult.contestedVariableIds
@@ -4960,17 +5276,26 @@ Property lib.TEvaluablePremise.evaluate.options.resolver
 Property lib.TEvaluablePremise.evaluate.options.strictUnknownKeys
 Property lib.TEvaluablePremise.getVariables.argumentId
 Property lib.TEvaluablePremise.getVariables.argumentId
+Property lib.TEvaluablePremise.getVariables.argumentId
+Property lib.TEvaluablePremise.getVariables.argumentVersion
 Property lib.TEvaluablePremise.getVariables.argumentVersion
 Property lib.TEvaluablePremise.getVariables.argumentVersion
 Property lib.TEvaluablePremise.getVariables.boundArgumentId
+Property lib.TEvaluablePremise.getVariables.boundArgumentId
 Property lib.TEvaluablePremise.getVariables.boundArgumentVersion
+Property lib.TEvaluablePremise.getVariables.boundArgumentVersion
+Property lib.TEvaluablePremise.getVariables.boundAspect
+Property lib.TEvaluablePremise.getVariables.boundExpressionId
 Property lib.TEvaluablePremise.getVariables.boundPremiseId
+Property lib.TEvaluablePremise.getVariables.checksum
 Property lib.TEvaluablePremise.getVariables.checksum
 Property lib.TEvaluablePremise.getVariables.checksum
 Property lib.TEvaluablePremise.getVariables.claimId
 Property lib.TEvaluablePremise.getVariables.claimVersion
 Property lib.TEvaluablePremise.getVariables.id
 Property lib.TEvaluablePremise.getVariables.id
+Property lib.TEvaluablePremise.getVariables.id
+Property lib.TEvaluablePremise.getVariables.symbol
 Property lib.TEvaluablePremise.getVariables.symbol
 Property lib.TEvaluablePremise.getVariables.symbol
 Property lib.TExecuteFinalizeResult.failures
@@ -5044,12 +5369,40 @@ Property lib.TInvariantViolation.message
 Property lib.TInvariantViolation.premiseId
 Property lib.TLaunchStageResult.responseId
 Property lib.TLaunchStageResult.status
+Property lib.TLinkCheckResult.attemptedSupport
+Property lib.TLinkCheckResult.counterexample
+Property lib.TLinkCheckResult.problems
+Property lib.TLinkCheckResult.reason
+Property lib.TLinkCheckResult.restsOnlyOnLinks
+Property lib.TLinkCheckResult.status
+Property lib.TLinkCheckResult.status
+Property lib.TLinkCheckResult.status
+Property lib.TLinkCheckResult.status
+Property lib.TLinkCheckResult.status
+Property lib.TLinkCheckResult.supportPremiseIds
+Property lib.TLinkElement.claimId
+Property lib.TLinkElement.expressionId
+Property lib.TLinkElement.kind
+Property lib.TLinkElement.kind
+Property lib.TLinkReference.argumentId
+Property lib.TLinkReference.argumentVersion
+Property lib.TLinkReference.premiseId
+Property lib.TLinkValidationResult.ok
+Property lib.TLinkValidationResult.violations
+Property lib.TLinkViolation.claimId
+Property lib.TLinkViolation.code
+Property lib.TLinkViolation.expressionId
+Property lib.TLinkViolation.message
+Property lib.TLinkViolation.premiseIds
+Property lib.TLinkViolation.severity
+Property lib.TLinkViolation.variableId
 Property lib.TLlmOutputCheckFailure.code
 Property lib.TLlmOutputCheckFailure.message
 Property lib.TLlmRequest._typeMarker
 Property lib.TLlmRequest.maxOutputTokens
 Property lib.TLlmRequest.model
 Property lib.TLlmRequest.onResponseCreated
+Property lib.TLlmRequest.onTextDelta
 Property lib.TLlmRequest.outputSchema
 Property lib.TLlmRequest.previousResponseId
 Property lib.TLlmRequest.reasoningEffort
@@ -5064,8 +5417,15 @@ Property lib.TLogicEngineOptions.behavior
 Property lib.TLogicEngineOptions.checksumConfig
 Property lib.TLogicEngineOptions.generateId
 Property lib.TLogicEngineOptions.positionConfig
+Property lib.TMergedCarriedInput.collisions
+Property lib.TMergedCarriedInput.linkAnswers
+Property lib.TMergedCarriedInput.operatorAssignments
+Property lib.TMergedCarriedInput.variables
 Property lib.TMultiTurnInput.previousResponseId
 Property lib.TMultiTurnOutput.responseId
+Property lib.TNotCarried.conflictsWith
+Property lib.TNotCarried.premiseId
+Property lib.TNotCarried.reason
 Property lib.TOptionalChecksum.T.checksum
 Property lib.TOptionalDep.__optional
 Property lib.TOptionalDep.id
@@ -5138,10 +5498,14 @@ Property lib.TPipelineEvent.at
 Property lib.TPipelineEvent.at
 Property lib.TPipelineEvent.at
 Property lib.TPipelineEvent.at
+Property lib.TPipelineEvent.at
 Property lib.TPipelineEvent.attempt
 Property lib.TPipelineEvent.attempt
 Property lib.TPipelineEvent.attempt
 Property lib.TPipelineEvent.attempt
+Property lib.TPipelineEvent.attempt
+Property lib.TPipelineEvent.delta
+Property lib.TPipelineEvent.kind
 Property lib.TPipelineEvent.kind
 Property lib.TPipelineEvent.kind
 Property lib.TPipelineEvent.kind
@@ -5163,6 +5527,7 @@ Property lib.TPipelineEvent.prompts.user
 Property lib.TPipelineEvent.rawResponseId
 Property lib.TPipelineEvent.reason
 Property lib.TPipelineEvent.responseId
+Property lib.TPipelineEvent.stageId
 Property lib.TPipelineEvent.stageId
 Property lib.TPipelineEvent.stageId
 Property lib.TPipelineEvent.stageId
@@ -5191,6 +5556,8 @@ Property lib.TPremiseCrud.createPremiseWithId.options.derivedClaimId
 Property lib.TPremiseCrud.createPremiseWithId.options.extras
 Property lib.TPremiseCrud.createPremiseWithId.options.symbol
 Property lib.TPremiseCrud.createPremiseWithId.options.type
+Property lib.TPremiseElements.claimIds
+Property lib.TPremiseElements.expressionIds
 Property lib.TPremiseEngineSnapshot.config
 Property lib.TPremiseEngineSnapshot.expressions
 Property lib.TPremiseEngineSnapshot.premise
@@ -5224,6 +5591,22 @@ Property lib.TReactiveSnapshot.argument
 Property lib.TReactiveSnapshot.premises
 Property lib.TReactiveSnapshot.roles
 Property lib.TReactiveSnapshot.variables
+Property lib.TRebaseDecisions.bindings
+Property lib.TResponseCoherenceResult.coherent
+Property lib.TResponseCoherenceResult.coherent
+Property lib.TResponseCoherenceResult.coherent
+Property lib.TResponseCoherenceResult.problems
+Property lib.TResponseCoherenceResult.reason
+Property lib.TResponseCoherenceResult.status
+Property lib.TResponseCoherenceResult.status
+Property lib.TResponseCoherenceResult.status
+Property lib.TResponseCoherenceResult.status
+Property lib.TResponseCoherenceResult.unsatisfiablePremiseIds
+Property lib.TResponseLink.boundAspect
+Property lib.TResponseLink.boundExpressionId
+Property lib.TResponseLink.move
+Property lib.TResponseLink.premiseId
+Property lib.TResponseLink.variableId
 Property lib.TRetrievedResponse.errorMessage
 Property lib.TRetrievedResponse.incompleteReason
 Property lib.TRetrievedResponse.output
@@ -5234,6 +5617,10 @@ Property lib.TRetryPolicy.backoffMs
 Property lib.TRetryPolicy.maxAppendedErrorBytes
 Property lib.TRetryPolicy.maxAttempts
 Property lib.TRetryPolicy.retryOn
+Property lib.TSatisfyingAssignmentResult.assignment
+Property lib.TSatisfyingAssignmentResult.satisfiable
+Property lib.TSatisfyingAssignmentResult.satisfiable
+Property lib.TSatisfyingAssignmentResult.satisfiable
 Property lib.TStage.dependsOn
 Property lib.TStage.id
 Property lib.TStage.outputSchema
@@ -5265,17 +5652,26 @@ Property lib.TTurnResult.responseId
 Property lib.TTurnResult.tokenUsage
 Property lib.TValidatablePremise.getVariables.argumentId
 Property lib.TValidatablePremise.getVariables.argumentId
+Property lib.TValidatablePremise.getVariables.argumentId
+Property lib.TValidatablePremise.getVariables.argumentVersion
 Property lib.TValidatablePremise.getVariables.argumentVersion
 Property lib.TValidatablePremise.getVariables.argumentVersion
 Property lib.TValidatablePremise.getVariables.boundArgumentId
+Property lib.TValidatablePremise.getVariables.boundArgumentId
 Property lib.TValidatablePremise.getVariables.boundArgumentVersion
+Property lib.TValidatablePremise.getVariables.boundArgumentVersion
+Property lib.TValidatablePremise.getVariables.boundAspect
+Property lib.TValidatablePremise.getVariables.boundExpressionId
 Property lib.TValidatablePremise.getVariables.boundPremiseId
+Property lib.TValidatablePremise.getVariables.checksum
 Property lib.TValidatablePremise.getVariables.checksum
 Property lib.TValidatablePremise.getVariables.checksum
 Property lib.TValidatablePremise.getVariables.claimId
 Property lib.TValidatablePremise.getVariables.claimVersion
 Property lib.TValidatablePremise.getVariables.id
 Property lib.TValidatablePremise.getVariables.id
+Property lib.TValidatablePremise.getVariables.id
+Property lib.TValidatablePremise.getVariables.symbol
 Property lib.TValidatablePremise.getVariables.symbol
 Property lib.TValidatablePremise.getVariables.symbol
 Property lib.TValidatorContext.argument
@@ -5298,6 +5694,24 @@ Property lib.TVariableManagement.addVariable.variable.id
 Property lib.TVariableManagement.addVariable.variable.id
 Property lib.TVariableManagement.addVariable.variable.symbol
 Property lib.TVariableManagement.addVariable.variable.symbol
+Property lib.TVariableManagement.bindVariableToExpression.variable.argumentId
+Property lib.TVariableManagement.bindVariableToExpression.variable.argumentId
+Property lib.TVariableManagement.bindVariableToExpression.variable.argumentVersion
+Property lib.TVariableManagement.bindVariableToExpression.variable.argumentVersion
+Property lib.TVariableManagement.bindVariableToExpression.variable.boundArgumentId
+Property lib.TVariableManagement.bindVariableToExpression.variable.boundArgumentId
+Property lib.TVariableManagement.bindVariableToExpression.variable.boundArgumentVersion
+Property lib.TVariableManagement.bindVariableToExpression.variable.boundArgumentVersion
+Property lib.TVariableManagement.bindVariableToExpression.variable.boundAspect
+Property lib.TVariableManagement.bindVariableToExpression.variable.boundAspect
+Property lib.TVariableManagement.bindVariableToExpression.variable.boundExpressionId
+Property lib.TVariableManagement.bindVariableToExpression.variable.boundExpressionId
+Property lib.TVariableManagement.bindVariableToExpression.variable.checksum
+Property lib.TVariableManagement.bindVariableToExpression.variable.checksum
+Property lib.TVariableManagement.bindVariableToExpression.variable.id
+Property lib.TVariableManagement.bindVariableToExpression.variable.id
+Property lib.TVariableManagement.bindVariableToExpression.variable.symbol
+Property lib.TVariableManagement.bindVariableToExpression.variable.symbol
 Property lib.TVariableManagement.bindVariableToPremise.variable.argumentId
 Property lib.TVariableManagement.bindVariableToPremise.variable.argumentId
 Property lib.TVariableManagement.bindVariableToPremise.variable.argumentVersion
@@ -5335,32 +5749,50 @@ Property lib.UnknownExpressionError.stack
 Property lib.UnknownExpressionError.stackTraceLimit
 Property lib.VariableManager.constructor.TVar.argumentId
 Property lib.VariableManager.constructor.TVar.argumentId
+Property lib.VariableManager.constructor.TVar.argumentId
+Property lib.VariableManager.constructor.TVar.argumentVersion
 Property lib.VariableManager.constructor.TVar.argumentVersion
 Property lib.VariableManager.constructor.TVar.argumentVersion
 Property lib.VariableManager.constructor.TVar.boundArgumentId
+Property lib.VariableManager.constructor.TVar.boundArgumentId
 Property lib.VariableManager.constructor.TVar.boundArgumentVersion
+Property lib.VariableManager.constructor.TVar.boundArgumentVersion
+Property lib.VariableManager.constructor.TVar.boundAspect
+Property lib.VariableManager.constructor.TVar.boundExpressionId
 Property lib.VariableManager.constructor.TVar.boundPremiseId
+Property lib.VariableManager.constructor.TVar.checksum
 Property lib.VariableManager.constructor.TVar.checksum
 Property lib.VariableManager.constructor.TVar.checksum
 Property lib.VariableManager.constructor.TVar.claimId
 Property lib.VariableManager.constructor.TVar.claimVersion
 Property lib.VariableManager.constructor.TVar.id
 Property lib.VariableManager.constructor.TVar.id
+Property lib.VariableManager.constructor.TVar.id
+Property lib.VariableManager.constructor.TVar.symbol
 Property lib.VariableManager.constructor.TVar.symbol
 Property lib.VariableManager.constructor.TVar.symbol
 Property lib.VariableManager.fromSnapshot.TVar.argumentId
 Property lib.VariableManager.fromSnapshot.TVar.argumentId
+Property lib.VariableManager.fromSnapshot.TVar.argumentId
+Property lib.VariableManager.fromSnapshot.TVar.argumentVersion
 Property lib.VariableManager.fromSnapshot.TVar.argumentVersion
 Property lib.VariableManager.fromSnapshot.TVar.argumentVersion
 Property lib.VariableManager.fromSnapshot.TVar.boundArgumentId
+Property lib.VariableManager.fromSnapshot.TVar.boundArgumentId
 Property lib.VariableManager.fromSnapshot.TVar.boundArgumentVersion
+Property lib.VariableManager.fromSnapshot.TVar.boundArgumentVersion
+Property lib.VariableManager.fromSnapshot.TVar.boundAspect
+Property lib.VariableManager.fromSnapshot.TVar.boundExpressionId
 Property lib.VariableManager.fromSnapshot.TVar.boundPremiseId
+Property lib.VariableManager.fromSnapshot.TVar.checksum
 Property lib.VariableManager.fromSnapshot.TVar.checksum
 Property lib.VariableManager.fromSnapshot.TVar.checksum
 Property lib.VariableManager.fromSnapshot.TVar.claimId
 Property lib.VariableManager.fromSnapshot.TVar.claimVersion
 Property lib.VariableManager.fromSnapshot.TVar.id
 Property lib.VariableManager.fromSnapshot.TVar.id
+Property lib.VariableManager.fromSnapshot.TVar.id
+Property lib.VariableManager.fromSnapshot.TVar.symbol
 Property lib.VariableManager.fromSnapshot.TVar.symbol
 Property lib.VariableManager.fromSnapshot.TVar.symbol
 Property lib.VersionedLibrary.checksumConfig
@@ -5397,6 +5829,9 @@ Property lib.composeChangesets.TArg.checksum
 Property lib.composeChangesets.TArg.combinedChecksum
 Property lib.composeChangesets.TArg.descendantChecksum
 Property lib.composeChangesets.TArg.id
+Property lib.composeChangesets.TArg.respondsTo
+Property lib.composeChangesets.TArg.respondsTo.argumentId
+Property lib.composeChangesets.TArg.respondsTo.argumentVersion
 Property lib.composeChangesets.TArg.version
 Property lib.composeChangesets.TPremise.argumentId
 Property lib.composeChangesets.TPremise.argumentId
@@ -5415,29 +5850,44 @@ Property lib.composeChangesets.TPremise.type
 Property lib.composeChangesets.TPremise.type
 Property lib.composeChangesets.TVar.argumentId
 Property lib.composeChangesets.TVar.argumentId
+Property lib.composeChangesets.TVar.argumentId
+Property lib.composeChangesets.TVar.argumentVersion
 Property lib.composeChangesets.TVar.argumentVersion
 Property lib.composeChangesets.TVar.argumentVersion
 Property lib.composeChangesets.TVar.boundArgumentId
+Property lib.composeChangesets.TVar.boundArgumentId
 Property lib.composeChangesets.TVar.boundArgumentVersion
+Property lib.composeChangesets.TVar.boundArgumentVersion
+Property lib.composeChangesets.TVar.boundAspect
+Property lib.composeChangesets.TVar.boundExpressionId
 Property lib.composeChangesets.TVar.boundPremiseId
+Property lib.composeChangesets.TVar.checksum
 Property lib.composeChangesets.TVar.checksum
 Property lib.composeChangesets.TVar.checksum
 Property lib.composeChangesets.TVar.claimId
 Property lib.composeChangesets.TVar.claimVersion
 Property lib.composeChangesets.TVar.id
 Property lib.composeChangesets.TVar.id
+Property lib.composeChangesets.TVar.id
 Property lib.composeChangesets.TVar.symbol
 Property lib.composeChangesets.TVar.symbol
-Property lib.defaultCompareArgument._after.checksum
-Property lib.defaultCompareArgument._after.combinedChecksum
-Property lib.defaultCompareArgument._after.descendantChecksum
-Property lib.defaultCompareArgument._after.id
-Property lib.defaultCompareArgument._after.version
-Property lib.defaultCompareArgument._before.checksum
-Property lib.defaultCompareArgument._before.combinedChecksum
-Property lib.defaultCompareArgument._before.descendantChecksum
-Property lib.defaultCompareArgument._before.id
-Property lib.defaultCompareArgument._before.version
+Property lib.composeChangesets.TVar.symbol
+Property lib.defaultCompareArgument.after.checksum
+Property lib.defaultCompareArgument.after.combinedChecksum
+Property lib.defaultCompareArgument.after.descendantChecksum
+Property lib.defaultCompareArgument.after.id
+Property lib.defaultCompareArgument.after.respondsTo
+Property lib.defaultCompareArgument.after.respondsTo.argumentId
+Property lib.defaultCompareArgument.after.respondsTo.argumentVersion
+Property lib.defaultCompareArgument.after.version
+Property lib.defaultCompareArgument.before.checksum
+Property lib.defaultCompareArgument.before.combinedChecksum
+Property lib.defaultCompareArgument.before.descendantChecksum
+Property lib.defaultCompareArgument.before.id
+Property lib.defaultCompareArgument.before.respondsTo
+Property lib.defaultCompareArgument.before.respondsTo.argumentId
+Property lib.defaultCompareArgument.before.respondsTo.argumentVersion
+Property lib.defaultCompareArgument.before.version
 Property lib.defaultComparePremise._after.argumentId
 Property lib.defaultComparePremise._after.argumentId
 Property lib.defaultComparePremise._after.argumentVersion
@@ -5470,17 +5920,26 @@ Property lib.defaultComparePremise._before.type
 Property lib.defaultComparePremise._before.type
 Property lib.defaultCompareVariable.TVar.argumentId
 Property lib.defaultCompareVariable.TVar.argumentId
+Property lib.defaultCompareVariable.TVar.argumentId
+Property lib.defaultCompareVariable.TVar.argumentVersion
 Property lib.defaultCompareVariable.TVar.argumentVersion
 Property lib.defaultCompareVariable.TVar.argumentVersion
 Property lib.defaultCompareVariable.TVar.boundArgumentId
+Property lib.defaultCompareVariable.TVar.boundArgumentId
 Property lib.defaultCompareVariable.TVar.boundArgumentVersion
+Property lib.defaultCompareVariable.TVar.boundArgumentVersion
+Property lib.defaultCompareVariable.TVar.boundAspect
+Property lib.defaultCompareVariable.TVar.boundExpressionId
 Property lib.defaultCompareVariable.TVar.boundPremiseId
+Property lib.defaultCompareVariable.TVar.checksum
 Property lib.defaultCompareVariable.TVar.checksum
 Property lib.defaultCompareVariable.TVar.checksum
 Property lib.defaultCompareVariable.TVar.claimId
 Property lib.defaultCompareVariable.TVar.claimVersion
 Property lib.defaultCompareVariable.TVar.id
 Property lib.defaultCompareVariable.TVar.id
+Property lib.defaultCompareVariable.TVar.id
+Property lib.defaultCompareVariable.TVar.symbol
 Property lib.defaultCompareVariable.TVar.symbol
 Property lib.defaultCompareVariable.TVar.symbol
 Property lib.deterministicStage.config.dependsOn
@@ -5491,6 +5950,9 @@ Property lib.diffArguments.TArg.checksum
 Property lib.diffArguments.TArg.combinedChecksum
 Property lib.diffArguments.TArg.descendantChecksum
 Property lib.diffArguments.TArg.id
+Property lib.diffArguments.TArg.respondsTo
+Property lib.diffArguments.TArg.respondsTo.argumentId
+Property lib.diffArguments.TArg.respondsTo.argumentVersion
 Property lib.diffArguments.TArg.version
 Property lib.diffArguments.TPremise.argumentId
 Property lib.diffArguments.TPremise.argumentId
@@ -5509,17 +5971,26 @@ Property lib.diffArguments.TPremise.type
 Property lib.diffArguments.TPremise.type
 Property lib.diffArguments.TVar.argumentId
 Property lib.diffArguments.TVar.argumentId
+Property lib.diffArguments.TVar.argumentId
+Property lib.diffArguments.TVar.argumentVersion
 Property lib.diffArguments.TVar.argumentVersion
 Property lib.diffArguments.TVar.argumentVersion
 Property lib.diffArguments.TVar.boundArgumentId
+Property lib.diffArguments.TVar.boundArgumentId
 Property lib.diffArguments.TVar.boundArgumentVersion
+Property lib.diffArguments.TVar.boundArgumentVersion
+Property lib.diffArguments.TVar.boundAspect
+Property lib.diffArguments.TVar.boundExpressionId
 Property lib.diffArguments.TVar.boundPremiseId
+Property lib.diffArguments.TVar.checksum
 Property lib.diffArguments.TVar.checksum
 Property lib.diffArguments.TVar.checksum
 Property lib.diffArguments.TVar.claimId
 Property lib.diffArguments.TVar.claimVersion
 Property lib.diffArguments.TVar.id
 Property lib.diffArguments.TVar.id
+Property lib.diffArguments.TVar.id
+Property lib.diffArguments.TVar.symbol
 Property lib.diffArguments.TVar.symbol
 Property lib.diffArguments.TVar.symbol
 Property lib.emptyClaimConnectionLookup.TConn.checksum
@@ -5532,6 +6003,9 @@ Property lib.forkArgumentEngine.TArg.checksum
 Property lib.forkArgumentEngine.TArg.combinedChecksum
 Property lib.forkArgumentEngine.TArg.descendantChecksum
 Property lib.forkArgumentEngine.TArg.id
+Property lib.forkArgumentEngine.TArg.respondsTo
+Property lib.forkArgumentEngine.TArg.respondsTo.argumentId
+Property lib.forkArgumentEngine.TArg.respondsTo.argumentVersion
 Property lib.forkArgumentEngine.TArg.version
 Property lib.forkArgumentEngine.TClaim.checksum
 Property lib.forkArgumentEngine.TClaim.frozen
@@ -5555,17 +6029,26 @@ Property lib.forkArgumentEngine.TPremise.type
 Property lib.forkArgumentEngine.TPremise.type
 Property lib.forkArgumentEngine.TVar.argumentId
 Property lib.forkArgumentEngine.TVar.argumentId
+Property lib.forkArgumentEngine.TVar.argumentId
+Property lib.forkArgumentEngine.TVar.argumentVersion
 Property lib.forkArgumentEngine.TVar.argumentVersion
 Property lib.forkArgumentEngine.TVar.argumentVersion
 Property lib.forkArgumentEngine.TVar.boundArgumentId
+Property lib.forkArgumentEngine.TVar.boundArgumentId
 Property lib.forkArgumentEngine.TVar.boundArgumentVersion
+Property lib.forkArgumentEngine.TVar.boundArgumentVersion
+Property lib.forkArgumentEngine.TVar.boundAspect
+Property lib.forkArgumentEngine.TVar.boundExpressionId
 Property lib.forkArgumentEngine.TVar.boundPremiseId
+Property lib.forkArgumentEngine.TVar.checksum
 Property lib.forkArgumentEngine.TVar.checksum
 Property lib.forkArgumentEngine.TVar.checksum
 Property lib.forkArgumentEngine.TVar.claimId
 Property lib.forkArgumentEngine.TVar.claimVersion
 Property lib.forkArgumentEngine.TVar.id
 Property lib.forkArgumentEngine.TVar.id
+Property lib.forkArgumentEngine.TVar.id
+Property lib.forkArgumentEngine.TVar.symbol
 Property lib.forkArgumentEngine.TVar.symbol
 Property lib.forkArgumentEngine.TVar.symbol
 Property lib.forkArgumentEngine.engine
@@ -5580,19 +6063,61 @@ Property lib.isClaimBound.id
 Property lib.isClaimBound.symbol
 Property lib.isClaimBound.v.argumentId
 Property lib.isClaimBound.v.argumentId
+Property lib.isClaimBound.v.argumentId
+Property lib.isClaimBound.v.argumentVersion
 Property lib.isClaimBound.v.argumentVersion
 Property lib.isClaimBound.v.argumentVersion
 Property lib.isClaimBound.v.boundArgumentId
+Property lib.isClaimBound.v.boundArgumentId
 Property lib.isClaimBound.v.boundArgumentVersion
+Property lib.isClaimBound.v.boundArgumentVersion
+Property lib.isClaimBound.v.boundAspect
+Property lib.isClaimBound.v.boundExpressionId
 Property lib.isClaimBound.v.boundPremiseId
+Property lib.isClaimBound.v.checksum
 Property lib.isClaimBound.v.checksum
 Property lib.isClaimBound.v.checksum
 Property lib.isClaimBound.v.claimId
 Property lib.isClaimBound.v.claimVersion
 Property lib.isClaimBound.v.id
 Property lib.isClaimBound.v.id
+Property lib.isClaimBound.v.id
 Property lib.isClaimBound.v.symbol
 Property lib.isClaimBound.v.symbol
+Property lib.isClaimBound.v.symbol
+Property lib.isExpressionBound.argumentId
+Property lib.isExpressionBound.argumentVersion
+Property lib.isExpressionBound.boundArgumentId
+Property lib.isExpressionBound.boundArgumentVersion
+Property lib.isExpressionBound.boundAspect
+Property lib.isExpressionBound.boundExpressionId
+Property lib.isExpressionBound.checksum
+Property lib.isExpressionBound.id
+Property lib.isExpressionBound.symbol
+Property lib.isExpressionBound.v.argumentId
+Property lib.isExpressionBound.v.argumentId
+Property lib.isExpressionBound.v.argumentId
+Property lib.isExpressionBound.v.argumentVersion
+Property lib.isExpressionBound.v.argumentVersion
+Property lib.isExpressionBound.v.argumentVersion
+Property lib.isExpressionBound.v.boundArgumentId
+Property lib.isExpressionBound.v.boundArgumentId
+Property lib.isExpressionBound.v.boundArgumentVersion
+Property lib.isExpressionBound.v.boundArgumentVersion
+Property lib.isExpressionBound.v.boundAspect
+Property lib.isExpressionBound.v.boundExpressionId
+Property lib.isExpressionBound.v.boundPremiseId
+Property lib.isExpressionBound.v.checksum
+Property lib.isExpressionBound.v.checksum
+Property lib.isExpressionBound.v.checksum
+Property lib.isExpressionBound.v.claimId
+Property lib.isExpressionBound.v.claimVersion
+Property lib.isExpressionBound.v.id
+Property lib.isExpressionBound.v.id
+Property lib.isExpressionBound.v.id
+Property lib.isExpressionBound.v.symbol
+Property lib.isExpressionBound.v.symbol
+Property lib.isExpressionBound.v.symbol
 Property lib.isExternallyBound.v.argumentId
 Property lib.isExternallyBound.v.argumentVersion
 Property lib.isExternallyBound.v.boundArgumentId
@@ -5605,6 +6130,9 @@ Property lib.isNakedQDerivationPremise.TArg.checksum
 Property lib.isNakedQDerivationPremise.TArg.combinedChecksum
 Property lib.isNakedQDerivationPremise.TArg.descendantChecksum
 Property lib.isNakedQDerivationPremise.TArg.id
+Property lib.isNakedQDerivationPremise.TArg.respondsTo
+Property lib.isNakedQDerivationPremise.TArg.respondsTo.argumentId
+Property lib.isNakedQDerivationPremise.TArg.respondsTo.argumentVersion
 Property lib.isNakedQDerivationPremise.TArg.version
 Property lib.isNakedQDerivationPremise.TPremise.argumentId
 Property lib.isNakedQDerivationPremise.TPremise.argumentId
@@ -5623,23 +6151,35 @@ Property lib.isNakedQDerivationPremise.TPremise.type
 Property lib.isNakedQDerivationPremise.TPremise.type
 Property lib.isNakedQDerivationPremise.TVar.argumentId
 Property lib.isNakedQDerivationPremise.TVar.argumentId
+Property lib.isNakedQDerivationPremise.TVar.argumentId
+Property lib.isNakedQDerivationPremise.TVar.argumentVersion
 Property lib.isNakedQDerivationPremise.TVar.argumentVersion
 Property lib.isNakedQDerivationPremise.TVar.argumentVersion
 Property lib.isNakedQDerivationPremise.TVar.boundArgumentId
+Property lib.isNakedQDerivationPremise.TVar.boundArgumentId
 Property lib.isNakedQDerivationPremise.TVar.boundArgumentVersion
+Property lib.isNakedQDerivationPremise.TVar.boundArgumentVersion
+Property lib.isNakedQDerivationPremise.TVar.boundAspect
+Property lib.isNakedQDerivationPremise.TVar.boundExpressionId
 Property lib.isNakedQDerivationPremise.TVar.boundPremiseId
+Property lib.isNakedQDerivationPremise.TVar.checksum
 Property lib.isNakedQDerivationPremise.TVar.checksum
 Property lib.isNakedQDerivationPremise.TVar.checksum
 Property lib.isNakedQDerivationPremise.TVar.claimId
 Property lib.isNakedQDerivationPremise.TVar.claimVersion
 Property lib.isNakedQDerivationPremise.TVar.id
 Property lib.isNakedQDerivationPremise.TVar.id
+Property lib.isNakedQDerivationPremise.TVar.id
+Property lib.isNakedQDerivationPremise.TVar.symbol
 Property lib.isNakedQDerivationPremise.TVar.symbol
 Property lib.isNakedQDerivationPremise.TVar.symbol
 Property lib.isNakedQTree.TArg.checksum
 Property lib.isNakedQTree.TArg.combinedChecksum
 Property lib.isNakedQTree.TArg.descendantChecksum
 Property lib.isNakedQTree.TArg.id
+Property lib.isNakedQTree.TArg.respondsTo
+Property lib.isNakedQTree.TArg.respondsTo.argumentId
+Property lib.isNakedQTree.TArg.respondsTo.argumentVersion
 Property lib.isNakedQTree.TArg.version
 Property lib.isNakedQTree.TPremise.argumentId
 Property lib.isNakedQTree.TPremise.argumentId
@@ -5658,17 +6198,26 @@ Property lib.isNakedQTree.TPremise.type
 Property lib.isNakedQTree.TPremise.type
 Property lib.isNakedQTree.TVar.argumentId
 Property lib.isNakedQTree.TVar.argumentId
+Property lib.isNakedQTree.TVar.argumentId
+Property lib.isNakedQTree.TVar.argumentVersion
 Property lib.isNakedQTree.TVar.argumentVersion
 Property lib.isNakedQTree.TVar.argumentVersion
 Property lib.isNakedQTree.TVar.boundArgumentId
+Property lib.isNakedQTree.TVar.boundArgumentId
 Property lib.isNakedQTree.TVar.boundArgumentVersion
+Property lib.isNakedQTree.TVar.boundArgumentVersion
+Property lib.isNakedQTree.TVar.boundAspect
+Property lib.isNakedQTree.TVar.boundExpressionId
 Property lib.isNakedQTree.TVar.boundPremiseId
+Property lib.isNakedQTree.TVar.checksum
 Property lib.isNakedQTree.TVar.checksum
 Property lib.isNakedQTree.TVar.checksum
 Property lib.isNakedQTree.TVar.claimId
 Property lib.isNakedQTree.TVar.claimVersion
 Property lib.isNakedQTree.TVar.id
 Property lib.isNakedQTree.TVar.id
+Property lib.isNakedQTree.TVar.id
+Property lib.isNakedQTree.TVar.symbol
 Property lib.isNakedQTree.TVar.symbol
 Property lib.isNakedQTree.TVar.symbol
 Property lib.isPremiseBound.argumentId
@@ -5681,17 +6230,26 @@ Property lib.isPremiseBound.id
 Property lib.isPremiseBound.symbol
 Property lib.isPremiseBound.v.argumentId
 Property lib.isPremiseBound.v.argumentId
+Property lib.isPremiseBound.v.argumentId
+Property lib.isPremiseBound.v.argumentVersion
 Property lib.isPremiseBound.v.argumentVersion
 Property lib.isPremiseBound.v.argumentVersion
 Property lib.isPremiseBound.v.boundArgumentId
+Property lib.isPremiseBound.v.boundArgumentId
 Property lib.isPremiseBound.v.boundArgumentVersion
+Property lib.isPremiseBound.v.boundArgumentVersion
+Property lib.isPremiseBound.v.boundAspect
+Property lib.isPremiseBound.v.boundExpressionId
 Property lib.isPremiseBound.v.boundPremiseId
+Property lib.isPremiseBound.v.checksum
 Property lib.isPremiseBound.v.checksum
 Property lib.isPremiseBound.v.checksum
 Property lib.isPremiseBound.v.claimId
 Property lib.isPremiseBound.v.claimVersion
 Property lib.isPremiseBound.v.id
 Property lib.isPremiseBound.v.id
+Property lib.isPremiseBound.v.id
+Property lib.isPremiseBound.v.symbol
 Property lib.isPremiseBound.v.symbol
 Property lib.isPremiseBound.v.symbol
 Property lib.llmStage.config.buildPrompt
@@ -5706,10 +6264,28 @@ Property lib.llmStage.config.outputSchema
 Property lib.llmStage.config.reasoningEffort
 Property lib.llmStage.config.retry
 Property lib.llmStage.config.tools
+Property lib.mergeCarriedInput.carried.collisions
+Property lib.mergeCarriedInput.carried.into
+Property lib.mergeCarriedInput.carried.into.argumentId
+Property lib.mergeCarriedInput.carried.into.argumentVersion
+Property lib.mergeCarriedInput.carried.intoResponse
+Property lib.mergeCarriedInput.carried.intoResponse
+Property lib.mergeCarriedInput.carried.linkAnswers
+Property lib.mergeCarriedInput.carried.notCarried
+Property lib.mergeCarriedInput.carried.operatorAssignments
+Property lib.mergeCarriedInput.carried.sources
+Property lib.mergeCarriedInput.carried.status
+Property lib.mergeCarriedInput.carried.variables
+Property lib.mergeCarriedInput.own.linkAnswers
+Property lib.mergeCarriedInput.own.operatorAssignments
+Property lib.mergeCarriedInput.own.variables
 Property lib.mergeChangesets.TArg.checksum
 Property lib.mergeChangesets.TArg.combinedChecksum
 Property lib.mergeChangesets.TArg.descendantChecksum
 Property lib.mergeChangesets.TArg.id
+Property lib.mergeChangesets.TArg.respondsTo
+Property lib.mergeChangesets.TArg.respondsTo.argumentId
+Property lib.mergeChangesets.TArg.respondsTo.argumentVersion
 Property lib.mergeChangesets.TArg.version
 Property lib.mergeChangesets.TPremise.argumentId
 Property lib.mergeChangesets.TPremise.argumentId
@@ -5728,23 +6304,35 @@ Property lib.mergeChangesets.TPremise.type
 Property lib.mergeChangesets.TPremise.type
 Property lib.mergeChangesets.TVar.argumentId
 Property lib.mergeChangesets.TVar.argumentId
+Property lib.mergeChangesets.TVar.argumentId
+Property lib.mergeChangesets.TVar.argumentVersion
 Property lib.mergeChangesets.TVar.argumentVersion
 Property lib.mergeChangesets.TVar.argumentVersion
 Property lib.mergeChangesets.TVar.boundArgumentId
+Property lib.mergeChangesets.TVar.boundArgumentId
 Property lib.mergeChangesets.TVar.boundArgumentVersion
+Property lib.mergeChangesets.TVar.boundArgumentVersion
+Property lib.mergeChangesets.TVar.boundAspect
+Property lib.mergeChangesets.TVar.boundExpressionId
 Property lib.mergeChangesets.TVar.boundPremiseId
+Property lib.mergeChangesets.TVar.checksum
 Property lib.mergeChangesets.TVar.checksum
 Property lib.mergeChangesets.TVar.checksum
 Property lib.mergeChangesets.TVar.claimId
 Property lib.mergeChangesets.TVar.claimVersion
 Property lib.mergeChangesets.TVar.id
 Property lib.mergeChangesets.TVar.id
+Property lib.mergeChangesets.TVar.id
+Property lib.mergeChangesets.TVar.symbol
 Property lib.mergeChangesets.TVar.symbol
 Property lib.mergeChangesets.TVar.symbol
 Property lib.orderChangeset.TArg.checksum
 Property lib.orderChangeset.TArg.combinedChecksum
 Property lib.orderChangeset.TArg.descendantChecksum
 Property lib.orderChangeset.TArg.id
+Property lib.orderChangeset.TArg.respondsTo
+Property lib.orderChangeset.TArg.respondsTo.argumentId
+Property lib.orderChangeset.TArg.respondsTo.argumentVersion
 Property lib.orderChangeset.TArg.version
 Property lib.orderChangeset.TPremise.argumentId
 Property lib.orderChangeset.TPremise.argumentId
@@ -5763,17 +6351,26 @@ Property lib.orderChangeset.TPremise.type
 Property lib.orderChangeset.TPremise.type
 Property lib.orderChangeset.TVar.argumentId
 Property lib.orderChangeset.TVar.argumentId
+Property lib.orderChangeset.TVar.argumentId
+Property lib.orderChangeset.TVar.argumentVersion
 Property lib.orderChangeset.TVar.argumentVersion
 Property lib.orderChangeset.TVar.argumentVersion
 Property lib.orderChangeset.TVar.boundArgumentId
+Property lib.orderChangeset.TVar.boundArgumentId
 Property lib.orderChangeset.TVar.boundArgumentVersion
+Property lib.orderChangeset.TVar.boundArgumentVersion
+Property lib.orderChangeset.TVar.boundAspect
+Property lib.orderChangeset.TVar.boundExpressionId
 Property lib.orderChangeset.TVar.boundPremiseId
+Property lib.orderChangeset.TVar.checksum
 Property lib.orderChangeset.TVar.checksum
 Property lib.orderChangeset.TVar.checksum
 Property lib.orderChangeset.TVar.claimId
 Property lib.orderChangeset.TVar.claimVersion
 Property lib.orderChangeset.TVar.id
 Property lib.orderChangeset.TVar.id
+Property lib.orderChangeset.TVar.id
+Property lib.orderChangeset.TVar.symbol
 Property lib.orderChangeset.TVar.symbol
 Property lib.orderChangeset.TVar.symbol
 Property lib.subPipelineStage.config.dependsOn
@@ -5789,17 +6386,26 @@ Property lib.validateDerivationStructure.premise.id
 Property lib.validateDerivationStructure.premise.type
 Property lib.validateDerivationStructure.variables.argumentId
 Property lib.validateDerivationStructure.variables.argumentId
+Property lib.validateDerivationStructure.variables.argumentId
+Property lib.validateDerivationStructure.variables.argumentVersion
 Property lib.validateDerivationStructure.variables.argumentVersion
 Property lib.validateDerivationStructure.variables.argumentVersion
 Property lib.validateDerivationStructure.variables.boundArgumentId
+Property lib.validateDerivationStructure.variables.boundArgumentId
 Property lib.validateDerivationStructure.variables.boundArgumentVersion
+Property lib.validateDerivationStructure.variables.boundArgumentVersion
+Property lib.validateDerivationStructure.variables.boundAspect
+Property lib.validateDerivationStructure.variables.boundExpressionId
 Property lib.validateDerivationStructure.variables.boundPremiseId
+Property lib.validateDerivationStructure.variables.checksum
 Property lib.validateDerivationStructure.variables.checksum
 Property lib.validateDerivationStructure.variables.checksum
 Property lib.validateDerivationStructure.variables.claimId
 Property lib.validateDerivationStructure.variables.claimVersion
 Property lib.validateDerivationStructure.variables.id
 Property lib.validateDerivationStructure.variables.id
+Property lib.validateDerivationStructure.variables.id
+Property lib.validateDerivationStructure.variables.symbol
 Property lib.validateDerivationStructure.variables.symbol
 Property lib.validateDerivationStructure.variables.symbol
 Property lib.validateGrammar.argumentId
@@ -5953,15 +6559,25 @@ TypeAlias lib.TArgumentEngineSnapshot
 TypeAlias lib.TArgumentLibraryLibraries
 TypeAlias lib.TArgumentLibrarySnapshot
 TypeAlias lib.TArgumentParserResult
+TypeAlias lib.TBindingChangeReason
+TypeAlias lib.TBindingClassification
+TypeAlias lib.TBindingDecision
+TypeAlias lib.TBoundAspect
+TypeAlias lib.TCalendarDatePrecision
+TypeAlias lib.TCarriedSource
+TypeAlias lib.TCarryCollision
+TypeAlias lib.TCarryResult
 TypeAlias lib.TClaimBoundVariable
 TypeAlias lib.TClaimConnectionLibrarySnapshot
 TypeAlias lib.TClaimCreateInput
 TypeAlias lib.TClaimLibrarySnapshot
 TypeAlias lib.TCodePointIndex
+TypeAlias lib.TColumnReference
 TypeAlias lib.TConversation
 TypeAlias lib.TCoreAnalysisFile
 TypeAlias lib.TCoreArgument
 TypeAlias lib.TCoreArgumentForkRecord
+TypeAlias lib.TCoreArgumentReference
 TypeAlias lib.TCoreArgumentRoleState
 TypeAlias lib.TCoreClaim
 TypeAlias lib.TCoreClaimAxiomaticType
@@ -6011,6 +6627,7 @@ TypeAlias lib.TExecutePipelineDeps
 TypeAlias lib.TExecuteStageDeps
 TypeAlias lib.TExecuteStageResult
 TypeAlias lib.TExecuteTurnDeps
+TypeAlias lib.TExpressionBoundVariable
 TypeAlias lib.TExpressionInput
 TypeAlias lib.TExpressionManagerSnapshot
 TypeAlias lib.TExpressionUpdate
@@ -6027,6 +6644,11 @@ TypeAlias lib.TJsonObject
 TypeAlias lib.TJsonPrimitive
 TypeAlias lib.TJsonValue
 TypeAlias lib.TLaunchStageResult
+TypeAlias lib.TLinkAnswer
+TypeAlias lib.TLinkCheckResult
+TypeAlias lib.TLinkElement
+TypeAlias lib.TLinkMove
+TypeAlias lib.TLinkViolationCode
 TypeAlias lib.TLlmModel
 TypeAlias lib.TLlmOutputCheckFailure
 TypeAlias lib.TLlmProvider
@@ -6036,6 +6658,7 @@ TypeAlias lib.TLlmTokenUsage
 TypeAlias lib.TLogicEngineOptions
 TypeAlias lib.TMultiTurnInput
 TypeAlias lib.TMultiTurnOutput
+TypeAlias lib.TNotCarriedReason
 TypeAlias lib.TNotOperatorNotDecidableReason
 TypeAlias lib.TOptionalChecksum
 TypeAlias lib.TOptionalDep
@@ -6059,6 +6682,7 @@ TypeAlias lib.TPipelineEvent
 TypeAlias lib.TPipelineFinalize
 TypeAlias lib.TPipelineResult
 TypeAlias lib.TPopulateResult
+TypeAlias lib.TPositionClass
 TypeAlias lib.TPremiseBoundVariable
 TypeAlias lib.TPremiseEngineSnapshot
 TypeAlias lib.TProcessingFailure
@@ -6069,11 +6693,13 @@ TypeAlias lib.TPropositCoreSnapshot
 TypeAlias lib.TReactivePremiseSnapshot
 TypeAlias lib.TReactiveSnapshot
 TypeAlias lib.TReasoningEffort
+TypeAlias lib.TResponseCoherenceResult
 TypeAlias lib.TResponseId
 TypeAlias lib.TResponseStatus
 TypeAlias lib.TRetrievedResponse
 TypeAlias lib.TRetryPolicy
 TypeAlias lib.TRetryReason
+TypeAlias lib.TSatisfyingAssignmentResult
 TypeAlias lib.TStage
 TypeAlias lib.TStageContext
 TypeAlias lib.TStageOutcomeRecord
@@ -6082,6 +6708,7 @@ TypeAlias lib.TToolSpec
 TypeAlias lib.TTurnInput
 TypeAlias lib.TTurnResult
 TypeAlias lib.TUUID
+TypeAlias lib.TUndeterminedReason
 TypeAlias lib.TValidatorContext
 TypeAlias lib.TVariableManagerSnapshot
 TypeAlias lib.TVersionedEntity
@@ -6132,6 +6759,7 @@ TypeLiteral lib.TExecuteTurnDeps.onEvent (1)
 TypeLiteral lib.TForkArgumentOptions.generateId (1)
 TypeLiteral lib.TJsonValue [index 1]
 TypeLiteral lib.TLlmRequest.onResponseCreated (1)
+TypeLiteral lib.TLlmRequest.onTextDelta (1)
 TypeLiteral lib.TLogicEngineOptions.generateId (1)
 TypeLiteral lib.TParserBuildOptions.generateId (1)
 TypeLiteral lib.TPipelineFinalize.run (1)
@@ -6322,8 +6950,10 @@ Variable lib.ARG_CHECKSUM_MISMATCH
 Variable lib.ARG_CIRCULARITY_DETECTED
 Variable lib.ARG_CLAIM_REF_NOT_FOUND
 Variable lib.ARG_CONCLUSION_NOT_FOUND
+Variable lib.ARG_EXPRESSION_BINDING_OUTSIDE_RESPONSE
 Variable lib.ARG_OWNERSHIP_MISMATCH
 Variable lib.ARG_PREMISE_REF_NOT_FOUND
+Variable lib.ARG_RESPONDS_TO_ITSELF
 Variable lib.ARG_SCHEMA_INVALID
 Variable lib.AXIOM_CLAIM_NOT_NORMAL_TYPE
 Variable lib.AXIOM_CLAIM_REF_NOT_FOUND
@@ -6333,6 +6963,7 @@ Variable lib.AXIOM_SCHEMA_INVALID
 Variable lib.AXIOM_SUPPORTING_NOT_AXIOMATIC_TYPE
 Variable lib.AXIOM_SUPPORTING_REF_NOT_FOUND
 Variable lib.AXIOM_VARIABLE_ASSIGNMENT_FORBIDDEN
+Variable lib.BoundAspectSchema
 Variable lib.CITATION_CLAIM_REF_NOT_FOUND
 Variable lib.CITATION_CYCLE_DETECTED
 Variable lib.CITATION_DUPLICATE_ID
@@ -6347,6 +6978,7 @@ Variable lib.CLAIM_TYPE_IMMUTABLE
 Variable lib.CONTESTED
 Variable lib.CREATE_DERIVATION_CLAIM_NOT_FOUND
 Variable lib.CREATE_DERIVATION_REQUIRES_DERIVED_CLAIM_ID
+Variable lib.CalendarDate
 Variable lib.CoreAnalysisFileSchema
 Variable lib.CoreArgumentForkRecordSchema
 Variable lib.CoreArgumentRoleStateSchema
@@ -6361,6 +6993,7 @@ Variable lib.CoreClaimSchema
 Variable lib.CoreClaimTypeSchema
 Variable lib.CoreDerivationPremiseSchema
 Variable lib.CoreEntityForkRecordSchema
+Variable lib.CoreExpressionBoundVariableSchema
 Variable lib.CoreExpressionForkRecordSchema
 Variable lib.CoreFormulaExpressionSchema
 Variable lib.CoreFreeformPremiseSchema
@@ -6446,6 +7079,7 @@ Variable lib.ParsedVariableSchema
 Variable lib.ProcessingFailureSchema
 Variable lib.SATISFIABILITY_VARIABLE_CEILING
 Variable lib.UUID
+Variable lib.VAR_BINDING_AMBIGUOUS
 Variable lib.VAR_CHECKSUM_MISMATCH
 Variable lib.VAR_DUPLICATE_ID
 Variable lib.VAR_DUPLICATE_SYMBOL

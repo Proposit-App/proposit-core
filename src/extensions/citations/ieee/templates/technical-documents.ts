@@ -3,6 +3,7 @@
 import {
     separator,
     stringField,
+    yearOrUndated,
     whenPresent,
     onlineAvailable,
 } from "./fragments.js"
@@ -16,7 +17,7 @@ export const DATASHEET_TEMPLATE: TSegmentInstruction[] = [
     separator(", "),
     stringField("partNumber", "misc"),
     separator(", "),
-    stringField("year", "year"),
+    yearOrUndated(),
     separator(". "),
     ...onlineAvailable(),
 ]
@@ -29,7 +30,7 @@ export const PRODUCT_MANUAL_TEMPLATE: TSegmentInstruction[] = [
     separator(", "),
     stringField("model", "misc"),
     separator(", "),
-    stringField("year", "year"),
+    yearOrUndated(),
     whenPresent("url", [separator(". "), ...onlineAvailable()]),
     separator("."),
 ]

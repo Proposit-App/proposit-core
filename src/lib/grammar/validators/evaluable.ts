@@ -11,7 +11,11 @@
 
 import type { TViolation } from "../types.js"
 import type { TValidatorContext } from "./context.js"
-import { isClaimBound, isPremiseBound } from "../../schemata/propositional.js"
+import {
+    isClaimBound,
+    isExpressionBound,
+    isPremiseBound,
+} from "../../schemata/propositional.js"
 import { isVariadicOperator } from "../../core/expression-manager/checks.js"
 
 /**
@@ -208,6 +212,8 @@ export function validateE6(ctx: TValidatorContext): readonly TViolation[] {
  */
 export function validateE7(ctx: TValidatorContext): readonly TViolation[] {
     if (ctx.premises.length === 0) return []
+    // A response has no conclusion; E-8 covers one that has.
+    if (ctx.argument.respondsTo !== undefined) return []
     const conclusionId = ctx.roleState.conclusionPremiseId
     if (conclusionId === undefined) {
         return [
@@ -234,6 +240,82 @@ export function validateE7(ctx: TValidatorContext): readonly TViolation[] {
     return []
 }
 
+/**
+ * E-8 — A response has no conclusion. A response answers another argument
+ * through its links and asserts no conclusion of its own, and the engine
+ * never designates one. A response stored with a conclusion still loads, so
+ * that the data can be repaired, and this rule reports it.
+ */
+export function validateE8(ctx: TValidatorContext): readonly TViolation[] {
+    if (ctx.argument.respondsTo === undefined) return []
+    const conclusionId = ctx.roleState.conclusionPremiseId
+    if (conclusionId === undefined) return []
+    return [
+        {
+            tier: "evaluable",
+            code: "E-8",
+            message: `response has a conclusion premise ${conclusionId}; a response has none`,
+            argumentId: ctx.argument.id,
+            premiseId: conclusionId,
+        },
+    ]
+}
+
+/**
+ * E-9 — One variable per referent. In a response, no two expression-bound
+ * variables bind the same expression of the argument answered in the same
+ * aspect. The binder reuses an existing variable rather than adding a second,
+ * so this reports only stored data; such a pair would let one premise
+ * contradict what another affirms of the same thing without the check seeing
+ * it as one thing.
+ */
+export function validateE9(ctx: TValidatorContext): readonly TViolation[] {
+    const violations: TViolation[] = []
+    const seen = new Map<string, string>()
+    for (const v of ctx.variables) {
+        if (!isExpressionBound(v)) continue
+        const key = `${v.boundArgumentId}:${v.boundExpressionId}:${v.boundAspect}`
+        const first = seen.get(key)
+        if (first === undefined) {
+            seen.set(key, v.id)
+            continue
+        }
+        violations.push({
+            tier: "evaluable",
+            code: "E-9",
+            message: `variable ${v.id} binds the ${v.boundAspect} of expression ${v.boundExpressionId}, as variable ${first} already does`,
+            argumentId: ctx.argument.id,
+            variableId: v.id,
+        })
+    }
+    return violations
+}
+
+/**
+ * E-10 — Links name the version answered. In a response, every
+ * expression-bound variable's `boundArgumentVersion` equals
+ * `respondsTo.argumentVersion`. A mismatch loads, so that rebasing can repair
+ * it, and this rule reports it.
+ */
+export function validateE10(ctx: TValidatorContext): readonly TViolation[] {
+    const respondsTo = ctx.argument.respondsTo
+    if (respondsTo === undefined) return []
+    const violations: TViolation[] = []
+    for (const v of ctx.variables) {
+        if (!isExpressionBound(v)) continue
+        if (v.boundArgumentId !== respondsTo.argumentId) continue
+        if (v.boundArgumentVersion === respondsTo.argumentVersion) continue
+        violations.push({
+            tier: "evaluable",
+            code: "E-10",
+            message: `variable ${v.id} binds version ${v.boundArgumentVersion} of argument ${v.boundArgumentId}, but the response answers version ${respondsTo.argumentVersion}`,
+            argumentId: ctx.argument.id,
+            variableId: v.id,
+        })
+    }
+    return violations
+}
+
 export function validateEvaluable(
     ctx: TValidatorContext
 ): readonly TViolation[] {
@@ -244,5 +326,8 @@ export function validateEvaluable(
         ...validateE5(ctx),
         ...validateE6(ctx),
         ...validateE7(ctx),
+        ...validateE8(ctx),
+        ...validateE9(ctx),
+        ...validateE10(ctx),
     ]
 }

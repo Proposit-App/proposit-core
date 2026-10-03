@@ -50,6 +50,24 @@ export function dateField(
     return segment({ kind: "date", field }, role)
 }
 
+/** A segment showing a calendar-date field of the reference, IEEE style. */
+export function calendarDateField(
+    field: string,
+    role: TSegmentRole
+): TSegmentInstructionSegment {
+    return segment({ kind: "calendarDate", field }, role)
+}
+
+/**
+ * The year segment: the `year` field as a calendar date, or "(n.d.)" in the
+ * same place when the source is undated, as IEEE's Reference Guide asks.
+ */
+export function yearOrUndated(): TSegmentInstructionConditional {
+    return whenPresent("year", [calendarDateField("year", "year")], {
+        otherwise: [literal("(n.d.)", "year")],
+    })
+}
+
 /** A segment showing fixed text. */
 export function literal(
     text: string,

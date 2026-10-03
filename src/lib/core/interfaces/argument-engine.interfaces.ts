@@ -1,6 +1,8 @@
 import type {
     TClaimBoundVariable,
     TPremiseBoundVariable,
+    TExpressionBoundVariable,
+    TCoreArgumentReference,
     TCoreArgument,
     TCorePremise,
     TCorePropositionalExpression,
@@ -15,14 +17,26 @@ import type {
     TCoreValidationResult,
     TCoreValidityCheckOptions,
     TCoreValidityCheckResult,
+    TCoreOperatorAssignment,
     TCoreVariableAssignment,
 } from "../../types/evaluation.js"
 import type { TCoreMutationResult } from "../../types/mutation.js"
+import type {
+    TBindingClassificationResult,
+    TCarryAnswersOptions,
+    TCarryResult,
+    TLinkAnswer,
+    TLinkCheckResult,
+    TRebaseDecisions,
+    TResponseCoherenceResult,
+} from "../../types/response.js"
+import type { TClassifyBindingsOptions } from "../response/rebase.js"
 import type { TReactiveSnapshot } from "../../types/reactive.js"
 import type { TInvariantValidationResult } from "../../types/validation.js"
 import type { TGrammarTier, TViolation } from "../../grammar/types.js"
 import type { PremiseEngine } from "../premise-engine.js"
 import type { TArgumentEngineSnapshot } from "../argument-engine.js"
+import type { TClaimLookup } from "./library.interfaces.js"
 
 /**
  * Premise creation, removal, and lookup.
@@ -273,18 +287,77 @@ export interface TVariableManagement<
             Record<string, unknown>
     ): TCoreMutationResult<TVar, TExpr, TVar, TPremise, TArg>
     /**
+     * Registers an expression-bound variable in a response: a variable that
+     * stands for one expression of the argument the response answers,
+     * either its truth (`boundAspect: "statement"`) or whether its operator's
+     * step holds (`"inference"`). A premise whose whole content is this
+     * variable, or `NOT` over it, is a link.
+     *
+     * When a variable with the same referent — the same argument, expression
+     * and aspect — already exists, it is returned and nothing is added.
+     *
+     * @param variable - The expression-bound variable entity to register.
+     * @returns The registered (or existing) variable and changeset.
+     * @throws If this argument is not a response.
+     * @throws If `boundArgumentId` / `boundArgumentVersion` differ from
+     *   `respondsTo`.
+     * @throws If `canBind()` refuses the argument and version.
+     * @throws If the variable does not belong to this argument, or its id or
+     *   symbol is already in use.
+     */
+    bindVariableToExpression(
+        variable: TOptionalChecksum<TExpressionBoundVariable> &
+            Record<string, unknown>
+    ): TCoreMutationResult<TVar, TExpr, TVar, TPremise, TArg>
+    /**
+     * Moves a response to another version of the argument it answers. The
+     * classification `classifyBindings` gives is computed again from
+     * `targetFrom`, `targetTo` and `options`; `respondsTo` becomes
+     * `targetTo`; every unchanged binding is re-pointed; and every changed
+     * or removed binding takes the caller's decision. Claim-bound variables
+     * are left alone: a claim the response shares with the target is the
+     * same proposition in every version.
+     *
+     * Afterwards every expression-bound variable must be bound to
+     * `targetTo` and name an expression present there, and `validateLinks`
+     * must report no fault it did not report before; otherwise the whole
+     * rebase is undone.
+     *
+     * @returns The classification acted on, and a changeset holding the
+     *   argument's new `respondsTo` and every variable and premise changed.
+     * @throws If this argument is not a response, the snapshots are not
+     *   versions of the argument it answers, `canBind()` refuses `targetTo`,
+     *   a decision is missing or cannot be carried out, or the result fails
+     *   the check above. Nothing changes when it throws.
+     */
+    rebaseResponse(
+        targetFrom: TArgumentEngineSnapshot,
+        targetTo: TArgumentEngineSnapshot,
+        decisions: TRebaseDecisions,
+        options?: TClassifyBindingsOptions
+    ): TCoreMutationResult<
+        TBindingClassificationResult,
+        TExpr,
+        TVar,
+        TPremise,
+        TArg
+    >
+    /**
      * Updates fields on an existing variable. Since all premises share the
      * same VariableManager, the update is immediately visible everywhere.
      *
      * @param variableId - The ID of the variable to update.
      * @param updates - Fields to update. For claim-bound variables: `symbol`,
      *   `claimId`, `claimVersion`. For premise-bound variables: `symbol`,
-     *   `boundPremiseId`, `boundArgumentId`, `boundArgumentVersion`.
+     *   `boundPremiseId`, `boundArgumentId`, `boundArgumentVersion`. For
+     *   expression-bound variables: `symbol` only — `rebaseResponse`
+     *   re-points them.
      *   `claimId` and `claimVersion` must be provided together on claim-bound variables.
      * @returns The updated variable, or `undefined` if not found.
      * @throws If the new symbol is already in use by a different variable.
      * @throws If the new claim reference does not exist in the claim library.
      * @throws If updates include fields from the wrong binding type (e.g., `boundPremiseId` on a claim-bound variable).
+     * @throws If updates change an expression-bound variable's binding fields.
      * @throws If the new `boundPremiseId` does not exist in this argument.
      */
     updateVariable(
@@ -482,7 +555,8 @@ export interface TArgumentRoleState<
         | undefined
     /**
      * Returns all supporting premises (derived: inference premises that are
-     * not the conclusion) in lexicographic ID order.
+     * not the conclusion) in lexicographic ID order. In a response, which
+     * has no conclusion, it returns every premise that is not a link.
      *
      * @returns An array of supporting PremiseEngine instances.
      */
@@ -493,6 +567,7 @@ export interface TArgumentRoleState<
      * @param premiseId - The ID of the premise to designate.
      * @returns The updated role state and changeset.
      * @throws If the premise does not exist.
+     * @throws If this argument is a response, which has no conclusion.
      */
     setConclusionPremise(
         premiseId: string
@@ -508,6 +583,9 @@ export interface TArgumentRoleState<
      * legitimately end up with no conclusion designated is to remove
      * every premise first. On a zero-premise argument the call still
      * clears (vacuously satisfies the invariant).
+     *
+     * A response is the exception: it has no conclusion (E-7 exempts it,
+     * E-8 reports one it was stored with), so the call always clears.
      *
      * @returns The current role state and changeset. If premises
      *   exist, the changeset is empty (no-op); if zero premises, the
@@ -622,7 +700,10 @@ export interface TArgumentEvaluation {
      *   decisions.
      * @param options - Optional evaluation options.
      * @returns The evaluation result, or `{ ok: false }` with validation
-     *   details if the argument is not structurally evaluable.
+     *   details if the argument is not structurally evaluable. A response
+     *   always answers `{ ok: false }` with `ARGUMENT_IS_RESPONSE`: it has no
+     *   conclusion to evaluate against; use `checkLink` and
+     *   `checkResponseCoherent`.
      */
     evaluate(
         assignment: TCoreExpressionAssignment,
@@ -655,9 +736,74 @@ export interface TArgumentEvaluation {
      *
      * @param options - Optional limits on variables/assignments checked
      *   and early termination mode.
-     * @returns The validity check result including any counterexamples.
+     * @returns The validity check result including any counterexamples. A
+     *   response always answers `{ ok: false }` with `ARGUMENT_IS_RESPONSE`.
      */
     checkValidity(options?: TCoreValidityCheckOptions): TCoreValidityCheckResult
+    /**
+     * Whether one link of this response follows from its other premises,
+     * read against the snapshot of the argument it answers. Each statement
+     * link is expanded into the expression it names and claims are merged
+     * into one column each, so the question is about what the links say.
+     * Answers `follows`, `asserted`, `incoherent`, `undetermined` or
+     * `invalid`; see `TLinkCheckResult`.
+     *
+     * @param linkPremiseId - A link premise of this response.
+     * @param targetSnapshot - The argument answered, at the version answered.
+     * @throws If this argument is not a response, or the premise is not one
+     *   of its links.
+     */
+    checkLink(
+        linkPremiseId: string,
+        targetSnapshot: TArgumentEngineSnapshot
+    ): TLinkCheckResult
+    /**
+     * Whether all of this response's premises can hold at once, over the
+     * same expanded premise set as `checkLink`, so the two never disagree.
+     * When they cannot, gives a minimal set of premises that cannot.
+     *
+     * @param targetSnapshot - The argument answered, at the version answered.
+     * @throws If this argument is not a response.
+     */
+    checkResponseCoherent(
+        targetSnapshot: TArgumentEngineSnapshot
+    ): TResponseCoherenceResult
+    /**
+     * What a reader's answers on this response's links carry into the
+     * argument it answers, one step along a chain of answers. Only `agree`
+     * answers carry, and each agreed link carries exactly what it says or is
+     * reported in `notCarried` with the reason it cannot (see
+     * `TNotCarriedReason`).
+     *
+     * - A statement link carries fixed claim values when what it says about
+     *   its expression, read with every claim free, is exactly a set of
+     *   fixed values; contradicting `Q ∧ R` is not.
+     * - A reinforce carries `accepted` only at a premise root that is
+     *   `implies` or `iff`; an undercut carries `rejected` wherever
+     *   evaluation honours a rejection.
+     * - Into another response, the result is answers on that response's
+     *   links.
+     *
+     * Merge the result into the reader's own input with `mergeCarriedInput`.
+     *
+     * @param targetSnapshot - The argument answered, at the version answered.
+     * @param linkAnswers - The reader's answers, keyed by link premise id.
+     * @param targetClaims - Resolves the answered argument's claims at the
+     *   versions it binds, to tell which are axioms.
+     * @param options - `ownLinkPremiseIds` names the answers that are the
+     *   reader's own rather than carried into this response, so they outrank
+     *   carried ones on a conflict (see `TCarryAnswersOptions`).
+     * @returns `invalid`, carrying nothing, when this argument is not a
+     *   response, the snapshot is not the argument and version it answers, or
+     *   `validateLinks` reports an error. Never throws on an answer it cannot
+     *   carry.
+     */
+    carryAnswers(
+        targetSnapshot: TArgumentEngineSnapshot,
+        linkAnswers: Record<string, TLinkAnswer>,
+        targetClaims: TClaimLookup,
+        options?: TCarryAnswersOptions
+    ): TCarryResult
     /**
      * Derives a default truth-value assignment for every variable in the
      * argument, from claim type and immediate support structure alone. Values
@@ -692,13 +838,19 @@ export interface TArgumentEvaluation {
      *
      * @param overrides - Variable assignments to layer over the defaults.
      * @param options - Optional evaluation options, forwarded to `evaluate`.
+     * @param operatorAssignments - Operator decisions, forwarded to
+     *   `evaluate` unchanged; none are made without it. To evaluate with values
+     *   carried from a response, pass the `variables` and
+     *   `operatorAssignments` of `mergeCarriedInput`'s result, so defaults
+     *   sit under carried values and carried values under the reader's own.
      * @returns The evaluation result under the merged assignment.
      *
      * @since 3.1.0
      */
     evaluateWithDefaults(
         overrides?: TCoreVariableAssignment,
-        options?: TCoreArgumentEvaluationOptions
+        options?: TCoreArgumentEvaluationOptions,
+        operatorAssignments?: Record<string, TCoreOperatorAssignment>
     ): TCoreArgumentEvaluationResult
     /**
      * Returns the IDs of every claim-bound variable bound to `claimId`, in
@@ -852,17 +1004,30 @@ export interface TArgumentIdentity<
      */
     getArgument(): TArg
     /**
+     * Whether this argument is a response: it carries `respondsTo` and has no
+     * conclusion.
+     */
+    isResponse(): boolean
+    /**
+     * The argument and version this response answers, or `undefined` for a
+     * standard argument. Set at construction and changed only by
+     * `rebaseResponse`.
+     */
+    getRespondsTo(): TCoreArgumentReference | undefined
+    /**
      * Returns the argument's extra metadata record (all fields except
-     * id, version, and checksums).
+     * id, version, checksums and `respondsTo`).
      *
      * @returns The extras record.
      */
     getExtras(): Record<string, unknown>
     /**
-     * Replaces the argument's extra metadata record.
+     * Replaces the argument's extra metadata record. A response's
+     * `respondsTo` is kept: it is owned by the engine, not an extra.
      *
      * @param extras - The new extras record.
      * @returns The new extras record and a changeset with the modified argument.
+     * @throws If `extras` names `respondsTo`.
      */
     setExtras(
         extras: Record<string, unknown>

@@ -37,36 +37,53 @@ console.log(engine.validate("presentable").length) // 0
 
 Rule codes are stable: store and match on them freely. `E-2` is not used.
 
-| Code          | Rule                                                                                    |
-| ------------- | --------------------------------------------------------------------------------------- |
-| `S-1`         | References resolve (parent, premise, argument id and version)                           |
-| `S-2`–`S-3`   | Operator types are valid; a variable expression names a variable                        |
-| `S-4`         | No cycles                                                                               |
-| `S-5`         | `implies` and `iff` only at a premise's root                                            |
-| `S-6`–`S-7`   | Premise type and claim type stay consistent and unchanged                               |
-| `S-8`         | `implies` and `iff` take exactly two children                                           |
-| `S-9`–`S-11`  | Sibling positions, entity ids and variable symbols are unique                           |
-| `S-12`–`S-13` | `not` and `formula` take exactly one child                                              |
-| `S-14`        | A derivation premise's root is a variable, `implies` or `iff`                           |
-| `E-1`         | `and`, `or`, `xor` have at least two children                                           |
-| `E-3`         | Every variable binding resolves                                                         |
-| `E-4`         | No assignment for an axiom-bound variable                                               |
-| `E-5`         | A derivation premise contains its derived claim's variable                              |
-| `E-6`         | A claim has at most one derivation premise                                              |
-| `E-7`         | An argument with premises has a conclusion                                              |
-| `D-1`         | A derivation premise is naked-Q (just the derived claim's variable) or `antecedent → Q` |
-| `D-2`         | A single support is written `S → Q`                                                     |
-| `D-3`         | An antecedent does not mix citations and axioms                                         |
-| `D-4`–`D-5`   | Axiom- and citation-bound variables appear only in a derivation premise's antecedent    |
-| `D-6`         | A derivation premise is not the conclusion                                              |
-| `P-1`         | A `formula` sits between an operator and a non-`not` operator child                     |
-| `P-2`         | No `not(not(x))`                                                                        |
-| `P-3`         | A `formula` wraps an operator                                                           |
-| `P-4`         | No single-child `and`, `or`, `xor`                                                      |
-| `P-5`         | No same operator nested through a `formula` (flatten it instead)                        |
-| `P-6`         | Only claim-bound variable expressions carry the enthymeme mark                          |
+| Code          | Rule                                                                                                                                                |
+| ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `S-1`         | References resolve (parent, premise, argument id and version)                                                                                       |
+| `S-2`         | Expression and operator types are valid                                                                                                             |
+| `S-3`         | Every variable has exactly one kind of reference: a claim, a premise, or an expression                                                              |
+| `S-4`         | No cycles                                                                                                                                           |
+| `S-5`         | `implies` and `iff` only at a premise's root                                                                                                        |
+| `S-6`–`S-7`   | Premise type and claim type stay consistent and unchanged                                                                                           |
+| `S-8`         | `implies` and `iff` take exactly two children                                                                                                       |
+| `S-9`–`S-11`  | Sibling positions, entity ids and variable symbols are unique                                                                                       |
+| `S-12`–`S-13` | `not` and `formula` take exactly one child                                                                                                          |
+| `S-14`        | A derivation premise's root is a variable, `implies` or `iff`                                                                                       |
+| `S-15`        | A response is well formed: it does not answer itself, and only a response holds expression-bound variables, each bound into the argument it answers |
+| `E-1`         | `and`, `or`, `xor` have at least two children                                                                                                       |
+| `E-3`         | Every variable binding resolves                                                                                                                     |
+| `E-4`         | No assignment for an axiom-bound variable                                                                                                           |
+| `E-5`         | A derivation premise contains its derived claim's variable                                                                                          |
+| `E-6`         | A claim has at most one derivation premise                                                                                                          |
+| `E-7`         | A standard argument with premises has a conclusion (a response is exempt)                                                                           |
+| `E-8`         | A response has no conclusion                                                                                                                        |
+| `E-9`         | In a response, no two variables bind the same expression in the same aspect                                                                         |
+| `E-10`        | In a response, every expression binding names the version in `respondsTo`                                                                           |
+| `D-1`         | A derivation premise is naked-Q (just the derived claim's variable) or `antecedent → Q`                                                             |
+| `D-2`         | A single support is written `S → Q`                                                                                                                 |
+| `D-3`         | An antecedent does not mix citations and axioms                                                                                                     |
+| `D-4`–`D-5`   | Axiom- and citation-bound variables appear only in a derivation premise's antecedent                                                                |
+| `D-6`         | A derivation premise is not the conclusion                                                                                                          |
+| `P-1`         | A `formula` sits between an operator and a non-`not` operator child                                                                                 |
+| `P-2`         | No `not(not(x))`                                                                                                                                    |
+| `P-3`         | A `formula` wraps an operator                                                                                                                       |
+| `P-4`         | No single-child `and`, `or`, `xor`                                                                                                                  |
+| `P-5`         | No same operator nested through a `formula` (flatten it instead)                                                                                    |
+| `P-6`         | Only claim-bound variable expressions carry the enthymeme mark                                                                                      |
 
 The full inventory, with examples, is in the repository's `docs/Proposit_Grammar.md`.
+
+### Rules for response arguments
+
+A response (see [building-arguments.md](building-arguments.md#responses-and-links)) adds a third kind of variable and drops the conclusion, and five rules cover that:
+
+- **`S-3`** used to mean "a claim or a premise reference, not both and not neither". It now means exactly one of a claim, a premise or an expression reference, so an expression-bound variable passes it. The code is unchanged. A consumer that reacts to `S-3` by assuming only the first two kinds exist must handle the third.
+- **`S-15`** is checked on every mutation and on load, so such data never loads: a response whose `respondsTo` names its own argument, an expression-bound variable in a standard argument, or one bound into an argument other than the one answered.
+- **`E-8`**, **`E-9`** and **`E-10`** are Evaluable, not Structural, so that the data still loads and can be repaired:
+    - `E-8`: a response stored with a conclusion. The engine never designates one, so this comes only from stored data.
+    - `E-9`: two expression-bound variables on the same expression and aspect. `bindVariableToExpression` returns the existing variable instead of adding a second, so this too comes only from stored data.
+    - `E-10`: a binding on another version of the argument answered, for example from a rebase that was only partly saved. Finishing the rebase with `rebaseResponse` repairs it (see [forking-and-diffs.md](forking-and-diffs.md#moving-a-response-to-a-newer-version)).
+- `E-7` does not apply to a response. Rules D-4 and D-5 do not restrict expression-bound variables.
 
 ## Assistive and permissive behavior
 
