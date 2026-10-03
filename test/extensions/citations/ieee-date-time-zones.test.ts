@@ -7,6 +7,7 @@ import {
     formatCitationParts,
     formatDate,
 } from "../../../src/extensions/citations/ieee"
+import { validBlog } from "./fixtures.js"
 
 // A citation date is a calendar date, so it must print the same day whatever
 // time zone the formatting process runs in. The zones include two whose local
@@ -77,21 +78,40 @@ describe("IEEE citation dates are calendar dates", () => {
                 )
             })
 
-            it("shows the stored day in a full NewspaperArticle citation", () => {
-                const reference = Value.Decode(
-                    NewspaperArticleReferenceSchema,
-                    {
-                        type: "NewspaperArticle",
-                        title: "To the People of the State of New York",
-                        authors: [{ name: "Publius" }],
-                        newspaperTitle: "New York Packet",
-                        date: "1787-11-22",
-                    }
-                )
-                const dateSegment = formatCitationParts(
-                    reference
-                ).segments.find((segment) => segment.role === "date")
-                expect(dateSegment?.text).toBe("Nov. 22, 1787")
+            it.each([
+                ["1787", "1787"],
+                ["1787-11", "Nov. 1787"],
+                ["1787-11-22", "Nov. 22, 1787"],
+            ])(
+                "shows a %s date as %s in a full NewspaperArticle citation",
+                (date, expected) => {
+                    const reference = Value.Decode(
+                        NewspaperArticleReferenceSchema,
+                        {
+                            type: "NewspaperArticle",
+                            title: "To the People of the State of New York",
+                            authors: [{ name: "Publius" }],
+                            newspaperTitle: "New York Packet",
+                            date,
+                        }
+                    )
+                    const dateSegment = formatCitationParts(
+                        reference
+                    ).segments.find((segment) => segment.role === "date")
+                    expect(dateSegment?.text).toBe(expected)
+                }
+            )
+
+            it("shows both kinds of date in one citation", () => {
+                const segments = formatCitationParts({
+                    ...validBlog(),
+                    date: "2026-07-30",
+                    accessedDate: new Date("2026-07-30T03:00:00Z"),
+                }).segments
+                const text = (role: string) =>
+                    segments.find((segment) => segment.role === role)?.text
+                expect(text("date")).toBe("Jul. 30, 2026")
+                expect(text("accessedDate")).toBe("Jul. 30, 2026")
             })
         })
     }
