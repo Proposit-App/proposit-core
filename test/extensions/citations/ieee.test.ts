@@ -593,10 +593,39 @@ describe("IEEE extension", () => {
             }
         })
 
-        it("formatDate rejects a value that is not a date", () => {
-            expect(() => formatDate("not a date")).toThrow(
-                /^Not a date: "not a date"$/
+        it("formatDate takes a Date only, so a calendar-date string is a type error and throws", () => {
+            // @ts-expect-error A calendar date is formatted by formatCalendarDate.
+            expect(() => formatDate("1787")).toThrow(/^Not a date: "1787"$/)
+            // @ts-expect-error An ISO instant must be decoded to a Date first.
+            expect(() => formatDate("1787-11-22T00:00:00.000Z")).toThrow(
+                TypeError
             )
+        })
+
+        it("formatDate rejects an invalid Date", () => {
+            expect(() => formatDate(new Date("nonsense"))).toThrow(
+                /^Not a date: Invalid Date$/
+            )
+        })
+
+        it("shows an unconverted Date in a calendar-date field as its UTC instant, whatever the process zone", () => {
+            const original = process.env.TZ
+            process.env.TZ = "America/Los_Angeles"
+            try {
+                const ref = {
+                    type: "NewspaperArticle",
+                    title: "t",
+                    authors: [{ name: "Publius" }],
+                    newspaperTitle: "n",
+                    date: new Date("1787-11-22"),
+                } as unknown as TIEEEReference
+                expect(() => formatCitationParts(ref)).toThrow(
+                    'Citation field "date" is not a calendar date: 1787-11-22T00:00:00.000Z'
+                )
+            } finally {
+                if (original === undefined) delete process.env.TZ
+                else process.env.TZ = original
+            }
         })
 
         it("names the field when a date field holds something that is not a date", () => {

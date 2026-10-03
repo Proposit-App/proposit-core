@@ -72,10 +72,16 @@ describe("IEEE citation dates are calendar dates", () => {
                 expect(formatDate(new Date("2024-01-01"))).toBe("Jan. 1, 2024")
             })
 
-            it("formats the ISO string a stored date comes back from JSON as", () => {
-                expect(formatDate("1787-11-22T00:00:00.000Z")).toBe(
-                    "Nov. 22, 1787"
-                )
+            it("formats an access date that came back from JSON as an ISO string", () => {
+                const segments = formatCitationParts({
+                    ...validBlog(),
+                    date: "1787-11-22",
+                    accessedDate: "1787-11-22T00:00:00.000Z" as unknown as Date,
+                }).segments
+                expect(
+                    segments.find((segment) => segment.role === "accessedDate")
+                        ?.text
+                ).toBe("Nov. 22, 1787")
             })
 
             it.each([

@@ -26,14 +26,15 @@ export const IEEE_MONTHS = [
 // A day is stored as midnight UTC of that day, the way `EncodableDate` decodes
 // "1787-11-22", so it is read back in UTC: the local-time getters would shift
 // it into the formatting process's time zone and print the day before or
-// after. Calendar dates never come here; `formatCalendarDate` renders them
-// from their parts.
+// after.
 //
-// A stored reference that comes back from JSON holds its instants as the ISO
-// strings `JSON.stringify` wrote, unless the caller decoded it first, so a
-// string is read the way `EncodableDate` decodes one.
-export function formatDate(d: Date | string): string {
-    const date = toCitationDate(d)
+// It takes a `Date` only. A calendar date is a string, and reading one as an
+// instant invents a day ("1787" would print "Jan. 1, 1787"), so a string is
+// refused rather than parsed; `formatCalendarDate` renders calendar dates.
+// The citation formatter reads an access date stored as an ISO string itself
+// before calling this.
+export function formatDate(d: Date): string {
+    const date = d instanceof Date ? toCitationDate(d) : undefined
     if (date === undefined) {
         throw new TypeError(`Not a date: ${describeValue(d)}`)
     }
@@ -44,9 +45,15 @@ export function formatDate(d: Date | string): string {
 }
 
 // For an error message: `JSON.stringify` writes an invalid `Date` as `null`
-// and throws on a bigint or a cycle, so neither may hide the actual value.
+// and throws on a bigint or a cycle, so neither may hide the actual value. A
+// valid `Date` is shown as its UTC instant: its local-time text would show the
+// day before midnight UTC in zones west of UTC.
 function describeValue(value: unknown): string {
-    if (value instanceof Date) return String(value)
+    if (value instanceof Date) {
+        return Number.isNaN(value.getTime())
+            ? String(value)
+            : value.toISOString()
+    }
     try {
         return JSON.stringify(value) ?? String(value)
     } catch {
