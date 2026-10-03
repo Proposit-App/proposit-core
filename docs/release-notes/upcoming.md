@@ -211,24 +211,27 @@ const article = {
   date string instead of a `Date`. Convert each stored value with
   `calendarDateFromInstant(value)`, which takes a `Date` or its ISO string and
   gives its UTC day. That is the day meant for data stored as 5.4.2 advised,
-  at midnight UTC. Data stored before 5.4.2 at local midnight converts
-  correctly only with the zone it was written in:
-  `calendarDateFromInstant(value, "day", "Europe/Berlin")`. Access dates stay
-  `Date`s.
+  at midnight UTC. Data stored before 5.4.2 at local midnight east of UTC
+  falls on the previous UTC day, and converts correctly only with the zone it
+  was written in: `calendarDateFromInstant(value, "day", "Europe/Berlin")`.
+  Access dates stay `Date`s.
 - **The `year` field is optional and may hold a month or day.** Code reading
   it must handle `undefined`, and must not assume four digits. Stored years
   convert by this rule, applied to the trimmed value:
-    1. a valid calendar date ("1787", "1787-11") is kept;
+    1. a valid calendar date ("1787", "1787-11") is kept, so applying the rule
+       twice changes nothing;
     2. an undated marker ("n.d.", "n.d", "nd", "n. d.", "no date", "undated",
-       "s.d.", "s.a.", in any case, with or without parentheses) becomes an
-       absent `year`;
-    3. anything else ("c. 1787", "1787?", "Jul./Aug. 2007") has no calendar
-       form: correct it by hand, or keep the reference as an `unparsed`
-       citation, which holds the original text.
+       "s.d.", "s.a.", in any case, regardless of spaces, with or without
+       parentheses) becomes an absent `year`;
+    3. anything else ("c. 1787", "1787?", "[1787]", "Jul./Aug. 2007") has no
+       calendar form: correct it by hand, or keep the reference as an
+       `unparsed` citation, which holds the original text.
 - **Unconverted citations throw when rendered.** Core does not check citations
   when it loads them, so a stored `Date`, ISO timestamp or non-conforming year
   in a calendar-date field makes `formatCitationParts` throw a `TypeError`
-  naming the field. Convert before rendering. The relaxed schemas refuse such
+  naming the field. That includes `year: null`: an undated source has no
+  `year` key at all, so a storage layer that turns an absent value into `null`
+  must turn it back. Convert before rendering. The relaxed schemas refuse such
   values too, so `Value.Check` with them finds what is left.
 - **Checksums of converted citations change** if your checksum configuration
   hashes `citation` (claims) or `reference` (origin documents). The defaults
