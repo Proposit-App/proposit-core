@@ -589,7 +589,9 @@ Full fork orchestration:
 8. Registers the forked engine in `ArgumentLibrary`.
 9. Creates fork records in all five `ForkLibrary` namespaces.
 
-Options extend `TForkArgumentOptions` with per-namespace extras (`argumentForkExtras`, `premiseForkExtras`, `expressionForkExtras`, `variableForkExtras`, `claimForkExtras`) and an optional `forkId`.
+Options extend `TForkArgumentOptions` with per-namespace extras (`argumentForkExtras`, `premiseForkExtras`, `expressionForkExtras`, `variableForkExtras`, `claimForkExtras`), an optional `forkId`, and `respondsToSnapshot` (below).
+
+**Forking a response.** A response's checks read a claim it shares with the argument it answers as one proposition, so a clone would make it a second, independent one and change what they answer. A fork of a response therefore keeps every claim the argument it answers uses, at the version it answers: those claims stay out of the closure and out of `claimRemap`, the fork's variables keep binding them, and a cloned claim's connection to one points at the kept claim. The response's other claims are cloned as usual. The argument answered is read from `options.respondsToSnapshot` when it is that argument at that version, otherwise from `ArgumentLibrary` when it holds that version; if neither does, `forkArgument` throws rather than guess which claims are shared.
 
 Returns:
 
