@@ -116,6 +116,8 @@ Function lib.buildCodePointIndex (1)
 Function lib.buildParsingPrompt (1)
 Function lib.buildParsingResponseSchema (1)
 Function lib.buildPremiseProfile (1)
+Function lib.calendarDateFromInstant (1)
+Function lib.calendarDateType (1)
 Function lib.canonicalSerialize (1)
 Function lib.canonicalizeOperatorAssignments (1)
 Function lib.checkArgumentValidity (1)
@@ -169,6 +171,7 @@ Function lib.normalizeChecksumConfig (1)
 Function lib.normalizeOriginText (1)
 Function lib.optional (1)
 Function lib.orderChangeset (1)
+Function lib.parseCalendarDate (1)
 Function lib.parseFormula (1)
 Function lib.positionClassOf (1)
 Function lib.propagateOperatorConstraints (1)
@@ -205,6 +208,7 @@ Interface lib.TArgumentValidationContext
 Interface lib.TBindingClassificationBase
 Interface lib.TBindingClassificationResult
 Interface lib.TBindingPremiseUse
+Interface lib.TCalendarDateParts
 Interface lib.TCanonicalizeOperatorAssignmentsInput
 Interface lib.TClaimConnectionLibraryManagement
 Interface lib.TClaimConnectionLookup
@@ -5019,6 +5023,10 @@ Property lib.TBindingDecision.expressionId
 Property lib.TBindingPremiseUse.cascaded
 Property lib.TBindingPremiseUse.isLink
 Property lib.TBindingPremiseUse.premiseId
+Property lib.TCalendarDateParts.day
+Property lib.TCalendarDateParts.month
+Property lib.TCalendarDateParts.precision
+Property lib.TCalendarDateParts.year
 Property lib.TCanonicalizeOperatorAssignmentsInput.expressionOverrides
 Property lib.TCanonicalizeOperatorAssignmentsInput.premiseScope
 Property lib.TCarriedSource.id
@@ -6549,6 +6557,7 @@ TypeAlias lib.TBindingChangeReason
 TypeAlias lib.TBindingClassification
 TypeAlias lib.TBindingDecision
 TypeAlias lib.TBoundAspect
+TypeAlias lib.TCalendarDatePrecision
 TypeAlias lib.TCarriedSource
 TypeAlias lib.TCarryCollision
 TypeAlias lib.TCarryResult
@@ -6963,6 +6972,7 @@ Variable lib.CLAIM_TYPE_IMMUTABLE
 Variable lib.CONTESTED
 Variable lib.CREATE_DERIVATION_CLAIM_NOT_FOUND
 Variable lib.CREATE_DERIVATION_REQUIRES_DERIVED_CLAIM_ID
+Variable lib.CalendarDate
 Variable lib.CoreAnalysisFileSchema
 Variable lib.CoreArgumentForkRecordSchema
 Variable lib.CoreArgumentRoleStateSchema
