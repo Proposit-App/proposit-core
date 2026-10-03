@@ -150,6 +150,9 @@
 
 ## Tests
 
+- The opt-in live OpenAI suite checks that text deltas arrive and, joined in
+  order, parse to the output, both from the provider and as
+  `stage:llm-text-delta` events through `executeTurn`.
 - Every checksum is pinned to values captured from the published 5.4.2 (and,
   for forking an argument with an external binding, 5.4.3) under the default, a
   consumer-extended and a partial configuration, across snapshot and data
