@@ -4,7 +4,7 @@ import {
     separator,
     segment,
     stringField,
-    dateField,
+    calendarDateField,
     literal,
     authorsLead,
     whenPresent,
@@ -116,7 +116,7 @@ export const STANDARD_TEMPLATE: TSegmentInstruction[] = [
     separator(", "),
     stringField("organization", "organization"),
     separator(", "),
-    dateField("date", "date"),
+    calendarDateField("date", "date"),
     separator("."),
 ]
 
@@ -147,7 +147,7 @@ export const PATENT_TEMPLATE: TSegmentInstruction[] = [
     literal(" Patent ", "prefix"),
     stringField("patentNumber", "patentNumber"),
     separator(", "),
-    dateField("date", "date"),
+    calendarDateField("date", "date"),
     separator("."),
 ]
 

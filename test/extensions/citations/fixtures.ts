@@ -58,7 +58,7 @@ export function validPatent() {
         inventors: [author("Bob", "Wilson")],
         country: "US",
         patentNumber: "US1234567",
-        date: new Date("2024-01-15"),
+        date: "2024-01-15",
     }
 }
 
@@ -68,7 +68,7 @@ export function validBlog() {
         author: author("Carol", "White"),
         postTitle: "My Latest Discovery",
         blogName: "My Tech Blog",
-        date: new Date("2024-03-01"),
+        date: "2024-03-01",
         url: "https://blog.example.com/post",
         accessedDate: new Date("2024-03-15"),
     }
@@ -121,7 +121,7 @@ export function oneOfEachType(): TIEEEReference[] {
             organization: "IEEE",
             standardNumber: "802.11",
             title: "WiFi",
-            date: new Date(),
+            date: "2024-05-20",
         },
         {
             type: "Thesis" as const,
@@ -158,7 +158,7 @@ export function oneOfEachType(): TIEEEReference[] {
             title: "Breaking News",
             authors: [a],
             newspaperTitle: "Times",
-            date: new Date(),
+            date: "2024-05-20",
         },
         {
             type: "ConferencePaper" as const,
@@ -166,13 +166,13 @@ export function oneOfEachType(): TIEEEReference[] {
             authors: [a],
             conferenceName: "Conf",
             location: "NYC",
-            date: new Date(),
+            date: "2024-05-20",
         },
         {
             type: "ConferenceProceedings" as const,
             conferenceName: "Conf",
             location: "NYC",
-            date: new Date(),
+            date: "2024-05-20",
             publisher: "Pub",
         },
         validDataset(),
@@ -193,7 +193,7 @@ export function oneOfEachType(): TIEEEReference[] {
             type: "SocialMedia" as const,
             author: a,
             platform: "Twitter",
-            postDate: new Date(),
+            postDate: "2024-05-20",
             url: "https://twitter.com",
         },
         {
@@ -233,40 +233,40 @@ export function oneOfEachType(): TIEEEReference[] {
             presenter: a,
             eventTitle: "Event",
             location: "NYC",
-            date: new Date(),
+            date: "2024-05-20",
         },
         {
             type: "Interview" as const,
             interviewee: a,
-            date: new Date(),
+            date: "2024-05-20",
         },
         {
             type: "PersonalCommunication" as const,
             person: a,
-            date: new Date(),
+            date: "2024-05-20",
         },
         {
             type: "Email" as const,
             sender: a,
             recipient: author("Zara", "Lee"),
-            date: new Date(),
+            date: "2024-05-20",
         },
         {
             type: "Law" as const,
             title: "Act",
             jurisdiction: "US",
-            dateEnacted: new Date(),
+            dateEnacted: "2024-05-20",
         },
         {
             type: "CourtCase" as const,
             caseName: "X v Y",
             court: "Supreme Court",
-            date: new Date(),
+            date: "2024-05-20",
         },
         {
             type: "GovernmentPublication" as const,
             title: "Annual Report",
-            date: new Date(),
+            date: "2024-05-20",
             agency: "EPA",
             location: "DC",
         },

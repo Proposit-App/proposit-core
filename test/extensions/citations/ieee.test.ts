@@ -512,7 +512,7 @@ describe("IEEE extension", () => {
         it("formats a Patent citation", () => {
             const result = formatCitationParts({
                 ...validPatent(),
-                date: new Date("2024-01-15"),
+                date: "2024-01-15",
             })
             expect(result.type).toBe("Patent")
             const roles = result.segments.map((s) => s.role)
@@ -580,7 +580,7 @@ describe("IEEE extension", () => {
             const withOptionalDates: TIEEEReference[] = oneOfEachType().map(
                 (ref) =>
                     ref.type === "Video"
-                        ? { ...ref, releaseDate: new Date("2024-03-01") }
+                        ? { ...ref, releaseDate: "2024-03-01" }
                         : ref.type === "SocialMedia"
                           ? { ...ref, accessedDate: new Date("2024-03-02") }
                           : ref
@@ -732,7 +732,7 @@ describe("SocialMedia", () => {
         postTitle: "Title",
         websiteTitle: "Site",
         platform: "Reddit",
-        postDate: new Date(Date.UTC(1995, 7, 12)),
+        postDate: "1995-08-12",
         url,
         accessedDate: new Date(Date.UTC(2026, 8, 1)),
     }
@@ -841,7 +841,7 @@ describe("SocialMedia", () => {
             type: "SocialMedia" as const,
             author: author("Jane Q.", "Doe"),
             platform: "X",
-            postDate: new Date(Date.UTC(2026, 2, 5)),
+            postDate: "2026-03-05",
             url,
         }
         expect(Value.Check(SocialMediaReferenceSchema, old)).toBe(true)

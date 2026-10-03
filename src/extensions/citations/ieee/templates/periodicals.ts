@@ -3,7 +3,7 @@
 import {
     separator,
     stringField,
-    dateField,
+    calendarDateField,
     authorsLead,
     doiIfPresent,
     pagesIfPresent,
@@ -46,7 +46,7 @@ export const NEWSPAPER_ARTICLE_TEMPLATE: TSegmentInstruction[] = [
     separator(", "),
     stringField("newspaperTitle", "misc", "italic"),
     separator(", "),
-    dateField("date", "date"),
+    calendarDateField("date", "date"),
     pagesIfPresent(),
     separator("."),
 ]

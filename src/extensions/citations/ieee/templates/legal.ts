@@ -3,7 +3,7 @@
 import {
     separator,
     stringField,
-    dateField,
+    calendarDateField,
     literal,
     whenPresent,
     optionalAuthorsLead,
@@ -16,7 +16,7 @@ export const LAW_TEMPLATE: TSegmentInstruction[] = [
     separator(", "),
     stringField("jurisdiction", "misc"),
     separator(", "),
-    dateField("dateEnacted", "date"),
+    calendarDateField("dateEnacted", "date"),
     separator("."),
 ]
 
@@ -27,7 +27,7 @@ export const COURT_CASE_TEMPLATE: TSegmentInstruction[] = [
     stringField("court", "misc"),
     whenPresent("reporter", [separator(", "), stringField("reporter", "misc")]),
     separator(", "),
-    dateField("date", "date"),
+    calendarDateField("date", "date"),
     separator("."),
 ]
 
@@ -45,6 +45,6 @@ export const GOVERNMENT_PUBLICATION_TEMPLATE: TSegmentInstruction[] = [
         stringField("reportNumber", "reportNumber"),
     ]),
     separator(", "),
-    dateField("date", "date"),
+    calendarDateField("date", "date"),
     separator("."),
 ]
