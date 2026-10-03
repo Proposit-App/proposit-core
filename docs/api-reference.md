@@ -1772,7 +1772,7 @@ It throws, and changes nothing, when:
 
 `changes` holds the argument with its new `respondsTo`, every variable re-pointed, added or removed, and every premise and expression the drops removed. The consumer persists it like the changeset of any other mutation.
 
-**A reader's answers do not follow a rebase.** `carryAnswers` keys a reader's answers by link premise id, and a rebase keeps premise ids. After a `keep` or `retarget`, a stored answer on that link speaks about the new content; after a `drop` it names no link and is reported `notALink`. Core cannot tell, because answers carry no version. Keep a reader's answers per version of the response, or invalidate those on links whose binding was `changed`, `removed` or retargeted.
+**A reader's answers do not follow a rebase.** `carryAnswers` keys a reader's answers by link premise id, and a rebase keeps premise ids. After a `keep` or `retarget`, a stored answer on that link speaks about the new content; after a `drop` it names no link, and an `agree` on it is reported `notALink`. Core cannot tell, because answers carry no version. Keep a reader's answers per version of the response, or invalidate those on links whose binding was `changed`, `removed` or retargeted.
 
 #### `structuralFingerprint(snapshot, expressionId)` → `string`
 

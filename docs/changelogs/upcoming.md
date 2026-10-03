@@ -80,6 +80,8 @@
   `checkLink` answers `follows` (with a minimal support set and
   `restsOnlyOnLinks`), `asserted` (with `attemptedSupport` and a
   counterexample), `incoherent`, `undetermined` or `invalid`.
+- An error naming a `Date` that is not a calendar date shows it as its UTC
+  instant, so it shows the stored day in every time zone.
 - `classifyBindings`, `structuralFingerprint`, `positionClassOf` and
   `ArgumentEngine.rebaseResponse`, which move a response to another version of
   the argument it answers. Each binding is `unchanged`, `changed` (`content`,
@@ -87,6 +89,11 @@
   `outsideSnapshots` lets references re-pinned to other versions of a third
   argument be compared rather than reported. `positionClassOf` and
   `linkTargetsElement` look through formula nodes at a premise's root.
+  A nested binding whose premise gains or loses the conclusion role is
+  `changed` with `position`, since carrying an undercut there changes.
+- `respondsTo` is the engine's own copy: the constructor and `rollback` copy it
+  in, every read hands out a fresh one, and a `null` one is left out of the
+  argument.
 - A response's claim-bound variables may use any claim, including claims the
   argument it answers uses; the checks read a shared claim as one proposition,
   and rebasing leaves claim-bound variables alone. Only links answer the
@@ -118,7 +125,9 @@
   (`TCarryAnswersOptions`) names the reader's own answers on a response
   partway along a chain: a carried link that disagrees with one is dropped
   (`overriddenByOwn`) and the difference reported in the result's
-  `collisions`, which `mergeCarriedInput` passes on.
+  `collisions`. `mergeCarriedInput` takes those in, leaving out one whose
+  carried value the reader's explicit input repeats and naming the input's
+  value as `own` on one it overrules, so each key has at most one collision.
 - `mergeCarriedInput(own, carried)`, which adds carried values to the reader's
   explicit input, keeping the reader's value on every collision and listing
   each. Types `TLinkAnswer`, `TCarryResult`, `TCarriedSource`, `TNotCarried`,
@@ -136,8 +145,9 @@
   `calendarDateFromInstant`, `TCalendarDateParts` and `TCalendarDatePrecision`
   in the package root; `formatCalendarDate` in the IEEE extension.
   `calendarDateFromInstant` returns a calendar date it is given unchanged (cut
-  to `precision` only when longer) and refuses a date-time string that names
-  no zone.
+  to `precision` only when longer), and refuses a date-time string that names
+  no zone or names a day or time that does not exist; it refuses an unknown
+  zone whatever the value.
 - `PropositCore.forkArgument` takes `respondsToSnapshot`. Forking a response
   keeps every claim its target uses instead of cloning it, so the fork's
   checks read a shared claim as one proposition, as the original's do; it
@@ -186,9 +196,8 @@
   `EncodableDate` decodes one; a value that is not a date throws a
   `TypeError` naming the field. `formatDate` still takes a `Date` only, and
   an invalid `Date` there, which used to print as "undefined NaN, NaN", now
-  throws. Calendar-date fields do not read ISO strings: see Breaking.
-- An error message naming a `Date` that is not a calendar date shows it as its
-  UTC instant, not as local-time text that shows the previous day west of UTC.
+  throws. A `Date` made in another realm (another `vm` context or
+  frame) formats like any other. Calendar-date fields do not read ISO strings: see Breaking.
 - An exception thrown by an `onTextDelta` or `onResponseCreated` callback,
   such as one from a pipeline `onEvent` handler, was reported by the OpenAI
   provider as a transient streaming failure, so the stage retried with a
@@ -202,14 +211,6 @@
 - `createConversation` set its chain to the failed turn's response id, or to
   `null`, after a failed turn, so the next turn lost the conversation. A failed
   turn now leaves the chain where it was.
-- `classifyBindings` reported a nested binding `unchanged` when only its
-  premise's conclusion role changed, although carrying an undercut there
-  changes from striking the premise to nothing; it is now `changed` with
-  `position`.
-- `respondsTo` was shared by reference with the object the engine was built
-  from and with what `getArgument`, `snapshot` and `getRespondsTo` returned, so
-  mutating one re-pointed the response. Each now holds its own copy, and a
-  `respondsTo` of `null` reads as no response.
 
 ## Tests
 

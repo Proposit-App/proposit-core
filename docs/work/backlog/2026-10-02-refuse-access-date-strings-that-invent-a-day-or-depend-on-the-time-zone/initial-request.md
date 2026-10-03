@@ -24,3 +24,7 @@ Accept only an ISO date-time with `Z` or an offset (the form `JSON.stringify` wr
 ## Tests
 
 A test per row of the table, run in the zone harness (`test/extensions/citations/ieee-date-time-zones.test.ts`), plus a checksum test of raw against decoded.
+
+## Also: three readers of ISO strings
+
+`toCitationDate` (`src/extensions/citations/ieee/segment-builder.ts`) is a line-for-line copy of `toDate` (`src/lib/schemata/shared.ts`). `calendarDateFromInstant` (`src/lib/schemata/calendar-date.ts`) is a third reader, and the strictest: it accepts only a zoned ISO date-time naming a day and time that exist. When this item tightens access dates, share one internal reader between all three, so they cannot drift apart again. The second round of the combined 6.0.0 review found this.

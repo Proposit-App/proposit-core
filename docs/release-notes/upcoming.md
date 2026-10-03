@@ -41,9 +41,10 @@ answering the old one. To move it, copy it into a new version of your own
 (keeping entity ids, as for any version) and call `classifyBindings` to see
 which bindings changed, then `rebaseResponse` with a decision for each one that
 did. Bindings whose meaning provably did not change need no decision. A
-reader's stored answers on a link whose binding changed, was retargeted or was
-dropped still name the same premise after the rebase, but now speak about
-something else: invalidate them.
+reader's stored answers are keyed by link premise id, which a rebase keeps: an
+answer on a link whose binding changed or was retargeted now speaks about
+something else, and one on a dropped link names no link at all. Invalidate
+them.
 
 A response may reason from the same claims its target uses, and may copy the
 target's derivation premises with the same cited sources: a claim is one
@@ -227,8 +228,9 @@ const article = {
 - **Leave the new fields out; never store them as `null`.** An argument that
   is not a response has no `respondsTo` key at all, and a variable that is not
   expression-bound has no `boundExpressionId` or `boundAspect`. A stored
-  `null` fails the schema when the argument loads, and a checksum includes a
-  field whenever its key is present. A storage layer that maps an absent value
+  `null` fails to load (the schema refuses `respondsTo: null`, and a variable
+  with a `null` binding field reads as having more than one kind of
+  reference), and a checksum includes a field whenever its key is present. A storage layer that maps an absent value
   to a `null` column must map it back to absent on the way out.
 - **Keep ids stable across versions.** Rebasing a response matches the
   answered argument's expressions by id between its versions. If you copy an
