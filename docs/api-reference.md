@@ -1731,7 +1731,7 @@ Each entry of `bindings` (`TBindingClassification`), in variable order, carries 
 `reasons` (`TBindingChangeReason[]`) holds one or more of:
 
 - `content`: the bound subtree's structure differs (an operator, a child order, a claim version), or something it references in a third argument differs between the two versions it is pinned to;
-- `position`: the expression's position class differs (see `positionClassOf`), for example an unchanged operator moved from a premise root to a nested place;
+- `position`: the expression's position class differs (see `positionClassOf`), for example an unchanged operator moved from a premise root to a nested place, or a nested expression's premise gained or lost the conclusion role. Carrying ignores an undercut nested in the conclusion but strikes the premise for one nested anywhere else, so either move changes what an answer on the link carries;
 - `outsideReferenceRepinned`: something the subtree references in a third argument is pinned to a different version in `targetTo`, and the snapshots needed to compare the two versions were not supplied.
 
 `premises` (`TBindingPremiseUse[]`) lists every premise that dropping the variable would remove, each as `{ premiseId, isLink, cascaded }`. `cascaded: true` marks a premise reached only because it uses a variable bound to another premise in the list: removing a premise removes the variables bound to it, and every expression that uses them.

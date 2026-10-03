@@ -272,6 +272,30 @@ export function structuralFingerprint(
 }
 
 /**
+ * The position class, refined by whether a nested expression sits in the
+ * conclusion premise. Carrying an undercut strikes a premise for an operator
+ * nested in any other premise but ignores one nested in the conclusion, so
+ * two places with the same class can still mean different things to a link.
+ * (Inside a derivation premise no finer split is needed: its root is a
+ * variable, `implies` or `iff`, and those operators occur only at a root, so
+ * an operator keeping its structure cannot move between root and nested.)
+ *
+ * @throws When the snapshot has no such expression.
+ */
+export function bindingPositionOf(
+    snapshot: TArgumentEngineSnapshot,
+    expressionId: string
+): string {
+    const positionClass = positionClassOf(snapshot, expressionId)
+    if (positionClass !== "nested") return positionClass
+    const index = indexOf(snapshot)
+    const premise = index.premiseOfExpression.get(expressionId)!
+    return premise.id === index.conclusionPremiseId
+        ? "nestedInConclusion"
+        : "nested"
+}
+
+/**
  * Where an expression sits in its argument: the root of a freeform premise,
  * the root of the conclusion premise, below a premise root, or anywhere in a
  * derivation premise.

@@ -398,6 +398,80 @@ describe("classifyBindings", () => {
         })
     })
 
+    // Carrying treats an operator nested in the conclusion premise unlike
+    // one nested in any other premise, so a binding whose premise gains or
+    // loses the conclusion role changes what an answer on its link carries.
+    describe("a change of what an answer on the link carries is a change of position", () => {
+        function withConclusionOn(
+            lib: ClaimLibrary,
+            version: number,
+            onStepPremise: boolean
+        ): TBuilt {
+            const built = build({
+                id: "x",
+                version,
+                lib,
+                conclusion: at("c", v("D")),
+                premises: [
+                    labelled(
+                        "p1",
+                        and(v("A"), paren(at("step", or(v("B"), v("C")))))
+                    ),
+                ],
+            })
+            if (onStepPremise)
+                built.engine.setConclusionPremise(built.premise("p1"))
+            return built
+        }
+
+        it.each([
+            ["into", false, true],
+            ["out of", true, false],
+        ])(
+            "an operator whose premise moves %s the conclusion role",
+            (_, before, after) => {
+                const lib = newLib()
+                const x3 = withConclusionOn(lib, 3, before)
+                const x4 = withConclusionOn(lib, 4, after)
+                const y = build({
+                    id: "y",
+                    version: 1,
+                    lib,
+                    respondsTo: x3,
+                    premises: [not(s("step"))],
+                })
+                const { bindings } = classifyBindings(
+                    y.engine,
+                    x3.engine.snapshot(),
+                    x4.engine.snapshot()
+                )
+                expect(bindings[0]).toMatchObject({
+                    status: "changed",
+                    reasons: ["position"],
+                })
+            }
+        )
+
+        it("an operator staying nested in a premise that keeps its role is unchanged", () => {
+            const lib = newLib()
+            const x3 = withConclusionOn(lib, 3, true)
+            const x4 = withConclusionOn(lib, 4, true)
+            const y = build({
+                id: "y",
+                version: 1,
+                lib,
+                respondsTo: x3,
+                premises: [not(s("step"))],
+            })
+            const { bindings } = classifyBindings(
+                y.engine,
+                x3.engine.snapshot(),
+                x4.engine.snapshot()
+            )
+            expect(bindings[0]?.status).toBe("unchanged")
+        })
+    })
+
     it("lists the premises reached through the removal of a premise that uses the variable", () => {
         const lib = newLib()
         const x3 = target(lib, 3)

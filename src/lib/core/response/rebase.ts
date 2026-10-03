@@ -11,8 +11,8 @@ import type {
     TArgumentEngineSnapshot,
 } from "../argument-engine.js"
 import {
+    bindingPositionOf,
     describeSubtree,
-    positionClassOf,
     premiseRootOf,
     snapshotHasExpression,
     type TOutsideReference,
@@ -68,7 +68,8 @@ class OutsideComparer {
     /**
      * Reasons the subtree rooted at `idA` in `snapA` differs from the one
      * rooted at `idB` in `snapB`. `position` means the two sit in different
-     * position classes.
+     * position classes, or one is nested in the conclusion premise and the
+     * other nested in another premise.
      */
     compareSubtrees(
         snapA: TArgumentEngineSnapshot,
@@ -79,7 +80,7 @@ class OutsideComparer {
         const reasons = new Set<TBindingChangeReason>()
         const a = describeSubtree(snapA, idA)
         const b = describeSubtree(snapB, idB)
-        if (positionClassOf(snapA, idA) !== positionClassOf(snapB, idB)) {
+        if (bindingPositionOf(snapA, idA) !== bindingPositionOf(snapB, idB)) {
             reasons.add("position")
         }
         if (a.shape !== b.shape) {
@@ -253,8 +254,9 @@ function assertRebaseTargets(
  * `alreadyRebased` when its expression is there and `removed` when it is
  * not. Every other one must be bound to `targetFrom`, and is:
  * - `removed` when its expression id is absent from `targetTo`;
- * - `changed` when the expression's structure (`content`) or position class
- *   (`position`) differs, or when something it references in another
+ * - `changed` when the expression's structure (`content`) or position
+ *   (`position`: its position class, or, for a nested expression, whether its
+ *   premise is the conclusion) differs, or when something it references in another
  *   argument is pinned to a different version that differs (`content`) or
  *   cannot be compared because a snapshot was not supplied
  *   (`outsideReferenceRepinned`);
