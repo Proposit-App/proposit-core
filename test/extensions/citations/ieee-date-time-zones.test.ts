@@ -3,6 +3,7 @@ import { Value } from "typebox/value"
 
 import {
     NewspaperArticleReferenceSchema,
+    formatCalendarDate,
     formatCitationParts,
     formatDate,
 } from "../../../src/extensions/citations/ieee"
@@ -18,6 +19,15 @@ const TIME_ZONES = [
     "Asia/Manila",
     "America/Sitka",
 ]
+
+describe("formatCalendarDate", () => {
+    it("throws a TypeError for something that is not a calendar date", () => {
+        expect(() => formatCalendarDate("1787-13")).toThrow(TypeError)
+        expect(() => formatCalendarDate("1787-11-22T00:00:00.000Z")).toThrow(
+            /Not a calendar date/
+        )
+    })
+})
 
 describe("IEEE citation dates are calendar dates", () => {
     let originalTimeZone: string | undefined
@@ -49,6 +59,12 @@ describe("IEEE citation dates are calendar dates", () => {
 
             it("formats a historical date as the stored calendar day", () => {
                 expect(formatDate(new Date("1787-11-22"))).toBe("Nov. 22, 1787")
+            })
+
+            it("formats a calendar date at its precision, building no Date", () => {
+                expect(formatCalendarDate("1787")).toBe("1787")
+                expect(formatCalendarDate("1787-11")).toBe("Nov. 1787")
+                expect(formatCalendarDate("1787-11-22")).toBe("Nov. 22, 1787")
             })
 
             it("formats a modern date as the stored calendar day", () => {

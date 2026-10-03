@@ -1,6 +1,7 @@
 import type { TCitationSegment } from "./segment-types.js"
 import type { TSegmentInstruction } from "./segment-templates.js"
 import type { TAuthor } from "./references.js"
+import { parseCalendarDate } from "../../../lib/schemata/calendar-date.js"
 
 // ---------------------------------------------------------------------------
 // Shared formatting helpers (canonical home — formatting.ts re-exports these)
@@ -61,6 +62,23 @@ function toCitationDate(value: unknown): Date | undefined {
     return date === undefined || Number.isNaN(date.getTime()) ? undefined : date
 }
 
+/**
+ * Formats a calendar date IEEE style at its precision: "1787", "Nov. 1787"
+ * or "Nov. 22, 1787". Builds no `Date`, so the process time zone cannot
+ * move the day.
+ *
+ * @throws TypeError when `value` is not a calendar date.
+ */
+export function formatCalendarDate(value: string): string {
+    const { year, month, day } = parseCalendarDate(value)
+    const yearText = String(year).padStart(4, "0")
+    if (month === undefined) return yearText
+    const monthText = IEEE_MONTHS[month - 1]
+    return day === undefined
+        ? `${monthText} ${yearText}`
+        : `${monthText} ${String(day)}, ${yearText}`
+}
+
 export function formatSingleAuthor(author: TAuthor): string {
     if (!("givenNames" in author)) return author.name
     const initials = author.givenNames
@@ -104,6 +122,21 @@ function resolveSource(
                 )
             }
             return formatDate(date)
+        }
+        case "calendarDate": {
+            const value = ref[src.field!]
+            if (typeof value !== "string") {
+                throw new TypeError(
+                    `Citation field "${src.field!}" is not a calendar date: ${describeValue(value)}`
+                )
+            }
+            try {
+                return formatCalendarDate(value)
+            } catch {
+                throw new TypeError(
+                    `Citation field "${src.field!}" is not a calendar date: ${describeValue(value)}`
+                )
+            }
         }
         case "authors":
             return formatNamesInCitation(ref[src.field!] as TAuthor[])

@@ -8,7 +8,13 @@ import type { TCitationSegment } from "../segment-types.js"
 // ---------------------------------------------------------------------------
 
 export interface TSegmentSource {
-    kind: "string" | "date" | "authors" | "singleAuthor" | "literal"
+    kind:
+        | "string"
+        | "date"
+        | "calendarDate"
+        | "authors"
+        | "singleAuthor"
+        | "literal"
     field?: string
     text?: string
 }
