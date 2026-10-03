@@ -124,3 +124,9 @@ This records a survey of the code made to answer the scope question. It is not a
   - AN-3's promotion of a single child (`an-rules.ts:227`).
 - **Every evaluator folds a binary function over the children** (`src/lib/core/premise/evaluation.ts:113-158`, `src/lib/core/evaluation/argument-evaluation.ts:154-183`, `propagation.ts:137-174`, `src/lib/core/response/combined-premise-set.ts:356-378`). "At most one" cannot be written as such a fold, so it needs an n-ary four-valued function. The accepted-operator switch in `propagation.ts:280-424` has no default, so without a rule the operator would silently propagate nothing.
 - **Found in passing, unrelated to this item:** the formula-syntax list given to the language model (`src/lib/parsing/prompt-builder.ts:34-48`) has no `xor`.
+
+## Decided 2026-10-02: not being done
+
+The maintainer decided on 2026-10-02 that the at-most-one operator will not be built, in 6.0.0 or later. The item is closed as won't-do.
+
+The survey recorded above under "what it would cost to ship outside a major release" stays here for anyone who reopens it. Its main finding: "at most one" is not associative and is not transparent with one operand, so it cannot join the `isVariadicOperator` class without letting AN-3, AN-4 and `changeOperator`'s merge change what formulas mean. The comment in `src/lib/parsing/prompt-builder.ts` explaining why the extraction prompt leaves out `xor` stays as it is.
