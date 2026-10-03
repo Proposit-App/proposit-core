@@ -3,7 +3,6 @@ import {
     isExpressionBound,
     isPremiseBound,
     type TCoreArgumentReference,
-    type TCorePropositionalExpression,
     type TCorePropositionalVariable,
 } from "../../schemata/index.js"
 import type {
@@ -26,7 +25,12 @@ import {
     type TCombinedNode,
     type TTargetExpander,
 } from "./combined-premise-set.js"
-import { isPremiseRootExpression } from "./fingerprint.js"
+import {
+    indexOf,
+    isPremiseRootExpression,
+    type TSnapshotIndex,
+} from "./fingerprint.js"
+import { isNakedQExpressionList } from "../../grammar/naked-q.js"
 import { readLink } from "./links.js"
 
 /**
@@ -138,39 +142,31 @@ type TLinkOutcome = { values: TProposal[] } | { reason: TNotCarriedReason }
 
 /** The parts of the target snapshot carrying reads, indexed once. */
 interface TTargetIndex {
-    expressions: Map<string, TCorePropositionalExpression>
-    premiseOfExpression: Map<string, { id: string; type?: string }>
+    expressions: TSnapshotIndex["expressions"]
+    premiseOfExpression: TSnapshotIndex["premiseOfExpression"]
     conclusionPremiseId: string | undefined
     /** Variables named by a premise evaluation reads. */
     evaluatedVariables: TCorePropositionalVariable[]
 }
 
 function indexTarget(target: TArgumentEngineSnapshot): TTargetIndex {
-    const expressions = new Map<string, TCorePropositionalExpression>()
-    const premiseOfExpression = new Map<string, { id: string; type?: string }>()
+    const index = indexOf(target)
     const evaluatedVariableIds = new Set<string>()
     for (const ps of target.premises) {
         const own = ps.expressions.expressions
-        for (const expr of own) {
-            expressions.set(expr.id, expr)
-            premiseOfExpression.set(expr.id, ps.premise)
-        }
         // Evaluation hides a derivation premise that holds only its derived
         // claim's variable, so nothing placed there would be read.
-        const nakedQ =
-            ps.premise.type === "derivation" &&
-            own.length === 1 &&
-            own[0].type === "variable"
-        if (nakedQ) continue
+        if (ps.premise.type === "derivation" && isNakedQExpressionList(own))
+            continue
         for (const expr of own) {
             if (expr.type === "variable")
                 evaluatedVariableIds.add(expr.variableId)
         }
     }
     return {
-        expressions,
-        premiseOfExpression,
-        conclusionPremiseId: target.conclusionPremiseId,
+        expressions: index.expressions,
+        premiseOfExpression: index.premiseOfExpression,
+        conclusionPremiseId: index.conclusionPremiseId,
         evaluatedVariables: target.variables.variables.filter((variable) =>
             evaluatedVariableIds.has(variable.id)
         ),

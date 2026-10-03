@@ -42,7 +42,7 @@ export interface TSubtreeDescription {
     outside: TOutsideReference[]
 }
 
-interface TSnapshotIndex {
+export interface TSnapshotIndex {
     argumentId: string
     conclusionPremiseId: string | undefined
     expressions: Map<string, TCorePropositionalExpression>
@@ -54,7 +54,12 @@ interface TSnapshotIndex {
 
 const indexes = new WeakMap<TArgumentEngineSnapshot, TSnapshotIndex>()
 
-function indexOf(snapshot: TArgumentEngineSnapshot): TSnapshotIndex {
+/**
+ * The snapshot's expressions, premises and variables, indexed once per
+ * snapshot object. Shared by everything in this folder that reads a target
+ * snapshot.
+ */
+export function indexOf(snapshot: TArgumentEngineSnapshot): TSnapshotIndex {
     const known = indexes.get(snapshot)
     if (known !== undefined) return known
     const index: TSnapshotIndex = {

@@ -211,6 +211,7 @@ Interface lib.TBindingClassificationResult
 Interface lib.TBindingPremiseUse
 Interface lib.TCalendarDateParts
 Interface lib.TCanonicalizeOperatorAssignmentsInput
+Interface lib.TCarryAnswersOptions
 Interface lib.TClaimConnectionLibraryManagement
 Interface lib.TClaimConnectionLookup
 Interface lib.TClaimLibraryManagement
@@ -4764,6 +4765,7 @@ Property lib.PropositCore.forkArgument.options.claimForkExtras
 Property lib.PropositCore.forkArgument.options.expressionForkExtras
 Property lib.PropositCore.forkArgument.options.forkId
 Property lib.PropositCore.forkArgument.options.premiseForkExtras
+Property lib.PropositCore.forkArgument.options.respondsToSnapshot
 Property lib.PropositCore.forkArgument.options.variableForkExtras
 Property lib.PropositCore.forkArgument.remapTable
 Property lib.PropositCore.forks
@@ -5040,6 +5042,7 @@ Property lib.TCarriedSource.linkPremiseIds
 Property lib.TCarriedSource.value
 Property lib.TCarriedSource.value
 Property lib.TCarriedSource.value
+Property lib.TCarryAnswersOptions.ownLinkPremiseIds
 Property lib.TCarryCollision.carried
 Property lib.TCarryCollision.carried
 Property lib.TCarryCollision.carried
@@ -5053,6 +5056,7 @@ Property lib.TCarryCollision.linkPremiseIds
 Property lib.TCarryCollision.own
 Property lib.TCarryCollision.own
 Property lib.TCarryCollision.own
+Property lib.TCarryResult.collisions
 Property lib.TCarryResult.into
 Property lib.TCarryResult.intoResponse
 Property lib.TCarryResult.intoResponse
@@ -6260,6 +6264,7 @@ Property lib.llmStage.config.outputSchema
 Property lib.llmStage.config.reasoningEffort
 Property lib.llmStage.config.retry
 Property lib.llmStage.config.tools
+Property lib.mergeCarriedInput.carried.collisions
 Property lib.mergeCarriedInput.carried.into
 Property lib.mergeCarriedInput.carried.into.argumentId
 Property lib.mergeCarriedInput.carried.into.argumentVersion
