@@ -4,9 +4,13 @@ Line numbers are against `4abd8a10` on `feat/response-arguments`. The request is
 
 **Status of the decisions in this spec.**
 
-- The requester's answers in `initial-request.md` are provisional, given on the maintainer's behalf. The maintainer confirms them with this spec.
-- One adversarial review round was run on the first draft (2026-10-02). This is the revision that followed it; no further round was run.
-- The review showed that rendering access dates in a reader's time zone misreads data stored as the 5.4.2 release notes advised ("Out of scope: access dates"). On that, **the requester chose, on the maintainer's behalf, to leave access dates exactly as they are in this change.** The maintainer may choose differently, and either of the two later options described there can be added without breaking anything.
+- **The maintainer's decisions of 2026-10-02:**
+  - this change ships in 6.0.0;
+  - every answer in `initial-request.md` is confirmed as his;
+  - access dates stay exactly as they are ("Out of scope: access dates");
+  - Email `date` and SocialMedia `postDate` are calendar dates;
+  - the 15 `year` fields become calendar dates too ("The year fields").
+- One adversarial review round was run on the first draft (2026-10-02), and the spec was revised after it. A second, bounded round covered only the year change.
 
 ## Does this need a major version on its own?
 
@@ -15,6 +19,8 @@ Line numbers are against `4abd8a10` on `feat/response-arguments`. The request is
 - Consumer code that builds or reads those fields stops compiling.
 - Stored data that holds an instant in one of them no longer passes the IEEE schema until it is converted.
 
+The year change ("The year fields") is breaking as well, though less visibly: the static type stays `string`, but code that assumes four digits breaks, and the relaxed schemas start refusing values they accept today.
+
 Shipped outside a major release, this would be 7.0.0. Inside 6.0.0, which is already a major release, it costs nothing extra. "Additive alternatives" describes the non-breaking route, and why it is a fallback rather than the plan.
 
 ## Capability changes
@@ -22,7 +28,7 @@ Shipped outside a major release, this would be 7.0.0. Inside 6.0.0, which is alr
 The capability ledger is empty (`tcw capabilities list` prints nothing), so no ledger record changes. The taxonomy gains:
 
 - **Vocabulary:** **calendar date**: a day, month or year as written, with no time of day or zone, at a stated precision. Child of `reference`.
-- **Changed feature:** `ieee-citation-formatting`. Its description gains "rendering calendar dates at their precision".
+- **Changed feature:** `ieee-citation-formatting`. Its description gains "rendering calendar dates at their precision, including a month or day on sources dated by year".
 
 ## Problem
 
@@ -37,7 +43,7 @@ The capability ledger is empty (`tcw capabilities list` prints nothing), so no l
 ## Goals
 
 1. **A calendar date is a value of its own:** a year, a year and month, or a full day, with no time or zone. It renders exactly as written, at its precision, in every time zone.
-2. **Every reference date other than an access date is a calendar date.**
+2. **Every reference date other than an access date is a calendar date,** including the `year` fields, so a journal or magazine article can give its month ("Nov. 1787").
 3. **The encoded form round-trips exactly** through `snapshot()`, JSON and decoding, precision included.
 4. **Consumers can convert what they already store,** by a stated rule and a provided helper, including data written before 5.4.2.
 5. **A value that is not a valid calendar date fails at formatting with an error naming the field,** since core does not check citations when it loads them.
@@ -46,17 +52,16 @@ The capability ledger is empty (`tcw capabilities list` prints nothing), so no l
 
 - **Uncertainty and alternatives** ("1755?", "1755 or 1757", EDTF qualifiers). They wait for a later item. The encoding is chosen so that adding them is additive (Design, "Encoding").
 - **Dates before year 0000 or after 9999.** The four-digit year matches the existing `year` fields (`references.ts:163`, pattern `^\d{4}$`).
-- **The 15 `year` string fields** on Book, JournalArticle and the others. They are question (b) for the maintainer (Notes).
 - **A migration run by core.** Consumers convert their own data (Design, "Converting stored data").
 - **Any other citation style, and other places `EncodableDate` is used.** The CLI's `createdAt` and `publishedAt` (`src/cli/schemata.ts:25-27`) are real instants and stay as they are.
 
 ### Out of scope: access dates
 
-The six `accessedDate` fields stay `EncodableDate`, rendered by their UTC day exactly as today. There is no display time-zone option. The first draft had one; it was dropped for this reason:
+The six `accessedDate` fields stay `EncodableDate`, rendered by their UTC day exactly as today. There is no display time-zone option. That is the maintainer's decision of 2026-10-02. The first draft had one; it was dropped for this reason:
 
 > The 5.4.2 release notes (`docs/release-notes/v5.4.2.md:49-53`) told consumers to store every citation date, access dates included, as midnight UTC of the day they mean, and the fixtures do the same (`test/extensions/citations/ieee.test.ts`, `accessedDate: new Date(Date.UTC(2026, 8, 1))`). Rendering such a value in a zone west of UTC prints the day before, for every access date already stored. Even for a true moment, rendering in each reader's zone makes one citation show different access days to different readers, and a server rendering in UTC disagree with a browser rendering in local time, which is the defect 5.4.2 fixed. The intake's example has the person saving and the person reading as the same Los Angeles user; that is the only case where the reader's zone gives the right answer.
 
-Either of these can be added later without breaking anything, if the maintainer wants it:
+Two later options remain open:
 
 - **(i) An access date becomes a calendar date,** captured in the saver's zone at the moment of saving (for example `calendarDateFromInstant(new Date(), "day", "America/Los_Angeles")`). The citation then prints the day the person citing saw the source, for every reader. This is the IEEE meaning of "Accessed:". It changes the six fields' type, so it is itself breaking if done after 6.0.0; done in 6.0.0, it is one more row in the table below.
 - **(ii) An access date stays a moment, rendered in a zone the caller passes.** The formatter gains a `timeZone` option applying to access dates only. The release notes would have to say that values stored as midnight UTC shift a day west of UTC, and which zone each kind of caller should pass. Additive at any time.
@@ -112,9 +117,47 @@ Calendar date (15 fields), in `src/extensions/citations/ieee/references.ts`:
 
 Unchanged, as `EncodableDate` (6 fields): `accessedDate` on Website (`:210`), OnlineDocument (`:736`), Blog (`:762`), SocialMedia (`:812`, optional), Video (`:878`) and Podcast (`:909`).
 
-Email `date` and SocialMedia `postDate` are question (a) for the maintainer (Notes). This spec makes them calendar dates, following the requester's answer that names posting dates.
+Email `date` and SocialMedia `postDate` are calendar dates by the maintainer's decision: the date as the source prints it, in the sender's zone, captured when the email or post is recorded.
 
-Every other field keeps its schema, including the 15 `year: Type.String({ pattern: "^\\d{4}$" })` fields (Book, BookChapter, Handbook, TechnicalReport, Thesis, Dictionary, Encyclopedia, JournalArticle, MagazineArticle, Dataset, Software, Preprint, Course, Datasheet, ProductManual).
+Every other date-like field is a `year` field, covered next.
+
+### The year fields
+
+Fifteen types hold `year: Type.String({ pattern: "^\\d{4}$" })`, each rendered by one `stringField("year", "year")` in the templates:
+
+| Type | Schema line (`references.ts`) | Template (`templates/`) |
+|---|---|---|
+| Book | `:163` | `textual-sources.ts:31` |
+| BookChapter | `:228` | `textual-sources.ts:70` |
+| Handbook | `:274` | `textual-sources.ts:89` |
+| TechnicalReport | `:307` | `textual-sources.ts:107` |
+| Thesis | `:362` | `textual-sources.ts:136` |
+| Dictionary | `:419` | `textual-sources.ts:161` |
+| Encyclopedia | `:442` | `textual-sources.ts:172` |
+| JournalArticle | `:468` | `periodicals.ts:23` |
+| MagazineArticle | `:509` | `periodicals.ts:37` |
+| Dataset | `:646` | `digital-sources.ts:27` |
+| Software | `:685` | `digital-sources.ts:39` |
+| Preprint | `:825` | `digital-sources.ts:139` |
+| Course | `:922` | `multimedia.ts:60` |
+| Datasheet | `:1086` | `technical-documents.ts:19` |
+| ProductManual | `:1115` | `technical-documents.ts:32` |
+
+- **The change.** Each `year` field's schema becomes `CalendarDate`. The field keeps its name, `year`, and its static type stays `string`. A rename to `date` was weighed and rejected: it would break every reader and writer of the field for a naming gain, and the fifteen types would then disagree with every IEEE-derived tool that calls it a year. The field's doc comment says it may hold a month or day.
+- **Rendering** goes through the `calendarDate` source kind, at the stored precision, so the segment shows exactly what was stored. Against IEEE's own examples (Reference Guide, read 2026-10-02):
+  - year: "1964" (books: "Washington, DC, USA: NBS, 1964");
+  - month: "Oct. 2011" (periodicals: "vol. 58, pp. 2787–2793, Oct. 2011"), "Nov. 1988" (technical reports), "Aug. 2013" (datasets);
+  - day: "Dec. 11, 2018" (an early-access article's online date).
+
+  IEEE shows only a year for books, handbooks and manuals. The formatter does not cut a stored month or day to fit the type: it prints what the author stored, which is the author's choice and keeps one rule for every field.
+- **The segment role stays `year`,** even when it carries a month or day: roles are public (`segment-types.ts:15`), and renaming one is a break for every consumer styling segments by role.
+- **What it breaks:**
+  - code that reads `year` as exactly four digits, for example `Number(ref.year)` or a sort by string, now meets "1787-11";
+  - **the relaxed schemas.** They strip `pattern`, so a relaxed `year` accepts any string today. The `CalendarDate` refinement survives the relaxed copy, so values like "c. 1787", "1787?" or "n.d." that pass relaxed validation now are refused.
+  - The strict schemas lose nothing: every value `^\\d{4}$` accepts is a valid year-precision calendar date.
+- **Converting existing year strings:**
+  - a four-digit string ("1787") is already a valid calendar date and needs no change;
+  - any other value can only have come through a relaxed schema. The rule: a value whose whole content is four digits with surrounding whitespace is trimmed; anything else ("c. 1787", "1787?", "n.d.") has no calendar-date form until uncertainty is supported (Non-goals) and must be corrected by hand or removed. A helper, `calendarDateFromYear(value: string): string | undefined`, applies this rule: it returns the trimmed four-digit year, or `undefined` for a value it cannot convert, never guessing a year out of free text.
 
 ### Rendering
 
@@ -124,7 +167,7 @@ Every other field keeps its schema, including the 15 `year: Type.String({ patter
   - `"1787-11-22"` → "Nov. 22, 1787".
 
   No `Date` is built, so the process time zone cannot affect the result. The abbreviations are those of IEEE's current Reference Guide, which writes "Sep.", "Jun." and "Jul." (checked 2026-10-02).
-- **Templates.** A new segment source kind, `calendarDate` (beside `date`, `templates/instruction-types.ts:11`), and a fragment `calendarDateField(field, role)` (beside `dateField`, `templates/fragments.ts:46-50`). Every template use of a changed field switches to it. The segment roles (`date`, `accessedDate`) are unchanged.
+- **Templates.** A new segment source kind, `calendarDate` (beside `date`, `templates/instruction-types.ts:11`), and a fragment `calendarDateField(field, role)` (beside `dateField`, `templates/fragments.ts:46-50`). Every template use of a changed field switches to it, the 15 `year` uses included. The segment roles (`date`, `accessedDate`, `year`) are unchanged.
 - **Access dates render exactly as today,** through the `date` source kind.
 - **A value that is not a valid calendar date.** Core never checks a citation against the IEEE schema when it loads one: `ClaimLibrary` validates claims against `CoreClaimSchema`, which allows extra properties, and `OriginLibrary.fromSnapshot` checks only `CoreOriginDocumentSchema` (`src/lib/core/origin-library.ts:529`). So an unconverted value (a `Date`, or an ISO instant string) reaches the formatter. The `calendarDate` source kind then throws a `TypeError` naming the field and the value, for example `Citation field "date" is not a calendar date: "1787-11-22T00:00:00.000Z"`. `formatCalendarDate` throws the same kind of error, without the field. This matches the `date` source kind's error for a non-date (the fix on `fix/decode-citation-dates-when-formatting`).
 
@@ -168,10 +211,16 @@ Test files: `test/core/calendar-date.test.ts` (new), `test/extensions/citations/
    - Year 950 gives "0950"; a year of 10000 throws a `RangeError`; an invalid `Date` throws a `TypeError`.
 10. **Parsing.** `parseCalendarDate("1787-11")` is `{ year: 1787, month: 11, precision: "month" }`; it throws a `TypeError` on "1787-13".
 11. **Types.** With `expectTypeOf`: each of the 15 fields' static type on its reference type is `string` (or `string | undefined` for `releaseDate`), and each `accessedDate` is still `Date`.
-12. **Unaffected types.** The segments for ProductManual, Datasheet and Course from the "handles all 33 reference types" fixtures are unchanged (snapshot of their text before and after).
-13. **Public surface.** `docs/api-surface.txt` gains the names `CalendarDate`, `parseCalendarDate`, `calendarDateFromInstant`, `formatCalendarDate` and `calendarDateField` and loses none. (It records names only; types are criterion 11's.) `pnpm run check` passes.
+12. **Year-only output unchanged.** For every type, a reference whose `year` is four digits renders exactly the same segments before and after the change (the "handles all 33 reference types" fixtures, compared before and after).
+15. **The year fields.**
+    - Each of the 15 `year` fields accepts "1787", "1787-11" and "1787-11-22" through its strict and relaxed schema, and refuses "c. 1787" through both.
+    - A JournalArticle with `year: "2011-10"` renders its `year` segment "Oct. 2011"; a TechnicalReport with `year: "1988-11"`, "Nov. 1988"; a Dataset with `year: "2013-08"`, "Aug. 2013"; a Book with `year: "1964"`, "1964"; a Preprint with `year: "2018-12-11"`, "Dec. 11, 2018".
+    - The segment role is `year` in each.
+    - `calendarDateFromYear` gives "1787" for "1787" and " 1787 ", and `undefined` for "c. 1787", "1787?", "n.d." and "".
+    - `expectTypeOf`: each `year` field's static type is still `string`.
+13. **Public surface.** `docs/api-surface.txt` gains the names `CalendarDate`, `parseCalendarDate`, `calendarDateFromInstant`, `calendarDateFromYear`, `formatCalendarDate` and `calendarDateField` and loses none. (It records names only; types are criterion 11's.) `pnpm run check` passes.
 14. **Documentation:**
-    - the release notes' Breaking and Migrating sections, with the conversion rule (including the zone for pre-5.4.2 data) and the checksum note;
+    - the release notes' Breaking and Migrating sections, with the conversion rules (instants, including the zone for pre-5.4.2 data; year strings, including relaxed values with no calendar form) and the checksum note;
     - the changelog;
     - `docs/api-reference.md`: a citation-dates section, since none exists today;
     - `README.md`'s IEEE paragraph (`:270`);
@@ -186,23 +235,16 @@ Test files: `test/core/calendar-date.test.ts` (new), `test/extensions/citations/
 
 ## Effort
 
-Medium. The schema and helpers are small; most of the work is the 15 template uses, the fixtures in the 15 fields, the new tests (about 14 criteria), and the five documentation targets.
+Medium. The schema and helpers are small; most of the work is the 30 template uses (15 date fields and 15 year fields), the fixtures in those fields, the new tests (15 criteria), and the five documentation targets.
 
 ## Notes
 
-### Questions for the maintainer
+### The maintainer's answers (2026-10-02)
 
-1. **Access dates.** This change leaves them as they are (the requester's choice on your behalf). Do you want (i) or (ii) from "Out of scope: access dates", and if (i), in 6.0.0?
-2. **(a) Email `date` and SocialMedia `postDate`.** Both are moments a system recorded. Three options:
-   - a calendar date as the source prints it, in the sender's zone, captured when the email or post is ingested (what an IEEE citation prints, and what this spec does);
-   - a calendar date in some other agreed zone;
-   - a moment, rendered like an access date (which inherits the access-date question).
-3. **(b) The 15 `year` fields.** Should their schema become `CalendarDate`, so a journal or magazine article can give a month ("Nov. 1787"), as IEEE's own examples do? Keeping the name `year` and the static type `string`, every value the strict schema accepts today stays valid, so strict users and stored data are unaffected. It breaks two things:
-   - code that reads `year` as exactly four digits;
-   - users of the relaxed schemas, where `^\d{4}$` is stripped today and any string is accepted: the refinement would start rejecting values like "c. 1787".
-
-   It is therefore still a breaking change, and has to ride a major release: 6.0.0, or the next one.
-4. **Confirm the provisional answers** in `initial-request.md`, with the stored convention corrected from noon UTC to midnight UTC.
+1. **Access dates:** leave them exactly as they are in 6.0.0. Options (i) and (ii) stay open for later.
+2. **(a) Email `date` and SocialMedia `postDate`:** calendar dates, as this spec has them.
+3. **(b) The 15 `year` fields:** calendar dates in 6.0.0 ("The year fields").
+4. **The provisional answers** in `initial-request.md` are confirmed as his, with the stored convention corrected from noon UTC to midnight UTC.
 
 ### Review record
 
