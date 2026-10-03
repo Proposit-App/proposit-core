@@ -202,3 +202,6 @@
 2026-10-02-forking-breaks-bindings-into-another-argument:
   resolution: done
   resolved: '2026-10-02'
+2026-10-03-checklink-reports-no-attempted-support-for-a-reply-s-links:
+  resolution: done
+  resolved: '2026-10-03'
