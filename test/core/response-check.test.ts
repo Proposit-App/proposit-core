@@ -347,7 +347,7 @@ describe("checkLink on a reply, a response whose target is a response", () => {
         ["contradicts", "affirms", false, true],
     ])(
         "Y %s X and Z %s Y: a reason for Z's link is attempted support",
-        (_, __, yAffirms, zAffirms) => {
+        (_y, _z, yAffirms, zAffirms) => {
             expect(reply(yAffirms, zAffirms)).toMatchObject({
                 status: "asserted",
                 attemptedSupport: true,
