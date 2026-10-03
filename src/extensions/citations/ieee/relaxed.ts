@@ -44,10 +44,11 @@ import {
 // ---------------------------------------------------------------------------
 // Internal utilities
 //
-// Relaxed schemas are safe for Value.Check / Value.Parse only. Non-enumerable
-// TypeBox internals (~kind, ~optional) are not preserved by the recursive
-// clone — do not pass relaxed schemas to Value.Create, Type.Extends, or the
-// TypeBox compiler.
+// Relaxed schemas are meant for Value.Check / Value.Parse. The clone carries
+// TypeBox's non-enumerable internals over (~kind, ~optional, ~refine; see
+// cloneAndStrip), so a refined or optional field checks as in its source, but
+// nothing here exercises relaxed schemas with Value.Create, Type.Extends or
+// the TypeBox compiler — do not rely on those.
 // ---------------------------------------------------------------------------
 
 const CONSTRAINT_KEYS = new Set([

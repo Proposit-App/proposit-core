@@ -22,12 +22,14 @@ export const IEEE_MONTHS = [
     "Dec.",
 ]
 
-// A citation date is a calendar date, stored as midnight UTC of that day (the
-// way `EncodableDate` decodes "1787-11-22"). Read it back in UTC: the local-time
-// getters shift it into the formatting process's time zone and print the day
-// before or after, and no stored time of day avoids that for every zone.
+// Formats an instant (an access date, held as `EncodableDate`) by its UTC day.
+// A day is stored as midnight UTC of that day, the way `EncodableDate` decodes
+// "1787-11-22", so it is read back in UTC: the local-time getters would shift
+// it into the formatting process's time zone and print the day before or
+// after. Calendar dates never come here; `formatCalendarDate` renders them
+// from their parts.
 //
-// A stored reference that comes back from JSON holds its dates as the ISO
+// A stored reference that comes back from JSON holds its instants as the ISO
 // strings `JSON.stringify` wrote, unless the caller decoded it first, so a
 // string is read the way `EncodableDate` decodes one.
 export function formatDate(d: Date | string): string {
