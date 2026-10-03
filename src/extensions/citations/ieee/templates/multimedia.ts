@@ -3,6 +3,7 @@
 import {
     separator,
     stringField,
+    yearOrUndated,
     calendarDateField,
     literal,
     singleAuthorLead,
@@ -57,7 +58,7 @@ export const COURSE_TEMPLATE: TSegmentInstruction[] = [
     separator(", "),
     stringField("term", "misc"),
     separator(", "),
-    stringField("year", "year"),
+    yearOrUndated(),
     separator("."),
 ]
 

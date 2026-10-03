@@ -3,7 +3,18 @@
 
 import Type, { type Static, type TSchema } from "typebox"
 import { EncodableDate } from "../../../lib/schemata/shared.js"
-import { CalendarDate } from "../../../lib/schemata/calendar-date.js"
+import {
+    CalendarDate,
+    calendarDateType,
+} from "../../../lib/schemata/calendar-date.js"
+
+// The publication date of a source dated by year. Absent when the source is
+// undated, which the citation shows as "(n.d.)", as IEEE's Reference Guide
+// asks.
+const YearDate = calendarDateType({
+    description:
+        'Publication date as written: a year, a year and month, or a full day (ISO 8601: "1787", "1787-11", "1787-11-22"). Absent when the source is undated.',
+})
 
 // ---------------------------------------------------------------------------
 // Reference type discriminator
@@ -161,10 +172,7 @@ export const BookReferenceSchema = Type.Intersect([
     Type.Object({
         type: Type.Literal("Book"),
         title: Type.String({ minLength: 1, description: "Book title" }),
-        year: Type.String({
-            pattern: "^\\d{4}$",
-            description: "Four-digit publication year",
-        }),
+        year: Type.Optional(YearDate),
         authors: Type.Array(AuthorSchema, {
             minItems: 1,
             description: "Author names",
@@ -226,10 +234,7 @@ export const BookChapterReferenceSchema = Type.Intersect([
             minLength: 1,
             description: "Chapter title",
         }),
-        year: Type.String({
-            pattern: "^\\d{4}$",
-            description: "Four-digit publication year",
-        }),
+        year: Type.Optional(YearDate),
         authors: Type.Array(AuthorSchema, {
             minItems: 1,
             description: "Chapter author names",
@@ -272,10 +277,7 @@ export const HandbookReferenceSchema = Type.Intersect([
             minLength: 1,
             description: "Handbook title",
         }),
-        year: Type.String({
-            pattern: "^\\d{4}$",
-            description: "Four-digit publication year",
-        }),
+        year: Type.Optional(YearDate),
         publisher: Type.String({
             minLength: 1,
             description: "Publisher name",
@@ -305,10 +307,7 @@ export const TechnicalReportReferenceSchema = Type.Intersect([
             minLength: 1,
             description: "Report title",
         }),
-        year: Type.String({
-            pattern: "^\\d{4}$",
-            description: "Four-digit publication year",
-        }),
+        year: Type.Optional(YearDate),
         authors: Type.Array(AuthorSchema, {
             minItems: 1,
             description: "Author names",
@@ -360,10 +359,7 @@ export const ThesisReferenceSchema = Type.Intersect([
             minLength: 1,
             description: "Thesis title",
         }),
-        year: Type.String({
-            pattern: "^\\d{4}$",
-            description: "Four-digit publication year",
-        }),
+        year: Type.Optional(YearDate),
         authors: Type.Array(AuthorSchema, {
             minItems: 1,
             description: "Author names",
@@ -417,10 +413,7 @@ export const DictionaryReferenceSchema = Type.Intersect([
             minLength: 1,
             description: "Entry title",
         }),
-        year: Type.String({
-            pattern: "^\\d{4}$",
-            description: "Four-digit publication year",
-        }),
+        year: Type.Optional(YearDate),
         publisher: Type.String({
             minLength: 1,
             description: "Publisher name",
@@ -440,10 +433,7 @@ export const EncyclopediaReferenceSchema = Type.Intersect([
             minLength: 1,
             description: "Entry title",
         }),
-        year: Type.String({
-            pattern: "^\\d{4}$",
-            description: "Four-digit publication year",
-        }),
+        year: Type.Optional(YearDate),
         publisher: Type.String({
             minLength: 1,
             description: "Publisher name",
@@ -466,10 +456,7 @@ export const JournalArticleReferenceSchema = Type.Intersect([
             minLength: 1,
             description: "Article title",
         }),
-        year: Type.String({
-            pattern: "^\\d{4}$",
-            description: "Four-digit publication year",
-        }),
+        year: Type.Optional(YearDate),
         authors: Type.Array(AuthorSchema, {
             minItems: 1,
             description: "Author names",
@@ -507,10 +494,7 @@ export const MagazineArticleReferenceSchema = Type.Intersect([
             minLength: 1,
             description: "Article title",
         }),
-        year: Type.String({
-            pattern: "^\\d{4}$",
-            description: "Four-digit publication year",
-        }),
+        year: Type.Optional(YearDate),
         authors: Type.Array(AuthorSchema, {
             minItems: 1,
             description: "Author names",
@@ -644,10 +628,7 @@ export const DatasetReferenceSchema = Type.Intersect([
             minLength: 1,
             description: "Dataset title",
         }),
-        year: Type.String({
-            pattern: "^\\d{4}$",
-            description: "Four-digit publication year",
-        }),
+        year: Type.Optional(YearDate),
         authors: Type.Optional(
             Type.Array(AuthorSchema, {
                 description: "Author names",
@@ -683,10 +664,7 @@ export const SoftwareReferenceSchema = Type.Intersect([
             minLength: 1,
             description: "Software title",
         }),
-        year: Type.String({
-            pattern: "^\\d{4}$",
-            description: "Four-digit publication year",
-        }),
+        year: Type.Optional(YearDate),
         authors: Type.Optional(
             Type.Array(AuthorSchema, {
                 description: "Author names",
@@ -823,10 +801,7 @@ export const PreprintReferenceSchema = Type.Intersect([
             minLength: 1,
             description: "Paper title",
         }),
-        year: Type.String({
-            pattern: "^\\d{4}$",
-            description: "Four-digit publication year",
-        }),
+        year: Type.Optional(YearDate),
         authors: Type.Array(AuthorSchema, {
             minItems: 1,
             description: "Author names",
@@ -920,10 +895,7 @@ export const CourseReferenceSchema = Type.Intersect([
             minLength: 1,
             description: "Course title",
         }),
-        year: Type.String({
-            pattern: "^\\d{4}$",
-            description: "Four-digit publication year",
-        }),
+        year: Type.Optional(YearDate),
         instructor: AuthorSchema,
         institution: Type.String({
             minLength: 1,
@@ -1084,10 +1056,7 @@ export const DatasheetReferenceSchema = Type.Intersect([
             minLength: 1,
             description: "Datasheet title",
         }),
-        year: Type.String({
-            pattern: "^\\d{4}$",
-            description: "Four-digit publication year",
-        }),
+        year: Type.Optional(YearDate),
         manufacturer: Type.String({
             minLength: 1,
             description: "Manufacturer name",
@@ -1113,10 +1082,7 @@ export const ProductManualReferenceSchema = Type.Intersect([
             minLength: 1,
             description: "Manual title",
         }),
-        year: Type.String({
-            pattern: "^\\d{4}$",
-            description: "Four-digit publication year",
-        }),
+        year: Type.Optional(YearDate),
         manufacturer: Type.String({
             minLength: 1,
             description: "Manufacturer name",

@@ -164,3 +164,127 @@ describe("rendering calendar dates in a citation", () => {
         )
     })
 })
+
+const YEAR_TYPES = [
+    "Book",
+    "BookChapter",
+    "Handbook",
+    "TechnicalReport",
+    "Thesis",
+    "Dictionary",
+    "Encyclopedia",
+    "JournalArticle",
+    "MagazineArticle",
+    "Dataset",
+    "Software",
+    "Preprint",
+    "Course",
+    "Datasheet",
+    "ProductManual",
+] as const
+
+const YEAR_DESCRIPTION =
+    'Publication date as written: a year, a year and month, or a full day (ISO 8601: "1787", "1787-11", "1787-11-22"). Absent when the source is undated.'
+
+// The `year` property schema of a reference schema, wherever the
+// intersection it is built from keeps it.
+function yearPropertySchema(schema: unknown): Record<string, unknown> {
+    const node = schema as {
+        properties?: Record<string, Record<string, unknown>>
+        allOf?: unknown[]
+    }
+    if (node.properties?.year !== undefined) return node.properties.year
+    for (const part of node.allOf ?? []) {
+        try {
+            return yearPropertySchema(part)
+        } catch {
+            // not in this part
+        }
+    }
+    throw new Error("no year property")
+}
+
+function yearSegment(reference: unknown): string | undefined {
+    return dateSegment(reference, "year")
+}
+
+describe("year fields", () => {
+    describe.each(YEAR_TYPES)("%s", (type) => {
+        const strict =
+            IEEEReferenceSchemaMap[type as keyof typeof IEEEReferenceSchemaMap]
+        const relaxed =
+            IEEEReferenceSchemaMapRelaxed[
+                type as keyof typeof IEEEReferenceSchemaMapRelaxed
+            ]
+
+        it.each(["1787", "1787-11", "1787-11-22", undefined])(
+            "accepts %j",
+            (year) => {
+                const reference = fixtureOf(type)
+                if (year === undefined) delete reference.year
+                else reference.year = year
+                expect(Value.Check(strict, reference)).toBe(true)
+                expect(Value.Check(relaxed, reference)).toBe(true)
+            }
+        )
+
+        it.each(["c. 1787", "n.d."])("refuses %j", (year) => {
+            const reference = { ...fixtureOf(type), year }
+            expect(Value.Check(strict, reference)).toBe(false)
+            expect(Value.Check(relaxed, reference)).toBe(false)
+        })
+
+        it("describes the field as a calendar date", () => {
+            expect(yearPropertySchema(strict).description).toBe(
+                YEAR_DESCRIPTION
+            )
+        })
+
+        it("renders (n.d.) in the year's place when undated", () => {
+            const dated = fixtureOf(type)
+            const undated = { ...dated }
+            delete undated.year
+            const datedSegments = formatCitationParts(
+                dated as TIEEEReference
+            ).segments
+            const undatedSegments = formatCitationParts(
+                undated as TIEEEReference
+            ).segments
+            expect(undatedSegments).toEqual(
+                datedSegments.map((segment) =>
+                    segment.role === "year"
+                        ? { ...segment, text: "(n.d.)" }
+                        : segment
+                )
+            )
+        })
+    })
+
+    it.each([
+        ["JournalArticle", "2011-10", "Oct. 2011"],
+        ["TechnicalReport", "1988-11", "Nov. 1988"],
+        ["Dataset", "2013-08", "Aug. 2013"],
+        ["Book", "1964", "1964"],
+        ["JournalArticle", "2018-12-11", "Dec. 11, 2018"],
+    ])(
+        "a %s dated %s renders %s, as IEEE's examples do",
+        (type, year, text) => {
+            expect(yearSegment({ ...fixtureOf(type), year })).toBe(text)
+        }
+    )
+
+    it("an undated Datasheet ends like IEEE's example", () => {
+        const datasheet = fixtureOf("Datasheet")
+        delete datasheet.year
+        const text = formatCitationParts(datasheet as TIEEEReference)
+            .segments.map((segment) => segment.text)
+            .join("")
+        expect(text).toContain(", (n.d.).")
+    })
+
+    it("throws a TypeError naming the field for a year that is not a calendar date", () => {
+        expect(() =>
+            yearSegment({ ...fixtureOf("JournalArticle"), year: "c. 1787" })
+        ).toThrow(/Citation field "year" is not a calendar date: "c. 1787"/)
+    })
+})

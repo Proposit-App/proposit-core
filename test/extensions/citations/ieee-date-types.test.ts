@@ -3,6 +3,21 @@
 import { describe, expectTypeOf, it } from "vitest"
 
 import type {
+    TBookReference,
+    TBookChapterReference,
+    TCourseReference,
+    TDatasetReference,
+    TDatasheetReference,
+    TDictionaryReference,
+    TEncyclopediaReference,
+    THandbookReference,
+    TJournalArticleReference,
+    TMagazineArticleReference,
+    TPreprintReference,
+    TProductManualReference,
+    TSoftwareReference,
+    TTechnicalReportReference,
+    TThesisReference,
     TBlogReference,
     TConferencePaperReference,
     TConferenceProceedingsReference,
@@ -67,5 +82,24 @@ describe("reference date types", () => {
         >()
         expectTypeOf<TVideoReference["accessedDate"]>().toEqualTypeOf<Date>()
         expectTypeOf<TPodcastReference["accessedDate"]>().toEqualTypeOf<Date>()
+    })
+
+    it("year fields are optional strings", () => {
+        type TYear = string | undefined
+        expectTypeOf<TBookReference["year"]>().toEqualTypeOf<TYear>()
+        expectTypeOf<TBookChapterReference["year"]>().toEqualTypeOf<TYear>()
+        expectTypeOf<THandbookReference["year"]>().toEqualTypeOf<TYear>()
+        expectTypeOf<TTechnicalReportReference["year"]>().toEqualTypeOf<TYear>()
+        expectTypeOf<TThesisReference["year"]>().toEqualTypeOf<TYear>()
+        expectTypeOf<TDictionaryReference["year"]>().toEqualTypeOf<TYear>()
+        expectTypeOf<TEncyclopediaReference["year"]>().toEqualTypeOf<TYear>()
+        expectTypeOf<TJournalArticleReference["year"]>().toEqualTypeOf<TYear>()
+        expectTypeOf<TMagazineArticleReference["year"]>().toEqualTypeOf<TYear>()
+        expectTypeOf<TDatasetReference["year"]>().toEqualTypeOf<TYear>()
+        expectTypeOf<TSoftwareReference["year"]>().toEqualTypeOf<TYear>()
+        expectTypeOf<TPreprintReference["year"]>().toEqualTypeOf<TYear>()
+        expectTypeOf<TCourseReference["year"]>().toEqualTypeOf<TYear>()
+        expectTypeOf<TDatasheetReference["year"]>().toEqualTypeOf<TYear>()
+        expectTypeOf<TProductManualReference["year"]>().toEqualTypeOf<TYear>()
     })
 })
