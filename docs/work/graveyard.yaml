@@ -121,6 +121,9 @@
 2026-08-28-decompose-premiseengine-into-method-family-seam-files:
   resolution: superseded
   resolved: '2026-09-24'
+2026-09-24-add-an-at-most-one-operator-for-mutually-exclusive-options:
+  resolution: wontfix
+  resolved: '2026-10-02'
 2026-09-24-let-a-social-media-citation-carry-a-username-a-post-title-or-body-a-website-title-and-an-access-date:
   resolution: done
   resolved: '2026-09-24'
