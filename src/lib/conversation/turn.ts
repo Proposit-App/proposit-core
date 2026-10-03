@@ -47,9 +47,9 @@ export type TTurnResult<TOut> = {
      * The provider response id for this turn (nullable for non-chaining
      * providers such as chat-completions). For a turn that failed it is the
      * last response the provider returned, which the stage may have
-     * rejected, or `null` when none returned; a caller chaining turns should
-     * keep its previous id when `output` is `null`, as `createConversation`
-     * does.
+     * rejected, or `null` when none returned. A caller chaining turns should
+     * keep its previous id when the turn failed (it recorded failures and
+     * produced no output), as `createConversation` does.
      */
     responseId: TResponseId | null
     /** Cumulative token usage for this turn's LLM call. */

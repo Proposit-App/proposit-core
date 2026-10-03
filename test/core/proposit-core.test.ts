@@ -965,6 +965,47 @@ describe("PropositCore.forkArgument of a response", () => {
         expect(claimRemap.has("claim-P")).toBe(false)
     })
 
+    it("points a cloned claim's citation of a kept claim at the kept claim", () => {
+        const core = new PropositCore()
+        // K, a citation claim, is used by both arguments; O is the
+        // response's own and cites K.
+        core.claims.create({ id: "claim-K", type: "citation" } as never)
+        core.claims.create({ id: "claim-O", type: "normal" } as never)
+        core.citations.add({
+            id: "cite-O-K",
+            claimId: "claim-O",
+            claimVersion: 0,
+            supportingClaimId: "claim-K",
+            supportingClaimVersion: 0,
+        })
+        const target = build({
+            id: "x",
+            version: 3,
+            lib: core.claims,
+            conclusion: at("c", v("C")),
+            premises: [at("k", v("K"))],
+        })
+        const response = build({
+            id: "y",
+            version: 1,
+            lib: core.claims,
+            respondsTo: target,
+            premises: [v("O"), not(x("k"))],
+        })
+        core.arguments.register(response.engine)
+        core.arguments.register(target.engine)
+        const { claimRemap } = core.forkArgument("y", "y-fork")
+        expect(claimRemap.has("claim-K")).toBe(false)
+        const clonedO = claimRemap.get("claim-O")!
+        expect(core.citations.getConnectionsForClaim(clonedO)).toEqual([
+            expect.objectContaining({
+                claimId: clonedO,
+                supportingClaimId: "claim-K",
+                supportingClaimVersion: 0,
+            }),
+        ])
+    })
+
     it("takes the argument answered from the options when the library does not hold it", () => {
         const { core, target } = setUp(false)
         const targetSnapshot = target.engine.snapshot()
@@ -980,7 +1021,27 @@ describe("PropositCore.forkArgument of a response", () => {
     it("refuses to fork a response when the argument it answers cannot be found", () => {
         const { core } = setUp(false)
         expect(() => core.forkArgument("y", "y-fork")).toThrow(
-            /argument it answers/
+            'it answers "x" version 3, but the argument library does not hold "x"'
         )
+    })
+
+    it("says which version the library and the snapshot hold when neither is the one answered", () => {
+        const { core, target } = setUp(false)
+        const later = build({
+            id: "x",
+            version: 4,
+            lib: core.claims,
+            conclusion: at("c", v("C")),
+            premises: [at("p", v("P"))],
+        })
+        core.arguments.register(later.engine)
+        expect(() =>
+            core.forkArgument("y", "y-fork", {
+                respondsToSnapshot: later.engine.snapshot(),
+            })
+        ).toThrow(
+            'the argument library holds "x" at version 4, and respondsToSnapshot is "x" version 4'
+        )
+        expect(target.engine.getArgument().version).toBe(3)
     })
 })

@@ -648,14 +648,27 @@ export class PropositCore<
             isAnswered(respondsToSnapshot.argument)
         ) {
             variables = respondsToSnapshot.variables.variables
-        } else {
-            const held = this.arguments.get(respondsTo.argumentId)
-            if (held !== undefined && isAnswered(held.getArgument()))
-                variables = held.getVariables()
+        }
+        const held = this.arguments.get(respondsTo.argumentId)
+        if (
+            variables === undefined &&
+            held !== undefined &&
+            isAnswered(held.getArgument())
+        ) {
+            variables = held.getVariables()
         }
         if (variables === undefined) {
+            const answered = `"${respondsTo.argumentId}" version ${String(respondsTo.argumentVersion)}`
+            const inLibrary =
+                held === undefined
+                    ? `the argument library does not hold "${respondsTo.argumentId}"`
+                    : `the argument library holds "${respondsTo.argumentId}" at version ${String(held.getArgument().version)}`
+            const passed =
+                respondsToSnapshot === undefined
+                    ? ""
+                    : `, and respondsToSnapshot is "${respondsToSnapshot.argument.id}" version ${String(respondsToSnapshot.argument.version)}`
             throw new Error(
-                `Cannot fork response "${engine.getArgument().id}": the argument it answers, "${respondsTo.argumentId}" version ${String(respondsTo.argumentVersion)}, is not in the argument library. Pass it as respondsToSnapshot, so the claims the two share are kept rather than cloned.`
+                `Cannot fork response "${engine.getArgument().id}": it answers ${answered}, but ${inLibrary}${passed}. Pass that version as respondsToSnapshot, so the claims the two share are kept rather than cloned.`
             )
         }
         const claimIds = new Set<string>()

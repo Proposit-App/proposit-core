@@ -142,8 +142,9 @@ export async function readSseEnvelope(
     }
     // Only a failed read is the transport's fault. A callback runs outside
     // that try, so an error the caller's own code throws reaches the caller
-    // as it was thrown, is not retried as a network failure, and stops the
-    // response from streaming on unread.
+    // as it was thrown, is not retried as a network failure, and closes the
+    // connection rather than leaving it open unread. (A background response
+    // keeps generating on the server after its connection closes.)
     for (;;) {
         let chunk: Awaited<ReturnType<typeof reader.read>>
         try {
