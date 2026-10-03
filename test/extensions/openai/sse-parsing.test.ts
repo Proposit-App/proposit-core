@@ -79,3 +79,64 @@ describe("readSseEnvelope — text deltas", () => {
         expect(deltas).toEqual([])
     })
 })
+
+describe("readSseEnvelope — a callback that throws", () => {
+    // A stream that records whether it was cancelled, holding its frames
+    // open after the first chunk as a live response would.
+    function liveStream(): { response: Response; cancelled: () => boolean } {
+        let wasCancelled = false
+        const body = new ReadableStream<Uint8Array>({
+            start(controller) {
+                controller.enqueue(
+                    new TextEncoder().encode(
+                        frames
+                            .slice(0, 2)
+                            .map((f) => `data: ${JSON.stringify(f)}\n\n`)
+                            .join("")
+                    )
+                )
+            },
+            cancel() {
+                wasCancelled = true
+            },
+        })
+        return {
+            response: new Response(body, { status: 200 }),
+            cancelled: () => wasCancelled,
+        }
+    }
+
+    it("passes a delta callback's error through unchanged and cancels the stream", async () => {
+        const live = liveStream()
+        const error = new Error("render failed")
+        await expect(
+            readSseEnvelope(live.response, undefined, () => {
+                throw error
+            })
+        ).rejects.toBe(error)
+        expect(live.cancelled()).toBe(true)
+    })
+
+    it("passes a response-id callback's error through unchanged and cancels the stream", async () => {
+        let wasCancelled = false
+        const body = new ReadableStream<Uint8Array>({
+            start(controller) {
+                controller.enqueue(
+                    new TextEncoder().encode(
+                        `data: ${JSON.stringify({ type: "response.created", response: { id: "resp_1" } })}\n\n`
+                    )
+                )
+            },
+            cancel() {
+                wasCancelled = true
+            },
+        })
+        const error = new Error("store failed")
+        await expect(
+            readSseEnvelope(new Response(body, { status: 200 }), () => {
+                throw error
+            })
+        ).rejects.toBe(error)
+        expect(wasCancelled).toBe(true)
+    })
+})

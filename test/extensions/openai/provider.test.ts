@@ -6,6 +6,7 @@
 import { describe, it, expect, vi } from "vitest"
 import Type from "typebox"
 import { createOpenAiResponsesProvider } from "../../../src/extensions/openai/provider.js"
+import { executePipeline, llmStage } from "../../../src/lib/index.js"
 import {
     retrieveResponse,
     reconnectStream,
@@ -1769,6 +1770,60 @@ describe("OpenAI provider — foreground streaming callbacks", () => {
         release()
         expect((await pending).output).toEqual({ answer: "streamed" })
         expect(deltas).toHaveLength(2)
+    })
+
+    it("does not retry a call whose pipeline event handler throws on a delta, nor report it as a network failure", async () => {
+        let fetches = 0
+        const provider = createOpenAiResponsesProvider({
+            apiKey: "k",
+            fetch: () => {
+                fetches += 1
+                return Promise.resolve(
+                    sseResponse([
+                        delta('{"answer":', 1),
+                        delta('"streamed"}', 2),
+                        completed("resp_throw"),
+                    ])
+                )
+            },
+        })
+        const stage = llmStage<{ answer: string }>({
+            id: "s1",
+            dependsOn: [],
+            outputSchema: simpleSchema,
+            model: "gpt-5.4",
+            buildPrompt: () => ({ system: "s", user: "u" }),
+            retry: { backoffMs: 0 },
+        })
+        const events: string[] = []
+        const run = executePipeline(
+            {
+                id: "p",
+                version: "0.0.0",
+                inputSchema: Type.Object({}),
+                outputSchema: Type.Any(),
+                stages: [stage],
+                finalize: { dependsOn: ["s1"], run: (ctx) => ctx.get("s1") },
+            },
+            {},
+            {
+                llm: provider,
+                onEvent: (event) => {
+                    events.push(event.kind)
+                    if (event.kind === "stage:llm-text-delta") {
+                        throw new Error("render failed")
+                    }
+                },
+            }
+        )
+        const result = await run
+        expect(result.output).toBeNull()
+        expect(fetches).toBe(1)
+        expect(events).not.toContain("stage:retry")
+        expect(JSON.stringify(result.failures)).toContain("render failed")
+        expect(JSON.stringify(result.failures)).not.toMatch(
+            /streaming read failed|LLM_TRANSIENT_ERROR/
+        )
     })
 
     it("returns the same response without onTextDelta as for a stream with no deltas", async () => {

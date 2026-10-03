@@ -140,28 +140,38 @@ export async function readSseEnvelope(
             onResponseId?.(parsedEvent.responseId)
         }
     }
-    try {
-        for (;;) {
-            const chunk = await reader.read()
-            if (chunk.done) break
-            buffer += decoder.decode(chunk.value, { stream: true })
-            let sep = buffer.indexOf("\n\n")
-            while (sep !== -1) {
-                const rawEvent = buffer.slice(0, sep)
-                buffer = buffer.slice(sep + 2)
-                handleEvent(rawEvent)
-                sep = buffer.indexOf("\n\n")
+    // Only a failed read is the transport's fault. A callback runs outside
+    // that try, so an error the caller's own code throws reaches the caller
+    // as it was thrown, is not retried as a network failure, and stops the
+    // response from streaming on unread.
+    for (;;) {
+        let chunk: Awaited<ReturnType<typeof reader.read>>
+        try {
+            chunk = await reader.read()
+        } catch (err) {
+            if (isAbortError(err)) {
+                throw err
             }
+            throw new TransientLlmError({
+                message: `OpenAI streaming read failed: ${
+                    err instanceof Error ? err.message : String(err)
+                }`,
+            })
         }
-    } catch (err) {
-        if (isAbortError(err)) {
-            throw err
+        if (chunk.done) break
+        buffer += decoder.decode(chunk.value, { stream: true })
+        let sep = buffer.indexOf("\n\n")
+        while (sep !== -1) {
+            const rawEvent = buffer.slice(0, sep)
+            buffer = buffer.slice(sep + 2)
+            try {
+                handleEvent(rawEvent)
+            } catch (err) {
+                void reader.cancel().catch(() => undefined)
+                throw err
+            }
+            sep = buffer.indexOf("\n\n")
         }
-        throw new TransientLlmError({
-            message: `OpenAI streaming read failed: ${
-                err instanceof Error ? err.message : String(err)
-            }`,
-        })
     }
     // Flush any bytes the streaming decoder is still holding (an
     // incomplete multi-byte UTF-8 sequence at the final chunk boundary),
