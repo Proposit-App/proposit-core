@@ -31,6 +31,22 @@
   one. The repair behind it is under Fixed.
 - `TPipelineEvent` gains a member, `stage:llm-text-delta`. A `switch` over
   `kind` with no `default` stops compiling until it handles the new kind.
+- IEEE references: 15 date fields change from `EncodableDate` (`Date`) to
+  `CalendarDate` (`string`): `date` on Standard, Patent, NewspaperArticle,
+  ConferencePaper, ConferenceProceedings, Blog, Presentation, Interview,
+  PersonalCommunication, Email, CourtCase and GovernmentPublication;
+  SocialMedia `postDate`; Video `releaseDate`; Law `dateEnacted`. The six
+  `accessedDate` fields are unchanged.
+- IEEE references: the `year` field of 15 types becomes an optional
+  `CalendarDate` (`string | undefined`). It may hold a month or day, the
+  relaxed schemas refuse values like "c. 1787" or "n.d.", and its schema
+  `description` changed. An absent `year` renders "(n.d.)".
+- The calendar-date source kind throws a `TypeError` naming the field for a
+  value that is not a calendar date, so a stored, unconverted `Date`, ISO
+  timestamp or non-conforming year makes `formatCitationParts` throw.
+- `TSegmentSource.kind` gains `"calendarDate"`, and the public IEEE templates
+  use it; each year type's template holds a conditional where it held the
+  year segment.
 
 ## Added
 
@@ -102,6 +118,9 @@
   provider calls it in both streaming modes; `readSseEnvelope` parses
   `response.output_text.delta` frames (a top-level `delta` string) and passes
   each chunk to it, unaccumulated.
+- `CalendarDate`, `calendarDateType`, `parseCalendarDate`,
+  `calendarDateFromInstant`, `TCalendarDateParts` and `TCalendarDatePrecision`
+  in the package root; `formatCalendarDate` in the IEEE extension.
 
 ## Changed
 
@@ -163,3 +182,6 @@
   shape (top-level `delta`, not nested under `response`).
 - The mock provider takes `deltas` and `lateDeltas` on `ok` and
   `schema-invalid` responses.
+- IEEE citation tests share their fixtures (`test/extensions/citations/fixtures.ts`),
+  pin the output of every year-dated type, and cover calendar-date fields,
+  undated sources and the date types.

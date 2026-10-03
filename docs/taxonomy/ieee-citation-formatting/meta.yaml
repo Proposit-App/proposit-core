@@ -3,4 +3,5 @@ kind: Feature
 relatesTo: []
 vocabulary:
     - reference
+    - reference/calendar-date
     - argument/claim/citation-claim

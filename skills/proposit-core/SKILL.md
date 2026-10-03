@@ -80,6 +80,6 @@ Optional parts live at subpaths:
 - `@proposit/proposit-core/extensions/openai` and `/extensions/chat-completions`: LLM providers.
 - `/pipelines/ingestion` and `/pipelines/base`: text-to-argument pipelines.
 - `/extensions/basics`: basic argument, claim and premise schemas plus a matching parser.
-- `/extensions/citations/ieee` and `/extensions/citations/unparsed`: citation schemas.
+- `/extensions/citations/ieee` and `/extensions/citations/unparsed`: citation schemas. IEEE reference dates other than access dates are calendar-date strings (`"1787"`, `"1787-11"`, `"1787-11-22"`), never `Date`s.
 - `/conversation`: multi-turn LLM conversations; `/builder`: ready-made conversation turns that review, simulate and distill an argument.
 - `/pipelines/scheduling`: helpers for running a pipeline one stage at a time across separate processes.

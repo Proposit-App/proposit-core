@@ -1,1 +1,1 @@
-Formatting and validating IEEE-styled references, including raw references not yet parsed into a type.
+Formatting and validating IEEE-styled references, including raw references not yet parsed into a type. Renders calendar dates at their precision, including a month or day on sources dated by year, and "(n.d.)" for an undated source.

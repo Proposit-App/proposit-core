@@ -115,6 +115,34 @@ Things to know:
 Providers get the same signal directly through the new optional
 `TLlmRequest.onTextDelta` callback.
 
+### Citation dates are calendar dates
+
+A publication date is a day as printed on the source, not a moment, and it
+can be known only to its month or year. IEEE reference dates other than access
+dates are now **calendar dates**: ISO strings at one of three precisions,
+`"1787"`, `"1787-11"` or `"1787-11-22"`, rendered "1787", "Nov. 1787" or
+"Nov. 22, 1787". No `Date` is ever built from them, so the reader's time zone
+cannot move the day.
+
+```ts
+const article = {
+    type: "JournalArticle",
+    authors: [{ givenNames: "M. M.", familyName: "Chiampi" }],
+    title: "Induction of electric field in human bodies moving near MRI",
+    journalTitle: "IEEE Trans. Biomed. Eng.",
+    year: "2011-10", // renders "Oct. 2011"
+}
+```
+
+- **Every type dated by `year`** can now give a month or day, as IEEE's own
+  examples do for journals and magazines.
+- **An undated source** leaves `year` out and renders "(n.d.)", as IEEE asks.
+- **New in the package root:** `CalendarDate`, `calendarDateType`,
+  `parseCalendarDate` and `calendarDateFromInstant`; `formatCalendarDate` in
+  the IEEE extension. The API reference's "Citation dates" section has the
+  details.
+- **Access dates are unchanged:** still a `Date`, rendered by its UTC day.
+
 ## Fixed
 
 - Reloading an argument or premise with nothing beneath it under strict
@@ -179,3 +207,34 @@ Providers get the same signal directly through the new optional
 - **A new pipeline event kind.** If you `switch` over `TPipelineEvent`'s
   `kind` with no `default`, add a case for `stage:llm-text-delta` (or a
   `default`).
+- **Citation dates are strings now.** Fifteen IEEE date fields hold a calendar
+  date string instead of a `Date`. Convert each stored value with
+  `calendarDateFromInstant(value)`, which takes a `Date` or its ISO string and
+  gives its UTC day. That is the day meant for data stored as 5.4.2 advised,
+  at midnight UTC. Data stored before 5.4.2 at local midnight converts
+  correctly only with the zone it was written in:
+  `calendarDateFromInstant(value, "day", "Europe/Berlin")`. Access dates stay
+  `Date`s.
+- **The `year` field is optional and may hold a month or day.** Code reading
+  it must handle `undefined`, and must not assume four digits. Stored years
+  convert by this rule, applied to the trimmed value:
+    1. a valid calendar date ("1787", "1787-11") is kept;
+    2. an undated marker ("n.d.", "n.d", "nd", "n. d.", "no date", "undated",
+       "s.d.", "s.a.", in any case, with or without parentheses) becomes an
+       absent `year`;
+    3. anything else ("c. 1787", "1787?", "Jul./Aug. 2007") has no calendar
+       form: correct it by hand, or keep the reference as an `unparsed`
+       citation, which holds the original text.
+- **Unconverted citations throw when rendered.** Core does not check citations
+  when it loads them, so a stored `Date`, ISO timestamp or non-conforming year
+  in a calendar-date field makes `formatCitationParts` throw a `TypeError`
+  naming the field. Convert before rendering. The relaxed schemas refuse such
+  values too, so `Value.Check` with them finds what is left.
+- **Checksums of converted citations change** if your checksum configuration
+  hashes `citation` (claims) or `reference` (origin documents). The defaults
+  hash neither. Core never checks claim or origin-document checksums on load,
+  so recompute them when you convert.
+- **The IEEE templates changed shape.** `TSegmentSource.kind` gains
+  `"calendarDate"`, and each year-dated type's template holds a conditional
+  where it held the year segment. Code that walks the templates must handle
+  both.

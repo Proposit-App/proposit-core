@@ -2798,6 +2798,49 @@ Every scholar and scribe stage defaults to `gpt-6-sol` when no override is suppl
 
 ---
 
+## Citation dates
+
+A reference date in the IEEE citation extension (`@proposit/proposit-core/extensions/citations/ieee`) is one of two kinds.
+
+- **A calendar date**: a day, month or year as written, with no time of day or zone. Every reference date except an access date is one, including each type's `year`.
+- **An instant**: the six `accessedDate` fields (Website, OnlineDocument, Blog, SocialMedia, Video, Podcast) stay `EncodableDate`, a JavaScript `Date`, and render by their UTC day.
+
+### `CalendarDate` and `calendarDateType(options?)`
+
+`CalendarDate` is the TypeBox schema of a calendar date, exported from the package root: an ISO 8601 string at one of three precisions, `"1787"`, `"1787-11"` or `"1787-11-22"`. Its static type is `string`. It needs no codec: it encodes, decodes, hashes and round-trips through JSON as itself.
+
+The whole check is a refinement: the shape, a month of 01-12, and a day that exists in that month and year, leap years included. The relaxed IEEE schemas, which strip `pattern`, therefore still refuse `"87"`, `"1787-13"` or an ISO timestamp.
+
+`calendarDateType(options)` builds the same schema with extra schema options, such as a `description`.
+
+### `parseCalendarDate(value)` → `TCalendarDateParts`
+
+Reads a calendar date into `{ year, month?, day?, precision }`, where `precision` is `"year" | "month" | "day"`. Throws a `TypeError` naming the value if it is not a calendar date.
+
+### `calendarDateFromInstant(value, precision?, timeZone?)` → `string`
+
+The calendar date of an instant: `value` is a `Date`, or the ISO string `JSON.stringify` writes one as. It is read in `timeZone`, default `"UTC"`, and cut to `precision`, default `"day"`.
+
+- **Converting stored instants.** Dates stored as 5.4.2 advised, midnight UTC of the day meant, convert with the default zone.
+- **Data from before 5.4.2.** Data stored at local midnight converts with the zone it was written in. The UTC rule would give the previous day east of UTC.
+- **Errors.** It throws a `RangeError` for a year outside 0000-9999 or an unknown zone, and a `TypeError` for something that is not an instant.
+
+### Fields
+
+| Kind                      | Fields                                                                                                                                                                                                                                                            |
+| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Calendar date             | `date` on Standard, Patent, NewspaperArticle, ConferencePaper, ConferenceProceedings, Blog, Presentation, Interview, PersonalCommunication, Email, CourtCase and GovernmentPublication; SocialMedia `postDate`; Video `releaseDate` (optional); Law `dateEnacted` |
+| Optional calendar date    | `year` on Book, BookChapter, Handbook, TechnicalReport, Thesis, Dictionary, Encyclopedia, JournalArticle, MagazineArticle, Dataset, Software, Preprint, Course, Datasheet and ProductManual                                                                       |
+| Instant (`EncodableDate`) | `accessedDate` on Website, OnlineDocument, Blog, SocialMedia (optional), Video and Podcast                                                                                                                                                                        |
+
+### Rendering
+
+`formatCitationParts` renders a calendar date at its stored precision: "1787", "Nov. 1787" or "Nov. 22, 1787". `formatCalendarDate(value)` does the same for a bare value. No `Date` is built, so the process time zone never moves the day. The month abbreviations follow IEEE's current Reference Guide ("Sep.", "Jun.", "Jul.").
+
+- **A `year`** prints whatever precision is stored. IEEE's own examples print "Oct. 2011" for a journal article and "1964" for a book; the formatter does not cut a stored month or day to suit the type.
+- **An undated source**, with no `year`, renders "(n.d.)" in the year's place, as the guide asks. The segment role is `year` either way.
+- **An invalid value fails at formatting.** Core never checks a citation against the IEEE schema when it loads one, so an unconverted value can reach the formatter. A calendar-date field holding anything that is not a calendar date — a `Date`, an ISO timestamp, `"c. 1787"` — throws a `TypeError` naming the field, for example `Citation field "year" is not a calendar date: "c. 1787"`.
+
 ## Types
 
 ### `TExpressionInput`
