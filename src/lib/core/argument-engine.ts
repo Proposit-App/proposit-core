@@ -2524,7 +2524,7 @@ export class ArgumentEngine<
     private rollbackInternal(
         snapshot: TArgumentEngineSnapshot<TArg, TPremise, TExpr, TVar>
     ): void {
-        this.argument = { ...snapshot.argument }
+        this.argument = withOwnRespondsTo({ ...snapshot.argument })
         this.checksumConfig = normalizeChecksumConfig(
             snapshot.config?.checksumConfig
         )
@@ -3317,13 +3317,23 @@ export class ArgumentEngine<
 }
 
 // A copy of an argument entity holding its own copy of `respondsTo`, when it
-// has one. Any other field is shared as it was.
+// has one. A `respondsTo` of `null` is left out, as an absent field: the
+// schema allows only absent, every reader tests for `undefined`, and a
+// checksum would otherwise count the present key. Any other field is shared
+// as it was.
 function withOwnRespondsTo<T extends object>(argument: T): T {
     const respondsTo = (argument as Record<string, unknown>).respondsTo as
         | TCoreArgumentReference
         | null
         | undefined
-    return respondsTo == null
+    if (respondsTo === null) {
+        const { respondsTo: _null, ...rest } = argument as Record<
+            string,
+            unknown
+        >
+        return rest as T
+    }
+    return respondsTo === undefined
         ? argument
         : ({ ...argument, respondsTo: { ...respondsTo } } as T)
 }

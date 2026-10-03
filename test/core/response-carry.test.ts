@@ -1204,7 +1204,7 @@ describe("the reader's own answers outrank answers carried into a response", () 
                 throw new Error("expected values carried into X")
             return result
         }
-        return { t, y, carry }
+        return { lib, t, y, carry }
     }
 
     it("an own link dropped in a conflict of its own outranks nothing, so a carried link it disputed carries", () => {
@@ -1223,6 +1223,25 @@ describe("the reader's own answers outrank answers carried into a response", () 
             [y.premise("affirmQR"), "conflict"],
             [y.premise("denyR"), "conflict"],
         ])
+    })
+
+    it("carries into a snapshot whose respondsTo is null as into a standard argument", () => {
+        const { lib, t, y } = threeLinks()
+        const snapshot = t.engine.snapshot()
+        const withNull = {
+            ...snapshot,
+            argument: { ...snapshot.argument, respondsTo: null },
+        } as unknown as typeof snapshot
+        const result = y.engine.carryAnswers(
+            withNull,
+            { [y.premise("affirmQ")]: "agree" },
+            lib
+        )
+        expect(result).toMatchObject({
+            status: "carried",
+            intoResponse: false,
+            variables: { [t.variable("Q")]: true },
+        })
     })
 
     it("mergeCarriedInput keeps one collision per value, naming the reader's final value", () => {

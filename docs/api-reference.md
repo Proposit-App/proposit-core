@@ -1446,7 +1446,7 @@ This section writes versions as `{argument}.{version}`: `X.3` is argument X at v
 
 ### What makes an argument a response
 
-An argument is a response exactly when it carries `respondsTo: { argumentId, argumentVersion }` (type `TCoreArgumentReference`). The field is optional on `CoreArgumentSchema`, and absent, never `null`, on a standard argument: a stored `null` fails the schema when the argument loads, though an engine built directly from one reads it as no response. The engine keeps its own copy, and `getArgument`, `snapshot` and `getRespondsTo` each return a fresh one, so mutating what they return changes nothing. A response is created by passing the field to the constructor:
+An argument is a response exactly when it carries `respondsTo: { argumentId, argumentVersion }` (type `TCoreArgumentReference`). The field is optional on `CoreArgumentSchema`, and absent, never `null`, on a standard argument: a stored `null` fails the schema when the argument loads, and an engine built or rolled back directly from one leaves the key out, so it is a standard argument with the same checksum as one without the key. The engine keeps its own copy, taken by the constructor and by `rollback`, and `getArgument`, `snapshot` and `getRespondsTo` each return a fresh one, so mutating what they return changes nothing. A response is created by passing the field to the constructor:
 
 ```typescript
 import { ArgumentEngine } from "@proposit/proposit-core"
@@ -1723,24 +1723,24 @@ Each variable is judged against the snapshot of the version it is bound to. One 
 
 Each entry of `bindings` (`TBindingClassification`), in variable order, carries the fields of `TBindingClassificationBase` — `variableId`, `boundExpressionId`, `boundAspect`, `boundArgumentVersion`, `premises` — and one `status`:
 
-| `status`         | Meaning                                                                                                                                                                                                                           |
-| ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `unchanged`      | The expression id is in `targetTo`, with the same structural fingerprint, the same position class, and every reference it makes into a third argument either the same or re-pinned with no change. Re-pointed without a decision. |
-| `changed`        | The expression id is in `targetTo`, but something differs; `reasons` says what. Needs a decision.                                                                                                                                 |
-| `removed`        | The expression id is absent from `targetTo`. Needs a decision.                                                                                                                                                                    |
-| `alreadyRebased` | Already bound to `targetTo`, and its expression is there. Needs nothing.                                                                                                                                                          |
+| `status`         | Meaning                                                                                                                                                                                                                             |
+| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `unchanged`      | The expression id is in `targetTo`, with the same structural fingerprint, the same position (below), and every reference it makes into a third argument either the same or re-pinned with no change. Re-pointed without a decision. |
+| `changed`        | The expression id is in `targetTo`, but something differs; `reasons` says what. Needs a decision.                                                                                                                                   |
+| `removed`        | The expression id is absent from `targetTo`. Needs a decision.                                                                                                                                                                      |
+| `alreadyRebased` | Already bound to `targetTo`, and its expression is there. Needs nothing.                                                                                                                                                            |
 
 `reasons` (`TBindingChangeReason[]`) holds one or more of:
 
 - `content`: the bound subtree's structure differs (an operator, a child order, a claim version), or something it references in a third argument differs between the two versions it is pinned to;
-- `position`: the expression's position class differs (see `positionClassOf`), for example an unchanged operator moved from a premise root to a nested place, or a nested expression's premise gained or lost the conclusion role. Carrying ignores an undercut nested in the conclusion but strikes the premise for one nested anywhere else, so either move changes what an answer on the link carries;
+- `position`: the expression's position differs: its position class (see `positionClassOf`), or, for a nested expression, whether its premise is the conclusion. For example an unchanged operator moved from a premise root to a nested place, or a nested expression's premise gained or lost the conclusion role. Carrying ignores an undercut nested in the conclusion but strikes the premise for one nested anywhere else, so either move changes what an answer on the link carries;
 - `outsideReferenceRepinned`: something the subtree references in a third argument is pinned to a different version in `targetTo`, and the snapshots needed to compare the two versions were not supplied.
 
 `premises` (`TBindingPremiseUse[]`) lists every premise that dropping the variable would remove, each as `{ premiseId, isLink, cascaded }`. `cascaded: true` marks a premise reached only because it uses a variable bound to another premise in the list: removing a premise removes the variables bound to it, and every expression that uses them.
 
 **`options.outsideSnapshots`** (type `TClassifyBindingsOptions`) supplies snapshots of other arguments, each identified by its own id and version. Suppose Z.0 answers Y.1, and Y.2 moved from X.3 to X.4, so Y's link expressions now reference X.4 instead of X.3. When Z is brought from Y.1 to Y.2:
 
-- with X.3 and X.4 both supplied, the referenced X element (the expression, with its aspect, or the root of an externally bound premise) is compared across them. When it exists in both with the same fingerprint, claim versions included, and the same position class, judging its own outside references the same way, the re-pin counts as no change and the binding can be `unchanged`. Otherwise the binding is `changed` with reason `content`;
+- with X.3 and X.4 both supplied, the referenced X element (the expression, with its aspect, or the root of an externally bound premise) is compared across them. When it exists in both with the same fingerprint, claim versions included, and the same position, judging its own outside references the same way, the re-pin counts as no change and the binding can be `unchanged`. Otherwise the binding is `changed` with reason `content`;
 - with either version missing, the binding is `changed` with reason `outsideReferenceRepinned`. Core cannot fetch the argument, so it never assumes the change does not matter.
 
 Classification therefore reaches as far back as the snapshots supplied. The checks above still reach one argument back.

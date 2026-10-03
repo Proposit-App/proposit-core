@@ -82,6 +82,35 @@ describe("respondsTo cannot be changed from outside the engine", () => {
         expect(restored.getRespondsTo()).toEqual(ANSWERED)
     })
 
+    it("is copied in by rollback", () => {
+        const eng = fresh()
+        const snap = eng.snapshot()
+        eng.rollback(snap)
+        ;(snap.argument.respondsTo as TMutable).argumentVersion = 99
+        expect(eng.getRespondsTo()).toEqual(ANSWERED)
+    })
+
+    it("a respondsTo of null is left out of the argument, so nothing reads it as a response", () => {
+        const withNull = new ArgumentEngine(
+            { ...ARG, respondsTo: null } as unknown as TCoreArgument,
+            aLib()
+        )
+        const absent = new ArgumentEngine(ARG, aLib())
+        expect(withNull.getArgument()).not.toHaveProperty("respondsTo")
+        expect(withNull.getArgument().checksum).toBe(
+            absent.getArgument().checksum
+        )
+        expect(() => withNull.toDisplayString()).not.toThrow()
+        withNull.rollback({
+            ...withNull.snapshot(),
+            argument: {
+                ...withNull.snapshot().argument,
+                respondsTo: null,
+            } as unknown as TCoreArgument,
+        })
+        expect(withNull.getArgument()).not.toHaveProperty("respondsTo")
+    })
+
     it("a respondsTo of null is no response", () => {
         const eng = new ArgumentEngine(
             { ...ARG, respondsTo: null } as unknown as TCoreArgument,

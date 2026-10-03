@@ -422,7 +422,8 @@ export function carryAnswers(input: TCarryInput): TCarryResult {
     if (input.problems.length > 0)
         return { status: "invalid", problems: input.problems }
     const { target } = input
-    const intoResponse = target.argument.respondsTo !== undefined
+    // A snapshot's `respondsTo` of `null` is no response, as the engine reads it.
+    const intoResponse = target.argument.respondsTo != null
     const expander = createTargetExpander(target)
     const index = indexTarget(target)
     const linkOf = new Map(input.links.map((link) => [link.premiseId, link]))
