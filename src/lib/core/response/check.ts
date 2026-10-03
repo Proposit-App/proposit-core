@@ -252,12 +252,24 @@ function minimise(
     return kept
 }
 
-/** Whether `node`, with any `NOT`s above it removed, is the formula `key`. */
-function isReferent(node: TCombinedNode, key: string): boolean {
+/** `node` with every `NOT` above it removed. */
+function withoutNegations(node: TCombinedNode): TCombinedNode {
     let current = node
     while (current.kind === "op" && current.operator === "not")
         current = current.kids[0]
-    return formulaKey(current) === key
+    return current
+}
+
+/**
+ * Whether `node` and the formula `core` are one proposition up to negation:
+ * `core` is a link's referent with its own leading `NOT`s already removed,
+ * and `node` is compared the same way. A referent can itself be a negation:
+ * a link of a reply binds the content of the answered response's link, which
+ * is `NOT(x)` for a contradict link, so a reason concluding `NOT(NOT(x))` or
+ * `x` is about it as much as one concluding `NOT(x)`.
+ */
+function isReferent(node: TCombinedNode, core: string): boolean {
+    return formulaKey(withoutNegations(node)) === core
 }
 
 /**
@@ -266,8 +278,9 @@ function isReferent(node: TCombinedNode, key: string): boolean {
  */
 function hasOnConsequentSide(
     premises: readonly CombinedPremise[],
-    key: string
+    referent: TCombinedNode
 ): boolean {
+    const key = formulaKey(withoutNegations(referent))
     const visit = (node: TCombinedNode): boolean => {
         if (node.kind === "column") return false
         if (node.operator === "implies" && isReferent(node.kids[1], key))
@@ -325,7 +338,7 @@ export function checkLink(
             )
             return {
                 status: "asserted",
-                attemptedSupport: hasOnConsequentSide(others, link.referentKey),
+                attemptedSupport: hasOnConsequentSide(others, link.referent),
                 counterexample: counterexampleOf(set, status.witness),
             }
         }
