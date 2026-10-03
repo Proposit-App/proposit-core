@@ -232,6 +232,14 @@ const article = {
   with a `null` binding field reads as having more than one kind of
   reference), and a checksum includes a field whenever its key is present. A storage layer that maps an absent value
   to a `null` column must map it back to absent on the way out.
+- **Forking a response through `PropositCore` needs its target.**
+  `forkArgument` keeps the claims a response shares with the argument it
+  answers, so it must see that argument at the version answered. It reads it
+  from the argument library when that holds that version; otherwise pass it as
+  `respondsToSnapshot`. Without either, `forkArgument` throws, naming the
+  version it needs. Since the library holds one version per argument, a
+  library that already holds a newer version of the target needs the snapshot
+  passed. Forking a standard argument is unchanged.
 - **Keep ids stable across versions.** Rebasing a response matches the
   answered argument's expressions by id between its versions. If you copy an
   argument into a new version, keep the ids of everything that persists.
