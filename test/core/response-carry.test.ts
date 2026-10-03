@@ -1037,6 +1037,163 @@ describe("carrying into a response", () => {
     })
 })
 
+describe("the reader's own answers outrank answers carried into a response", () => {
+    // X: Q ∧ R. Y answers X: L1 affirms Q ∧ R, L2 contradicts Q. Z answers Y
+    // and affirms L1, so agreeing with Z carries "agree L1" into Y; the reader
+    // also agrees with L2 on Y themselves.
+    function threeStep() {
+        const lib = newLib()
+        const t = build({
+            id: "x",
+            version: 3,
+            lib,
+            conclusion: at("c", v("C")),
+            premises: [at("qr", and(at("q", v("Q")), v("R")))],
+        })
+        const y = build({
+            id: "y",
+            version: 0,
+            lib,
+            respondsTo: t,
+            premises: [
+                labelled("L1", at("L1x", x("qr"))),
+                labelled("L2", at("L2r", not(x("q")))),
+            ],
+        })
+        const z = build({
+            id: "z",
+            version: 0,
+            lib,
+            respondsTo: y,
+            premises: [labelled("A", x("L1x"))],
+        })
+        const intoY = z.engine.carryAnswers(
+            y.engine.snapshot(),
+            { [z.premise("A")]: "agree" },
+            lib
+        )
+        if (intoY.status !== "carried") throw new Error("expected a carry")
+        const ownOnY = { [y.premise("L2")]: "agree" as const }
+        const onY = mergeCarriedInput({ linkAnswers: ownOnY }, intoY)
+        return { lib, t, y, z, ownOnY, onY }
+    }
+
+    it("drops only the carried link and reports the collision", () => {
+        const { lib, t, y, ownOnY, onY } = threeStep()
+        const intoX = y.engine.carryAnswers(
+            t.engine.snapshot(),
+            onY.linkAnswers,
+            lib,
+            { ownLinkPremiseIds: Object.keys(ownOnY) }
+        )
+        if (intoX.status !== "carried" || intoX.intoResponse)
+            throw new Error("expected values carried into a standard argument")
+        expect(intoX.variables).toEqual({ [t.variable("Q")]: false })
+        expect(intoX.notCarried).toEqual([
+            {
+                premiseId: y.premise("L1"),
+                reason: "overriddenByOwn",
+                conflictsWith: [y.premise("L2")],
+            },
+        ])
+        expect(intoX.collisions).toEqual([
+            {
+                kind: "variable",
+                id: t.variable("Q"),
+                own: false,
+                carried: true,
+                linkPremiseIds: [y.premise("L1")],
+            },
+        ])
+    })
+
+    it("passes the collision on through mergeCarriedInput", () => {
+        const { lib, t, y, ownOnY, onY } = threeStep()
+        const intoX = y.engine.carryAnswers(
+            t.engine.snapshot(),
+            onY.linkAnswers,
+            lib,
+            { ownLinkPremiseIds: Object.keys(ownOnY) }
+        )
+        if (intoX.status !== "carried") throw new Error("expected a carry")
+        const onX = mergeCarriedInput({}, intoX)
+        expect(onX.variables).toEqual({ [t.variable("Q")]: false })
+        expect(onX.collisions).toEqual(intoX.collisions)
+    })
+
+    it("without the reader's own links named, the two links conflict as before", () => {
+        const { lib, t, y, onY } = threeStep()
+        const intoX = y.engine.carryAnswers(
+            t.engine.snapshot(),
+            onY.linkAnswers,
+            lib
+        )
+        if (intoX.status !== "carried") throw new Error("expected a carry")
+        expect(intoX.notCarried.map((entry) => entry.reason)).toEqual([
+            "conflict",
+            "conflict",
+        ])
+        expect(intoX.collisions).toEqual([])
+    })
+
+    it("two of the reader's own links that disagree still conflict with each other", () => {
+        const { lib, t, y } = threeStep()
+        const intoX = y.engine.carryAnswers(
+            t.engine.snapshot(),
+            { [y.premise("L1")]: "agree", [y.premise("L2")]: "agree" },
+            lib,
+            { ownLinkPremiseIds: [y.premise("L1"), y.premise("L2")] }
+        )
+        if (intoX.status !== "carried") throw new Error("expected a carry")
+        expect(intoX.notCarried.map((entry) => entry.reason)).toEqual([
+            "conflict",
+            "conflict",
+        ])
+        expect(intoX.collisions).toEqual([])
+    })
+
+    it("a carried link that agrees with the reader's own carries beside it", () => {
+        const { lib, t, y } = threeStep()
+        const intoX = y.engine.carryAnswers(
+            t.engine.snapshot(),
+            { [y.premise("L1")]: "agree" },
+            lib,
+            { ownLinkPremiseIds: [] }
+        )
+        if (intoX.status !== "carried" || intoX.intoResponse)
+            throw new Error("expected values carried into a standard argument")
+        expect(intoX.variables).toEqual({
+            [t.variable("Q")]: true,
+            [t.variable("R")]: true,
+        })
+    })
+
+    it("into a response, the reader's own link answer wins and the collision names the link answer", () => {
+        const { y, z, lib } = chain(
+            [labelled("A", x("Lx")), labelled("B", x("Lroot"))],
+            {}
+        )
+        const result = z.engine.carryAnswers(
+            y.engine.snapshot(),
+            { [z.premise("A")]: "agree", [z.premise("B")]: "agree" },
+            lib,
+            { ownLinkPremiseIds: [z.premise("B")] }
+        )
+        if (result.status !== "carried" || !result.intoResponse)
+            throw new Error("expected link answers carried into a response")
+        expect(result.linkAnswers).toEqual({ [y.premise("L")]: "agree" })
+        expect(result.collisions).toEqual([
+            {
+                kind: "linkAnswer",
+                id: y.premise("L"),
+                own: "agree",
+                carried: "disagree",
+                linkPremiseIds: [z.premise("A")],
+            },
+        ])
+    })
+})
+
 // ---------------------------------------------------------------------------
 // Merging carried values with the reader's own input
 // ---------------------------------------------------------------------------

@@ -45,6 +45,7 @@ import type {
 } from "../types/evaluation.js"
 import type {
     TLinkCheckResult,
+    TCarryAnswersOptions,
     TCarryResult,
     TLinkAnswer,
     TLinkViolation,
@@ -3016,7 +3017,8 @@ export class ArgumentEngine<
     public carryAnswers(
         targetSnapshot: TArgumentEngineSnapshot,
         linkAnswers: Record<string, TLinkAnswer>,
-        targetClaims: TClaimLookup
+        targetClaims: TClaimLookup,
+        options?: TCarryAnswersOptions
     ): TCarryResult {
         const respondsTo = this.getRespondsTo()
         const problems: TLinkViolation[] =
@@ -3040,6 +3042,7 @@ export class ArgumentEngine<
             linkAnswers,
             target: targetSnapshot as unknown as TArgumentEngineSnapshot,
             targetClaims,
+            ownLinkPremiseIds: options?.ownLinkPremiseIds,
         })
     }
 

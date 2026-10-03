@@ -1802,7 +1802,7 @@ A reference to another argument, another version, or a premise that is not a lin
 
 A reader who agrees with a response's links has asserted what those links say about the argument answered. Carrying puts that into the reader's input for the argument answered, one step at a time along a chain of answers: Z answers Y, which answers X, is carried Z into Y, then Y into X.
 
-#### `carryAnswers(targetSnapshot, linkAnswers, targetClaims)` → `TCarryResult`
+#### `carryAnswers(targetSnapshot, linkAnswers, targetClaims, options?)` → `TCarryResult`
 
 An `ArgumentEngine` method on the response. `linkAnswers` is `Record<premiseId, TLinkAnswer>`, where `TLinkAnswer` is `"agree" | "disagree"`; a link with no entry is unanswered. `targetClaims` is a `TClaimLookup` that resolves the answered argument's claims at the versions it binds, used to tell which are axioms; a snapshot carries no claims, and the response's own library need not hold them.
 
@@ -1811,7 +1811,8 @@ It answers `{ status: "invalid", problems }` when the engine is not a response, 
 - into a standard argument, `intoResponse: false` with `variables: Record<variableId, boolean>` and `operatorAssignments: Record<expressionId, "accepted" | "rejected">`;
 - into another response, `intoResponse: true` with `linkAnswers: Record<premiseId, TLinkAnswer>`;
 - `sources`: one `TCarriedSource` per carried value, `{ kind: "variable" | "operator" | "linkAnswer", id, value, linkPremiseIds }`, naming every link the value came from;
-- `notCarried`: one `TNotCarried` per `agree` answer that carried nothing, `{ premiseId, reason, conflictsWith? }`.
+- `notCarried`: one `TNotCarried` per `agree` answer that carried nothing, `{ premiseId, reason, conflictsWith? }`;
+- `collisions`: one `TCarryCollision` per value a carried link would have carried that the reader's own links carry the other way (see **The reader's own answers** below). Empty unless `options.ownLinkPremiseIds` is given.
 
 Every `agree` answer appears in `sources` or `notCarried`. It never throws on an answer it cannot carry.
 
@@ -1847,20 +1848,27 @@ A fixed claim value goes onto **every** variable bound to that claim in the prem
 
 **Conflicts.** When agreed links of one response fix one variable, decide one operator, or answer one link both ways, every link involved carries nothing (`conflict`, with `conflictsWith` naming the others): carrying only the uncontested part of a link would assert less than it says. This happens only in a response `checkResponseCoherent` calls incoherent; carrying does not require coherence.
 
-**Reasons a link carries nothing** (`TNotCarriedReason`): `axiom`, `unknownClaim`, `notExpressible`, `impossible`, `vacuous`, `tooLarge`, `nestedReinforce`, `nonConditionalRoot`, `ignoredInConclusion`, `derivationOperator`, `linkStep`, `noLinkReached`, `conflict`, and `notALink` for an `agree` on a premise that is not a link (a `disagree` there is not reported). Into a standard argument, `noLinkReached` means the link's values reach no variable evaluation reads, for example a claim used only in an unpopulated naked-Q derivation premise.
+**The reader's own answers.** Partway along a chain, a response's answers are of two kinds: the reader's own, and those carried into it from a response answering it. `options.ownLinkPremiseIds` names the reader's own. A carried link that would carry a value one of them carries the other way is dropped, whole (`overriddenByOwn`, with `conflictsWith` naming the reader's links), and each value it disagreed on is reported in `collisions` with the reader's value as `own`. The reader's links then settle as usual, and two of them that disagree still conflict with each other. So the reader's value wins at every step of the chain, as `mergeCarriedInput` makes it win at the last. Without the option every answer counts as the reader's own, and a carried link and a reader's link that disagree both carry nothing.
+
+**Reasons a link carries nothing** (`TNotCarriedReason`): `axiom`, `unknownClaim`, `notExpressible`, `impossible`, `vacuous`, `tooLarge`, `nestedReinforce`, `nonConditionalRoot`, `ignoredInConclusion`, `derivationOperator`, `linkStep`, `noLinkReached`, `conflict`, `overriddenByOwn`, and `notALink` for an `agree` keyed by a premise id that is not a link of this response: a premise that is not a link, or an id the response does not hold at all, such as one from before a fork re-keyed its premises or a link a rebase dropped (a `disagree` there is not reported). Into a standard argument, `noLinkReached` means the link's values reach no variable evaluation reads, for example a claim used only in an unpopulated naked-Q derivation premise.
 
 #### `mergeCarriedInput(own, carried)` → `TMergedCarriedInput`
 
-Adds a `carried` result to the reader's own **explicit** input for the argument it was carried into: `own` is `{ variables?, operatorAssignments?, linkAnswers? }`. Returns `{ variables, operatorAssignments, linkAnswers, collisions }`. The reader's value wins every collision, and each `TCarryCollision` gives `kind`, `id`, `own`, `carried` and the source links. An explicit `null` ("not sure") is not a value: a carried value replaces it without a collision. A value the argument's accepted steps contradict comes out `CONTESTED` at evaluation, as any reader value does. The merged input never contains `CONTESTED`. It does not check that `own` is for `carried.into`.
+Adds a `carried` result to the reader's own **explicit** input for the argument it was carried into: `own` is `{ variables?, operatorAssignments?, linkAnswers? }`. Returns `{ variables, operatorAssignments, linkAnswers, collisions }`. The reader's value wins every collision, and each `TCarryCollision` gives `kind`, `id`, `own`, `carried` and the source links. An explicit `null` ("not sure") is not a value: a carried value replaces it without a collision. A value the argument's accepted steps contradict comes out `CONTESTED` at evaluation, as any reader value does. The merged input never contains `CONTESTED`. It does not check that `own` is for `carried.into`. `collisions` starts with the `carried` result's own `collisions`, the ones settled inside `carryAnswers`.
 
 **Carried values are the reader's assertions.** They enter `variables` and `operatorAssignments`, so evaluation's attribution counts them exactly as the reader's own: `assertedByReader` and `claimAttribution` include them, and a conclusion reached through one is not reached without the reader's assertion. Which link a value came from lives in `sources`, not in the evaluation result.
 
 ```typescript
-// Z answers Y, which answers X. The reader agreed with some of Z's links.
+// Z answers Y, which answers X. The reader agreed with some of Z's links,
+// and answered some of Y's links themselves.
 const intoY = z.carryAnswers(ySnapshot, readerAnswersOnZ, claims)
 if (intoY.status === "carried" && intoY.intoResponse) {
     const onY = mergeCarriedInput({ linkAnswers: readerAnswersOnY }, intoY)
-    const intoX = y.carryAnswers(xSnapshot, onY.linkAnswers, claims)
+    // Name the reader's own answers on Y, so a value carried in from Z never
+    // cancels one: the carried link is dropped and reported in collisions.
+    const intoX = y.carryAnswers(xSnapshot, onY.linkAnswers, claims, {
+        ownLinkPremiseIds: Object.keys(readerAnswersOnY),
+    })
     if (intoX.status === "carried" && !intoX.intoResponse) {
         const merged = mergeCarriedInput(readerInputOnX, intoX)
         const result = x.evaluateWithDefaults(

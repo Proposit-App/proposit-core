@@ -304,13 +304,17 @@ export type TNotCarriedReason =
     | "linkStep"
     | "noLinkReached"
     | "conflict"
+    | "overriddenByOwn"
     | "notALink"
 
 /** An `agree` answer that carried nothing, and why. */
 export interface TNotCarried {
     premiseId: string
     reason: TNotCarriedReason
-    /** For `conflict`: the other links involved. */
+    /**
+     * For `conflict`: the other links involved. For `overriddenByOwn`: the
+     * reader's own links that outrank it.
+     */
     conflictsWith?: string[]
 }
 
@@ -337,6 +341,12 @@ export type TCarryResult =
           into: TCoreArgumentReference
           sources: TCarriedSource[]
           notCarried: TNotCarried[]
+          /**
+           * Values a carried link would have carried that the reader's own
+           * links (`ownLinkPremiseIds`) give another value. Empty unless own
+           * links were named.
+           */
+          collisions: TCarryCollision[]
       } & (
           | {
                 intoResponse: false
@@ -348,6 +358,20 @@ export type TCarryResult =
                 linkAnswers: Record<string, TLinkAnswer>
             }
       ))
+
+/** Options for `ArgumentEngine.carryAnswers`. */
+export interface TCarryAnswersOptions {
+    /**
+     * The links whose answers are the reader's own, rather than carried into
+     * this response from a response answering it. When a carried link would
+     * carry a value one of these carries the other way, only the carried link
+     * is dropped (`overriddenByOwn`) and the difference is reported in
+     * `collisions`, so the reader's value wins at every step of a chain.
+     * Without it, every answer counts as the reader's own and any two links
+     * carrying opposite values both carry nothing (`conflict`).
+     */
+    ownLinkPremiseIds?: Iterable<string>
+}
 
 /** A carried value the reader's own input already gives another value. */
 export type TCarryCollision = {

@@ -8,6 +8,7 @@ import {
 } from "../../schemata/index.js"
 import type {
     TCarriedSource,
+    TCarryCollision,
     TCarryResult,
     TLinkAnswer,
     TLinkViolation,
@@ -120,6 +121,11 @@ export interface TCarryInput {
     target: TArgumentEngineSnapshot
     /** Resolves the target's claims at the versions it binds. */
     targetClaims: TClaimLookup
+    /**
+     * The links whose answers are the reader's own rather than carried into
+     * this response from another; they outrank the rest on a conflict.
+     */
+    ownLinkPremiseIds?: Iterable<string>
 }
 
 /** One value an agreed link would carry. */
@@ -318,6 +324,99 @@ function proposalKey(proposal: TProposal): string {
     return `${proposal.kind}:${proposal.id}`
 }
 
+// For each value key, the links proposing each value (keyed by its text).
+function proposalValues(
+    proposals: ReadonlyMap<string, TProposal[]>
+): Map<string, Map<string, string[]>> {
+    const valuesOf = new Map<string, Map<string, string[]>>()
+    for (const [premiseId, values] of proposals) {
+        for (const proposal of values) {
+            const key = proposalKey(proposal)
+            const byValue = valuesOf.get(key) ?? new Map<string, string[]>()
+            const holders = byValue.get(String(proposal.value)) ?? []
+            if (!holders.includes(premiseId)) holders.push(premiseId)
+            byValue.set(String(proposal.value), holders)
+            valuesOf.set(key, byValue)
+        }
+    }
+    return valuesOf
+}
+
+// The links in one group that carry some value another link of the group
+// carries the other way, each with the links it disagrees with.
+function conflictsWithin(
+    proposals: ReadonlyMap<string, TProposal[]>
+): Map<string, Set<string>> {
+    const conflictsWith = new Map<string, Set<string>>()
+    for (const byValue of proposalValues(proposals).values()) {
+        if (byValue.size < 2) continue
+        const involved = [...byValue.values()].flat()
+        for (const premiseId of involved) {
+            const others = conflictsWith.get(premiseId) ?? new Set<string>()
+            for (const other of involved)
+                if (other !== premiseId) others.add(other)
+            conflictsWith.set(premiseId, others)
+        }
+    }
+    return conflictsWith
+}
+
+function collisionOf(
+    proposal: TProposal,
+    ownValue: string,
+    premiseId: string
+): TCarryCollision {
+    const linkPremiseIds = [premiseId]
+    if (proposal.kind === "variable")
+        return {
+            kind: "variable",
+            id: proposal.id,
+            own: ownValue === "true",
+            carried: proposal.value,
+            linkPremiseIds,
+        }
+    if (proposal.kind === "operator")
+        return {
+            kind: "operator",
+            id: proposal.id,
+            own: ownValue as "accepted" | "rejected",
+            carried: proposal.value,
+            linkPremiseIds,
+        }
+    return {
+        kind: "linkAnswer",
+        id: proposal.id,
+        own: ownValue as TLinkAnswer,
+        carried: proposal.value,
+        linkPremiseIds,
+    }
+}
+
+// Joins collisions on the same value into one, naming every carried link
+// behind it, and puts them in a stable order.
+function mergeCollisions(
+    collisions: TCarryCollision[],
+    byOrder: (a: string, b: string) => number
+): void {
+    const joined = new Map<string, TCarryCollision>()
+    for (const collision of collisions) {
+        const key = `${collision.kind}:${collision.id}`
+        const existing = joined.get(key)
+        if (existing === undefined) joined.set(key, collision)
+        else
+            for (const premiseId of collision.linkPremiseIds)
+                if (!existing.linkPremiseIds.includes(premiseId))
+                    existing.linkPremiseIds.push(premiseId)
+    }
+    collisions.length = 0
+    for (const collision of [...joined.values()].sort(
+        (a, b) => a.kind.localeCompare(b.kind) || a.id.localeCompare(b.id)
+    )) {
+        collision.linkPremiseIds.sort(byOrder)
+        collisions.push(collision)
+    }
+}
+
 /**
  * What a reader's answers on a response's links carry into the argument it
  * answers. Only `agree` answers carry; each agreed link carries exactly what
@@ -378,37 +477,61 @@ export function carryAnswers(input: TCarryInput): TCarryResult {
 
     // A link that would carry something another agreed link carries the other
     // way carries nothing at all: carrying only its uncontested part would
-    // assert less than it says.
-    const valuesOf = new Map<string, Map<string, string[]>>()
-    for (const [premiseId, values] of proposals) {
+    // assert less than it says. The reader's own answers are settled first:
+    // a carried link that disagrees with one of them is dropped instead, and
+    // the disagreement reported as a collision, so the reader's value wins.
+    const own = new Set(input.ownLinkPremiseIds ?? [])
+    const ownProposals = new Map(
+        [...proposals].filter(([premiseId]) => own.has(premiseId))
+    )
+    const carriedProposals = new Map(
+        [...proposals].filter(([premiseId]) => !own.has(premiseId))
+    )
+    const ownValuesOf = proposalValues(ownProposals)
+    const collisions: TCarryCollision[] = []
+    for (const [premiseId, values] of carriedProposals) {
+        const outranking = new Set<string>()
+        const disputed: TProposal[] = []
         for (const proposal of values) {
-            const key = proposalKey(proposal)
-            const byValue = valuesOf.get(key) ?? new Map<string, string[]>()
-            const holders = byValue.get(String(proposal.value)) ?? []
-            if (!holders.includes(premiseId)) holders.push(premiseId)
-            byValue.set(String(proposal.value), holders)
-            valuesOf.set(key, byValue)
+            const byValue = ownValuesOf.get(proposalKey(proposal))
+            if (byValue === undefined) continue
+            let isDisputed = false
+            for (const [value, holders] of byValue) {
+                if (value === String(proposal.value)) continue
+                isDisputed = true
+                for (const holder of holders) outranking.add(holder)
+            }
+            if (isDisputed) disputed.push(proposal)
         }
-    }
-    const conflictsWith = new Map<string, Set<string>>()
-    for (const byValue of valuesOf.values()) {
-        if (byValue.size < 2) continue
-        const involved = [...byValue.values()].flat()
-        for (const premiseId of involved) {
-            const others = conflictsWith.get(premiseId) ?? new Set<string>()
-            for (const other of involved)
-                if (other !== premiseId) others.add(other)
-            conflictsWith.set(premiseId, others)
-        }
-    }
-    for (const [premiseId, others] of conflictsWith) {
-        proposals.delete(premiseId)
+        if (outranking.size === 0) continue
+        carriedProposals.delete(premiseId)
         notCarried.push({
             premiseId,
-            reason: "conflict",
-            conflictsWith: [...others].sort(byOrder),
+            reason: "overriddenByOwn",
+            conflictsWith: [...outranking].sort(byOrder),
         })
+        for (const proposal of disputed) {
+            const byValue = ownValuesOf.get(proposalKey(proposal))
+            // When the reader's own links disagree among themselves they
+            // conflict below and carry nothing, so there is no own value.
+            if (byValue?.size !== 1) continue
+            const ownValue = [...byValue.keys()][0]
+            collisions.push(collisionOf(proposal, ownValue, premiseId))
+        }
     }
+    proposals.clear()
+    for (const group of [ownProposals, carriedProposals]) {
+        const conflictsWith = conflictsWithin(group)
+        for (const [premiseId, values] of group)
+            if (!conflictsWith.has(premiseId)) proposals.set(premiseId, values)
+        for (const [premiseId, others] of conflictsWith)
+            notCarried.push({
+                premiseId,
+                reason: "conflict",
+                conflictsWith: [...others].sort(byOrder),
+            })
+    }
+    mergeCollisions(collisions, byOrder)
     notCarried.sort((a, b) => byOrder(a.premiseId, b.premiseId))
 
     const sourceOf = new Map<string, TCarriedSource>()
@@ -441,6 +564,7 @@ export function carryAnswers(input: TCarryInput): TCarryResult {
             linkAnswers,
             sources,
             notCarried,
+            collisions,
         }
     }
     const variables: Record<string, boolean> = {}
@@ -458,6 +582,7 @@ export function carryAnswers(input: TCarryInput): TCarryResult {
         operatorAssignments,
         sources,
         notCarried,
+        collisions,
     }
 }
 
@@ -489,7 +614,10 @@ export function mergeCarriedInput(
         variables: { ...own.variables },
         operatorAssignments: { ...own.operatorAssignments },
         linkAnswers: { ...own.linkAnswers },
-        collisions: [],
+        collisions: carried.collisions.map((collision) => ({
+            ...collision,
+            linkPremiseIds: [...collision.linkPremiseIds],
+        })),
     }
     for (const source of carried.sources) {
         const { linkPremiseIds } = source

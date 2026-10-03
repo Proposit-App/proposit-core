@@ -23,6 +23,7 @@ import type {
 import type { TCoreMutationResult } from "../../types/mutation.js"
 import type {
     TBindingClassificationResult,
+    TCarryAnswersOptions,
     TCarryResult,
     TLinkAnswer,
     TLinkCheckResult,
@@ -789,6 +790,9 @@ export interface TArgumentEvaluation {
      * @param linkAnswers - The reader's answers, keyed by link premise id.
      * @param targetClaims - Resolves the answered argument's claims at the
      *   versions it binds, to tell which are axioms.
+     * @param options - `ownLinkPremiseIds` names the answers that are the
+     *   reader's own rather than carried into this response, so they outrank
+     *   carried ones on a conflict (see `TCarryAnswersOptions`).
      * @returns `invalid`, carrying nothing, when this argument is not a
      *   response, the snapshot is not the argument and version it answers, or
      *   `validateLinks` reports an error. Never throws on an answer it cannot
@@ -797,7 +801,8 @@ export interface TArgumentEvaluation {
     carryAnswers(
         targetSnapshot: TArgumentEngineSnapshot,
         linkAnswers: Record<string, TLinkAnswer>,
-        targetClaims: TClaimLookup
+        targetClaims: TClaimLookup,
+        options?: TCarryAnswersOptions
     ): TCarryResult
     /**
      * Derives a default truth-value assignment for every variable in the
