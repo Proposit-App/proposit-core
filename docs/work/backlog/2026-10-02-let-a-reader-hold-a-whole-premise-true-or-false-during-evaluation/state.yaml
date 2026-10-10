@@ -6,3 +6,5 @@ effort: medium
 complexity: high
 blocked_by:
 - slug: 2026-10-02-carry-a-reader-s-agreement-with-a-response-argument-into-the-argument-it-answers
+tags:
+- product
