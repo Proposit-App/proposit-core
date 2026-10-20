@@ -41,3 +41,13 @@ Approved by the maintainer on 2026-10-20.
 Check, in a scratch copy with the 3.0 CLI: the 2.x key grep printed nothing;
 `tcw validate`: `0 errors, 0 warnings, 0 unresolved`; composing every stage
 prompt and procedure printed nothing.
+
+### Step 4: Flatten the board
+
+`git mv` moved all 22 item folders to the top of `docs/work`, each with an
+`item.yaml` holding its `title` and `stage`; every status folder's `.gitkeep`
+and `graveyard.yaml` were deleted. No folder needed renaming, and there was no
+`renames.yaml` or `dod.yaml`.
+
+Check: the status-folder `find` printed nothing; the `item.yaml` loop printed
+nothing.
