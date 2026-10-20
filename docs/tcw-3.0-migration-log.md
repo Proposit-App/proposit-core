@@ -86,3 +86,8 @@ front matter.
 
 The inbox was empty; `inbox/.gitkeep` deleted. Check: `ls docs/work | grep -x
 inbox` printed nothing.
+
+### Step 9: Live references
+
+No folder was renamed and the inbox was empty, so there are no old names. The
+relative-link search over the 12 open items printed nothing.
