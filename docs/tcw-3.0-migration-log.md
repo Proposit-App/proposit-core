@@ -65,3 +65,24 @@ every `state.yaml` and `tracker.yaml` was deleted. Comments written:
 
 Check: `find docs/work \( -name state.yaml -o -name tracker.yaml \)` printed
 nothing, and the `^priority: [0-9]` grep printed nothing.
+
+### Step 7: Documents
+
+`initial-request.md` (with `intake.md` under `## Original intake` where not
+already contained) → `request/request.md`; `spec.md`, `plan.md` and
+`outcome.md` into their stage folders; each `refined-outcome.md` and
+`rework.md` → `qa/round-<N>.md` with `verdict` and `judges` front matter
+(`judges: 1` where the item has `implement/round-1.md`, else 0), a rework
+before the acceptance that followed it.
+
+Correction to step 5: one `item.yaml` with no list field had been written as a
+one-line `{…}` mapping; it was rewritten one key per line, as the guide's
+example shows.
+
+Check: the document-name `find` printed nothing; every verdict round has its
+front matter.
+
+### Step 8: Inbox
+
+The inbox was empty; `inbox/.gitkeep` deleted. Check: `ls docs/work | grep -x
+inbox` printed nothing.

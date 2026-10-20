@@ -1,1 +1,3 @@
-{title: checkLink reports no attempted support for a reply's links, stage: completed, priority: medium}
+title: checkLink reports no attempted support for a reply's links
+stage: completed
+priority: medium
