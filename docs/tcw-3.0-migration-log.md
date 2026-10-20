@@ -105,3 +105,29 @@ Checks printed nothing, and `1` for the `.gitignore` line.
 `tcw validate; echo "exit $?"`: `0 errors, 0 warnings, 0 unresolved`, `exit 0`.
 `tcw work list --all --json` lists the 22 items, each at the stage the plan
 gave it.
+
+## Agent instructions
+
+Step 12. Searched the places the guide lists, run from this repository's
+root, plus the bound prompt folder (`docs/lifecycle`). The user approved every
+proposed action in one answer.
+
+In this repository:
+
+- `.claude/settings.local.json` (untracked) lines 6–7: delete (approved); two
+  permissions from moving this board at the migration, removed.
+- `AGENTS.md` and the bound prompts: no passage wrong for 3.0 left (rewritten
+  at step 10).
+
+Outside the repository: the user's own instruction files, settings and saved
+memories were reviewed under the same approval; one memory written for this
+project's 2.x Jira mirroring was deleted, as this board is now on the
+filesystem. They are not listed by path here, because their paths name other
+projects. Their remaining lines are in the private file
+`~/.tcw-3.0-migration-proposit-core-expected-names.txt`.
+
+No line in a tracked file is still printed by the search:
+
+<!-- prettier-ignore -->
+```expected-names
+```
