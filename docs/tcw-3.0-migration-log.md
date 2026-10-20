@@ -27,7 +27,7 @@ are kept, with no folder renamed:
 - 1 in `discarded/` → `discarded`, with a comment recording its 2.x
   resolution;
 - one free-text blocker becomes a comment beginning `Carried over from TCW
-  2.x: blocked outside TCW`, and one blocker naming another item here becomes
+2.x: blocked outside TCW`, and one blocker naming another item here becomes
   `blocked-by`.
 
 Approved by the maintainer on 2026-10-20.
