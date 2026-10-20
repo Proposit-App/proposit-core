@@ -5,13 +5,30 @@ work:
         - bug
         - product
         - tech-debt
-    lifecycle:
-        stages:
-            implement:
-                prompt:
-                    - builtin: true
-                    # Node-local, so a `file:` binding reaches it.
-                    - file: docs/lifecycle/implement.md
+    # Pull before working a stage; commit and push the item's folder after
+    # every move (scripts/tcw-commit-item.sh).
+    stages:
+        request:
+            prompt: &pull-first
+                - blob: &pull-text >-
+                      Before you start, bring this checkout up to date with
+                      `git pull --ff-only`. If either pull fails, tell the user
+                      and carry on with what you have.
+                - inherit: true
+            post: &commit-after-move
+                - command: sh scripts/tcw-commit-item.sh
+        spec: { prompt: *pull-first, post: *commit-after-move }
+        plan: { prompt: *pull-first, post: *commit-after-move }
+        implement:
+            prompt:
+                - blob: *pull-text
+                - inherit: true
+                - file: docs/lifecycle/implement.md
+            post: *commit-after-move
+        review: { prompt: *pull-first, post: *commit-after-move }
+        qa: { prompt: *pull-first, post: *commit-after-move }
+        completed: { post: *commit-after-move }
+        discarded: { post: *commit-after-move }
     documentation:
         - path: README.md
           trigger: Public-CLI-API
