@@ -91,3 +91,11 @@ inbox` printed nothing.
 
 No folder was renamed and the inbox was empty, so there are no old names. The
 relative-link search over the 12 open items printed nothing.
+
+### Step 10: The project's own files
+
+`/tcw-config.local.yaml` added to `.gitignore`. No capability record had a
+`Planning doc:` or `Tracker:` line. `AGENTS.md`'s paragraph on change requests
+now points at the inbox stage instead of `tcw work inbox accept`. The hook
+script uses `TCW_ITEM_PATH`, and `TCW_SLUG` only in its commit message.
+Checks printed nothing, and `1` for the `.gitignore` line.

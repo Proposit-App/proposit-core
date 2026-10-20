@@ -16,3 +16,6 @@ docs/api/
 *.tgz
 
 .typedoc/
+
+# Personal TCW configuration, never committed.
+/tcw-config.local.yaml

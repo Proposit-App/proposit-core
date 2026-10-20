@@ -49,7 +49,7 @@ Opt-in live integration suites exercise the provider against the real Responses 
 
 This repository's work board lives in `docs/work/`, inside this repository. It connects to no other project: a project that uses this library may read this board as an upstream project, but nothing here refers back to it.
 
-Change requests arrive in the board's `tcw work` inbox. Adopt them with the `tcw-work` skill's inbox stage, and pass `--title` to `tcw work inbox accept` so the item gets a clean slug instead of one built from the entry's dated filename.
+Change requests arrive as items at the board's inbox stage (`tcw work list --stage inbox`). Decide on them with `tcw work stage prompt inbox`, or the `tcw:commands-process-inbox` skill, which runs it.
 
 ## Commands
 
