@@ -1,2 +1,6 @@
 title: Carry a reader's agreement with a response argument into the argument it answers
 stage: completed
+priority: medium
+effort: high
+complexity: very-high
+tags: [product]

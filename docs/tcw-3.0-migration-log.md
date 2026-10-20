@@ -51,3 +51,17 @@ and `graveyard.yaml` were deleted. No folder needed renaming, and there was no
 
 Check: the status-folder `find` printed nothing; the `item.yaml` loop printed
 nothing.
+
+### Step 5: Item fields
+
+Every `item.yaml` now holds its converted fields (priority as a name, `medium`
+where 2.x had none; effort, complexity, tags; `blocked-by` as full slugs), and
+every `state.yaml` and `tracker.yaml` was deleted. Comments written:
+
+- the discarded item: `Carried over from TCW 2.x: discarded as wontfix`,
+  followed by the reason its request records (decided 2026-10-02);
+- the free-text blocker: `Carried over from TCW 2.x: blocked outside TCW`,
+  followed by the 2.x text.
+
+Check: `find docs/work \( -name state.yaml -o -name tracker.yaml \)` printed
+nothing, and the `^priority: [0-9]` grep printed nothing.

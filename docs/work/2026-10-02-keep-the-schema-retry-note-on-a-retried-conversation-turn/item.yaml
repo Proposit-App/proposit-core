@@ -1,2 +1,4 @@
 title: Keep the schema-retry note on a retried conversation turn
 stage: request
+priority: medium
+tags: [bug]

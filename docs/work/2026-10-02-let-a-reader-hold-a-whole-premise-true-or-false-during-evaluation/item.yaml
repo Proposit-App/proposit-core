@@ -1,2 +1,7 @@
 title: Let a reader hold a whole premise true or false during evaluation
 stage: request
+priority: medium
+effort: medium
+complexity: high
+tags: [product]
+blocked-by: [proposit-core/2026-10-02-carry-a-reader-s-agreement-with-a-response-argument-into-the-argument-it-answers]

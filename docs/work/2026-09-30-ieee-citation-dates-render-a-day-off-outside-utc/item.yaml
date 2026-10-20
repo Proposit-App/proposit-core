@@ -1,2 +1,4 @@
 title: IEEE citation dates render a day off outside UTC
 stage: completed
+priority: medium
+tags: [bug]

@@ -1,2 +1,6 @@
 title: Citation dates that came through JSON crash the IEEE formatter
 stage: completed
+priority: medium
+effort: low
+complexity: low
+tags: [bug]

@@ -1,2 +1,6 @@
 title: Decide whether accepting a non-conditional conclusion root is the reader's assertion
 stage: request
+priority: medium
+effort: low
+complexity: medium
+tags: [product]

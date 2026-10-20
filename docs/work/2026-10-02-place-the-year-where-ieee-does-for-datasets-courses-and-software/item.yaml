@@ -1,2 +1,6 @@
 title: Place the year where IEEE does for datasets, courses and software
 stage: request
+priority: medium
+effort: low
+complexity: low
+tags: [bug]

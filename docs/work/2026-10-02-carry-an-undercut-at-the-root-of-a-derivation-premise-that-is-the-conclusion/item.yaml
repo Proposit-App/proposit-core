@@ -1,2 +1,4 @@
 title: Carry an undercut at the root of a derivation premise that is the conclusion
 stage: request
+priority: medium
+tags: [bug]

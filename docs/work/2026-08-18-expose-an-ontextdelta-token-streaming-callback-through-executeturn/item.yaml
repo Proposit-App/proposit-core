@@ -1,2 +1,6 @@
 title: Stream LLM text deltas to executeTurn and executePipeline callers
 stage: completed
+priority: highest
+effort: low
+complexity: medium
+tags: [product]
