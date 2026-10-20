@@ -99,3 +99,9 @@ relative-link search over the 12 open items printed nothing.
 now points at the inbox stage instead of `tcw work inbox accept`. The hook
 script uses `TCW_ITEM_PATH`, and `TCW_SLUG` only in its commit message.
 Checks printed nothing, and `1` for the `.gitignore` line.
+
+### Step 11: Validate
+
+`tcw validate; echo "exit $?"`: `0 errors, 0 warnings, 0 unresolved`, `exit 0`.
+`tcw work list --all --json` lists the 22 items, each at the stage the plan
+gave it.
