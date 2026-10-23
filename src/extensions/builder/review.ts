@@ -31,7 +31,9 @@ export function createReviewTurn(
 
 Your goal is to help the user build a more rigorous, well-supported argument through guided questioning. Provide at most 2-3 focused questions per turn.
 
-Respond as a single message — do NOT attempt to parse or structure the argument. Just ask questions.`,
+Respond as a single message. Do not try to parse the argument or restate it in a structured form; just ask questions.
+
+You may format your reply with Markdown, limited to bulleted or numbered lists, **bold**, *italic*, and paragraphs separated by blank lines. Do not use headings, links, images, tables, block quotes, or code, inline or fenced. When you ask two or more questions, put them in a numbered list; a single question is a plain sentence.`,
             user: "", // overridden by executeTurn
         }),
     })

@@ -85,6 +85,7 @@ Your job is to distill the user's final, settled argument into a single self-con
 - Write in third person, present tense, active voice. Each sentence should be a clear declarative statement.
 - Do NOT prepend author-attribution frames like "The author claims…" — write the proposition itself.
 - The output must be a single coherent prose passage (one or more paragraphs) that fully expresses the argument.
+- Write plain prose with no Markdown or other formatting, even where the conversation uses it.
 
 ## Output
 

@@ -463,6 +463,85 @@ describe("builder turns", () => {
             "argumentText"
         )
     })
+
+    // A provider that records the system prompt each request carries and
+    // answers with the given output.
+    function promptRecorder(output: unknown) {
+        const systemPrompts: string[] = []
+        const llm: TLlmProvider = {
+            respond<T>(req: TLlmRequest<T>): Promise<TLlmResponse<T>> {
+                systemPrompts.push(req.systemPrompt)
+                return Promise.resolve({
+                    output: output as T,
+                    tokenUsage: mockTokenUsage(),
+                    rawResponseId: "resp-0",
+                })
+            },
+        }
+        return { llm, systemPrompts }
+    }
+
+    it("review turn limits its reply to a small Markdown subset", async () => {
+        const { llm, systemPrompts } = promptRecorder(mockOutput())
+        await executeTurn(
+            createReviewTurn("gpt-5.5"),
+            { userMessage: "argument" },
+            { llm }
+        )
+        const [system] = systemPrompts
+        expect(system).toContain(
+            "You may format your reply with Markdown, limited to bulleted or numbered lists, **bold**, *italic*, and paragraphs separated by blank lines."
+        )
+        expect(system).toContain(
+            "Do not use headings, links, images, tables, block quotes, or code, inline or fenced."
+        )
+    })
+
+    it("review turn puts two or more questions in a numbered list", async () => {
+        const { llm, systemPrompts } = promptRecorder(mockOutput())
+        await executeTurn(
+            createReviewTurn("gpt-5.5"),
+            { userMessage: "argument" },
+            { llm }
+        )
+        const [system] = systemPrompts
+        expect(system).toContain(
+            "When you ask two or more questions, put them in a numbered list; a single question is a plain sentence."
+        )
+    })
+
+    it("review turn's single-message line refers to the argument's structure, not the reply's", async () => {
+        const { llm, systemPrompts } = promptRecorder(mockOutput())
+        await executeTurn(
+            createReviewTurn("gpt-5.5"),
+            { userMessage: "argument" },
+            { llm }
+        )
+        const [system] = systemPrompts
+        expect(system).toContain(
+            "Do not try to parse the argument or restate it in a structured form; just ask questions."
+        )
+        expect(system).not.toContain("parse or structure the argument")
+    })
+
+    it("distill turn writes plain prose even when the conversation uses Markdown", async () => {
+        const { llm, systemPrompts } = promptRecorder({
+            argumentText: "The argument.",
+        })
+        await executeTurn(
+            createDistillTurn({
+                model: "gpt-5.5",
+                // eslint-disable-next-line @typescript-eslint/no-empty-function
+                onClose: () => {},
+            }),
+            { userMessage: "transcript" },
+            { llm }
+        )
+        const [system] = systemPrompts
+        expect(system).toContain(
+            "Write plain prose with no Markdown or other formatting, even where the conversation uses it."
+        )
+    })
 })
 
 // ---------------- contract types ---------------------------------------------
