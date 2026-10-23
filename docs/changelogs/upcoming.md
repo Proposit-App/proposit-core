@@ -1,0 +1,15 @@
+# Upcoming changelog
+
+## Changed
+
+- The builder's review turn (`createReviewTurn`) now tells the model it may
+  format its reply with a small Markdown subset: bulleted and numbered lists,
+  bold, italic, and paragraphs separated by blank lines. Headings, links,
+  images, tables, block quotes and code are ruled out, and two or more
+  questions go in a numbered list. Its "single message" instruction is
+  reworded so that it refers to the argument's structure, not the reply's.
+- The builder's distill turn (`createDistillTurn`) now tells the model to write
+  plain prose with no Markdown, even where the conversation uses it, so
+  `argumentText` stays plain text for the ingestion pipeline.
+- `createSimulateTurn` is unchanged. Pinned by
+  `test/conversation/conversation.test.ts`.
